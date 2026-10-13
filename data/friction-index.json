@@ -1,0 +1,983 @@
+{
+  "generated": "2026-10-13T18:10:34.960Z",
+  "repos": [
+    {
+      "owner": "langchain-ai",
+      "repo": "langchain",
+      "score": 100,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [],
+      "signals": {
+        "owner": "langchain-ai",
+        "repo": "langchain",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "langchain-ai",
+      "repo": "deepagents",
+      "score": 100,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [],
+      "signals": {
+        "owner": "langchain-ai",
+        "repo": "deepagents",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "reticlehq",
+      "repo": "reticle",
+      "score": 95,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": true,
+          "evidence": "/README.md)). ## What must be green to merge `gate` plus `dco`. Bench and the full Windows install matrix still run only after merge, quaran..."
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "DCO sign-off required (-5)"
+      ],
+      "signals": {
+        "owner": "reticlehq",
+        "repo": "reticle",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": true,
+            "evidence": "/README.md)). ## What must be green to merge `gate` plus `dco`. Bench and the full Windows install matrix still run only after merge, quaran..."
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "GustavoBaranda",
+      "repo": "chatflow-agent",
+      "score": 90,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": true,
+          "evidence": "problem, the proposed solution, and realistic use cases. 3. Discuss the architectural fit before submitting a large pull request to avoid re..."
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "discussion first (-10)"
+      ],
+      "signals": {
+        "owner": "GustavoBaranda",
+        "repo": "chatflow-agent",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": true,
+            "evidence": "problem, the proposed solution, and realistic use cases. 3. Discuss the architectural fit before submitting a large pull request to avoid re..."
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "PrefectHQ",
+      "repo": "fastmcp",
+      "score": 75,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-13: issue must be assigned or carry a 'prs welcome' label (PrefectHQ/fastmcp PR #4557)"
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: assignment_required",
+        "assignment required before PR (-25)"
+      ],
+      "signals": {
+        "owner": "PrefectHQ",
+        "repo": "fastmcp",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-13: issue must be assigned or carry a 'prs welcome' label (PrefectHQ/fastmcp PR #4557)"
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "openclaw",
+      "repo": "openclaw",
+      "score": 75,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": true,
+          "evidence": "d tooling to support standard decorators. ## AI/Vibe-Coded PRs Welcome! 🤖 Built with Codex, Claude, or other AI tools? **Welcome!** No AI-a..."
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: assignment_required",
+        "assignment required before PR (-25)"
+      ],
+      "signals": {
+        "owner": "openclaw",
+        "repo": "openclaw",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": true,
+            "evidence": "d tooling to support standard decorators. ## AI/Vibe-Coded PRs Welcome! 🤖 Built with Codex, Claude, or other AI tools? **Welcome!** No AI-a..."
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "batrapulkit",
+      "repo": "squidbrake",
+      "score": 75,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-13: maintainer asks contributors to comment to claim before starting"
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: assignment_required",
+        "assignment required before PR (-25)"
+      ],
+      "signals": {
+        "owner": "batrapulkit",
+        "repo": "squidbrake",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-13: maintainer asks contributors to comment to claim before starting"
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "modelcontextprotocol",
+      "repo": "python-sdk",
+      "score": 75,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-13: same assignment culture as the other MCP SDKs"
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: assignment_required",
+        "assignment required before PR (-25)"
+      ],
+      "signals": {
+        "owner": "modelcontextprotocol",
+        "repo": "python-sdk",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-13: same assignment culture as the other MCP SDKs"
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "shadcn-labs",
+      "repo": "pdfcn",
+      "score": 70,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": true,
+          "evidence": "story, reproduction, or test that shows the need. - Do not claim an issue silently. Comment before starting work, and check the thread first..."
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": true,
+          "evidence": "problem and solution. ## Developer Certificate of Origin (DCO) All contributions are made under the [Developer Certificate of Origin](https:..."
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: assignment_required",
+        "assignment required before PR (-25)",
+        "DCO sign-off required (-5)"
+      ],
+      "signals": {
+        "owner": "shadcn-labs",
+        "repo": "pdfcn",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": true,
+            "evidence": "story, reproduction, or test that shows the need. - Do not claim an issue silently. Comment before starting work, and check the thread first..."
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": true,
+            "evidence": "problem and solution. ## Developer Certificate of Origin (DCO) All contributions are made under the [Developer Certificate of Origin](https:..."
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "triggerdotdev",
+      "repo": "trigger.dev",
+      "score": 65,
+      "gates": [
+        {
+          "kind": "vouch_required",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-13: unvouched-author PRs auto-closed; vouch-request issue required first"
+        },
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: vouch_required",
+        "vouch required before PR (-35)"
+      ],
+      "signals": {
+        "owner": "triggerdotdev",
+        "repo": "trigger.dev",
+        "gates": [
+          {
+            "kind": "vouch_required",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-13: unvouched-author PRs auto-closed; vouch-request issue required first"
+          },
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "modelcontextprotocol",
+      "repo": "typescript-sdk",
+      "score": 65,
+      "gates": [
+        {
+          "kind": "assignment_required",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-13: SDKs expect a linked assigned or 'help wanted' issue, or an assignment comment"
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": true,
+          "evidence": "ript SDK. ## Issues ### Discuss Before You Code **Please open an issue before starting work on new features or significant changes.** This g..."
+        },
+        {
+          "kind": "collaborators_only",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: assignment_required",
+        "assignment required before PR (-25)",
+        "discussion first (-10)"
+      ],
+      "signals": {
+        "owner": "modelcontextprotocol",
+        "repo": "typescript-sdk",
+        "gates": [
+          {
+            "kind": "assignment_required",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-13: SDKs expect a linked assigned or 'help wanted' issue, or an assignment comment"
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": true,
+            "evidence": "ript SDK. ## Issues ### Discuss Before You Code **Please open an issue before starting work on new features or significant changes.** This g..."
+          },
+          {
+            "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "modelcontextprotocol",
+      "repo": "servers",
+      "score": 50,
+      "gates": [
+        {
+          "kind": "collaborators_only",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-13: PR creation policy collaborators_only"
+        },
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: collaborators_only",
+        "PR creation restricted to collaborators (-50)"
+      ],
+      "signals": {
+        "owner": "modelcontextprotocol",
+        "repo": "servers",
+        "gates": [
+          {
+            "kind": "collaborators_only",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-13: PR creation policy collaborators_only"
+          },
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    }
+  ]
+}
