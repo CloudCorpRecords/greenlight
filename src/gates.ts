@@ -2,12 +2,15 @@
  * CONTRIBUTING.md gate parser.
  *
  * Problem this solves: repos have unwritten rituals before an outside PR is
- * even allowed, and they differ per repo. FastMCP requires assignment or a
- * "prs welcome" label (PrefectHQ/fastmcp#4557). trigger.dev auto-closes PRs
- * from unvouched authors. modelcontextprotocol/servers and
+ * even allowed, and they differ per repo. FastMCP requires assignment
+ * (PrefectHQ/fastmcp#4557). trigger.dev auto-closes PRs from unvouched
+ * authors. modelcontextprotocol/servers and
  * openai/openai-agents-python are collaborators-only for PR creation.
- * This parser extracts those gates from contributing text so the verdict
- * engine can flag GATED instead of letting you code first and get rejected.
+ * shadcn-labs/pdfcn asks contributors to comment before starting work:
+ * that is a soft claim-first ritual, satisfied by posting a comment, not a
+ * hard assignment gate. This parser extracts those gates from contributing
+ * text so the verdict engine can flag GATED instead of letting you code
+ * first and get rejected, while soft gates like claim_first only add a note.
  */
 import type { Gate, GateKind } from "./types.js";
 
@@ -24,11 +27,18 @@ const RULES: GateRule[] = [
       /request (an )?assignment/i,
       /must be assigned/i,
       /assign.*before (submitting|opening|a PR)/i,
-      /comment .* before (starting|working|opening)/i,
       /please (wait|hold) (for|until).*assign/i,
-      /claim.*before (you )?start/i,
-      /\bprs welcome\b/i,
       /\bgood first issue\b.{0,40}\bassign/i,
+    ],
+  },
+  {
+    // Soft ritual: comment (or claim) on the issue before starting work.
+    // Satisfied by posting a comment; never a hard block.
+    kind: "claim_first",
+    regexes: [
+      /comment.{0,60}before (starting|working|opening)/i,
+      /claim.*before (you )?start/i,
+      /comment.{0,60}before you (start|code|submit)/i,
     ],
   },
   {
@@ -88,7 +98,7 @@ export interface ParseOptions {
 }
 
 /**
- * Parse contributing text into a gate list. Always returns all six gates
+ * Parse contributing text into a gate list. Always returns all seven gates
  * with detected true/false, plus an evidence snippet when detected.
  */
 export function parseGates(text: string | undefined, options: ParseOptions = {}): Gate[] {
@@ -121,6 +131,7 @@ export function hardGates(gates: Gate[]): Gate[] {
 export function gateLabel(kind: GateKind): string {
   switch (kind) {
     case "assignment_required": return "assignment required before PR";
+    case "claim_first": return "comment first before starting";
     case "vouch_required": return "vouch required before PR";
     case "cla_required": return "CLA signature required";
     case "dco_required": return "DCO sign-off required";

@@ -3,7 +3,7 @@
  * Greenlight CLI.
  *
  *   greenlight check <issue-url> [--json]
- *   greenlight scan <owner/repo> [--json]
+ *   greenlight scan <owner/repo> [--json] [--no-fallback]
  *   greenlight friction <owner/repo> [--json]
  *   greenlight claim <issue-url> [--yes] [--force] [--json]
  *   greenlight prep <issue-url> [--dir path] [--yes] [--json]
@@ -16,7 +16,7 @@
 import {
   parseIssueUrl,
   buildIssueSnapshot,
-  listStarterIssues,
+  scanCandidates,
   fetchContributing,
   countStarterIssues,
   detectRepoPolicy,
@@ -78,11 +78,15 @@ async function cmdCheck(issueUrl: string, asJson: boolean): Promise<void> {
   printVerdict(snapshot, result, asJson);
 }
 
-async function cmdScan(repoRef: string, asJson: boolean): Promise<void> {
+async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promise<void> {
   const { owner, repo } = parseRepoRef(repoRef);
-  const issues = await listStarterIssues(owner, repo, 10);
+  const { issues, fallbackUsed } = await scanCandidates(owner, repo, {
+    fallback: !args.includes("--no-fallback"),
+    limit: 10,
+  });
   if (issues.length === 0) {
     console.log(`No open unassigned good-first-issue/help-wanted issues found in ${owner}/${repo}.`);
+    if (fallbackUsed) console.log(`The fallback pass (recent open unassigned issues) also found nothing.`);
     return;
   }
   const results: Array<{ url: string; title: string; verdict: string; reasons: string[]; flags: string[] }> = [];
@@ -99,10 +103,13 @@ async function cmdScan(repoRef: string, asJson: boolean): Promise<void> {
   results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
 
   if (asJson) {
-    console.log(JSON.stringify({ repo: `${owner}/${repo}`, results }, null, 2));
+    console.log(JSON.stringify({ repo: `${owner}/${repo}`, fallback: fallbackUsed, results }, null, 2));
     return;
   }
   console.log(`Scan of ${owner}/${repo}: ${results.length} candidate issues, GO first`);
+  if (fallbackUsed) {
+    console.log(`(fallback pass: no label-tagged starter issues found, showing the most recent open unassigned issues)`);
+  }
   for (const r of results) {
     console.log(`\n${SYMBOL[r.verdict] ?? "[?]"} ${r.title}`);
     console.log(`  ${r.url}`);
@@ -195,6 +202,8 @@ async function cmdPrep(issueUrl: string, args: string[]): Promise<void> {
           issue: snapshot.sourceUrl,
           verdict: plan.verdict.verdict,
           branch: plan.branch,
+          branchDefault: plan.branchDefault,
+          branchPatternNote: plan.branchPatternNote,
           forkReady: plan.forkReady,
           forkCreated: plan.forkCreated,
           branchReady: plan.branchReady,
@@ -209,6 +218,7 @@ async function cmdPrep(issueUrl: string, args: string[]): Promise<void> {
     return;
   }
   console.log(`\nBranch: ${plan.branch}${plan.branchReady ? " (ready)" : " (not created yet)"}`);
+  if (plan.branchPatternNote) console.log(`  ${plan.branchPatternNote}; default would be ${plan.branchDefault}`);
   console.log(`Fork: ${plan.forkReady ? "ready" : "missing"}${plan.forkCreated ? " (created just now)" : ""}`);
   console.log(`Prep checklist written to: ${plan.prepFile}`);
   console.log(`Next commands:`);
@@ -271,7 +281,7 @@ function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
   console.log("  greenlight check <issue-url> [--json]");
-  console.log("  greenlight scan <owner/repo> [--json]");
+  console.log("  greenlight scan <owner/repo> [--json] [--no-fallback]");
   console.log("  greenlight friction <owner/repo> [--json]");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
@@ -285,7 +295,7 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -300,7 +310,7 @@ async function main(): Promise<void> {
 
   try {
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"));
-    if (command === "scan" && target) return await cmdScan(target, args.includes("--json"));
+    if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);

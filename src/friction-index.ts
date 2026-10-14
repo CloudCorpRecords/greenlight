@@ -58,7 +58,7 @@ const HAND: HandEntry[] = [
   },
   {
     owner: "batrapulkit", repo: "squidbrake",
-    gates: [gate("assignment_required", "hand-verified 2026-10-13: maintainer asks contributors to comment to claim before starting")],
+    gates: [gate("claim_first", "hand-verified 2026-10-14: maintainer asks contributors to comment to claim before starting")],
     note: "hand-verified 2026-10-13",
   },
   {

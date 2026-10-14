@@ -24,7 +24,10 @@
  *     you: PrefectHQ/fastmcp#5718 (assignment), triggerdotdev/trigger.dev#5016 (vouch).
  *  8. No activity for 180+ days -> STALE. The issue is probably abandoned,
  *     the repro may not even hold on current code.
- *  9. Otherwise -> GO, unless an open PR only mentions the issue, which
+ *  9. Soft claim-first gate (comment before starting, shadcn-labs/pdfcn
+ *     style): never GATED. It caps an otherwise-GO verdict at RISKY with a
+ *     note, following the same downgrade shape as the weak-PR-mention rule.
+ *  10. Otherwise -> GO, unless an open PR only mentions the issue, which
  *     downgrades GO to RISKY ("verify it is not already being worked").
  */
 import type { IssueSnapshot, VerdictResult } from "./types.js";
@@ -115,15 +118,31 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     return { verdict: "STALE", reasons, claims, gates, flags };
   }
 
-  // Rule 9: nothing blocking, unless an open PR merely mentions the issue.
+  // Rule 9: soft claim-first gate. Comment-first is a ritual you satisfy by
+  // posting a comment, not a hard block, so it never yields GATED. It caps
+  // an otherwise-GO verdict at RISKY with a note, the same downgrade shape
+  // as the weak-PR-mention rule below.
+  const claimFirst = gates.some((g) => g.kind === "claim_first" && g.detected);
+  const claimFirstNote = "repo asks contributors to comment before starting (claim first)";
+
+  // Rule 10: nothing blocking, unless an open PR merely mentions the issue.
   if (openMentionPRs.length > 0) {
     const n = openMentionPRs[0].number;
     reasons.push(
       `PR #${n} mentions this issue but does not close it; verify it is not already being worked`
     );
+    if (claimFirst) {
+      reasons.push(claimFirstNote);
+      flags.push("claim_first");
+    }
     return { verdict: "RISKY", reasons, claims, gates, flags };
   }
   reasons.push(`open, unassigned, no linked closing PRs, no claim signals, no blocking gates on ${repoRef}`);
+  if (claimFirst) {
+    reasons.push(claimFirstNote);
+    flags.push("claim_first");
+    return { verdict: "RISKY", reasons, claims, gates, flags };
+  }
   return { verdict: "GO", reasons, claims, gates, flags };
 }
 

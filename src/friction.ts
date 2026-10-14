@@ -9,6 +9,7 @@
  *     vouch_required       -35
  *     collaborators_only   -50
  *     discussion_first     -10
+ *     claim_first           -5
  *     cla_required          -5
  *     dco_required          -5
  *   outcome signals (only when computed, never guessed):
@@ -31,6 +32,7 @@ const GATE_WEIGHTS: Record<string, number> = {
   vouch_required: -35,
   collaborators_only: -50,
   discussion_first: -10,
+  claim_first: -5,
   cla_required: -5,
   dco_required: -5,
 };

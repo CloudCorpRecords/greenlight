@@ -316,12 +316,20 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
   return snapshot;
 }
 
+export interface ScanCandidate {
+  number: number;
+  title: string;
+  url: string;
+  labels: string[];
+  updatedAt: string;
+}
+
 /** List open good-first-issue / help-wanted issues for scan mode. */
 export async function listStarterIssues(
   owner: string,
   repo: string,
   limit = 25
-): Promise<Array<{ number: number; title: string; url: string; labels: string[]; updatedAt: string }>> {
+): Promise<ScanCandidate[]> {
   const q = encodeURIComponent(
     `repo:${owner}/${repo} type:issue state:open no:assignee (label:"good first issue" OR label:"help wanted")`
   );
@@ -341,6 +349,85 @@ export async function listStarterIssues(
     labels: i.labels.map((l) => l.name),
     updatedAt: i.updated_at,
   }));
+}
+
+/** Raw issue-list item shape from GET /repos/:o/:r/issues. */
+interface IssueListItem {
+  number: number;
+  title: string;
+  html_url: string;
+  labels: Array<{ name: string }>;
+  updated_at: string;
+  pull_request?: unknown;
+  assignees?: Array<{ login: string }>;
+}
+
+/**
+ * Filter raw issue-list items down to scan candidates: real issues (not
+ * pull requests) with no assignees, newest first. Pure so tests can drive
+ * it with fixtures.
+ */
+export function toScanCandidates(items: IssueListItem[]): ScanCandidate[] {
+  return items
+    .filter((i) => !i.pull_request && (i.assignees ?? []).length === 0)
+    .map((i) => ({
+      number: i.number,
+      title: i.title,
+      url: i.html_url,
+      labels: i.labels.map((l) => l.name),
+      updatedAt: i.updated_at,
+    }));
+}
+
+/**
+ * Fallback candidate list for scan mode: the most recent open unassigned
+ * issues in the repo, for repos whose landable issues do not carry
+ * good-first-issue / help-wanted labels. Lists broadly (up to `cap`) so
+ * the caller can take the newest slice.
+ */
+export async function listRecentUnassignedIssues(
+  owner: string,
+  repo: string,
+  cap = 25
+): Promise<ScanCandidate[]> {
+  const items = await paginate<IssueListItem>(
+    `/repos/${owner}/${repo}/issues?state=open&sort=created&direction=desc`,
+    100,
+    3
+  );
+  return toScanCandidates(items).slice(0, cap);
+}
+
+export interface ScanCandidateList {
+  issues: ScanCandidate[];
+  /** True when the label pass came back empty and the fallback list was used. */
+  fallbackUsed: boolean;
+}
+
+export interface ScanDeps {
+  starter?: (owner: string, repo: string, limit: number) => Promise<ScanCandidate[]>;
+  recent?: (owner: string, repo: string, cap: number) => Promise<ScanCandidate[]>;
+}
+
+/**
+ * Scan candidates for a repo: the label-tagged starter list first; when it
+ * is empty, fall back to recent open unassigned issues (opt out with
+ * fallback: false). Injectable deps keep tests offline.
+ */
+export async function scanCandidates(
+  owner: string,
+  repo: string,
+  opts: { fallback?: boolean; limit?: number } = {},
+  deps: ScanDeps = {}
+): Promise<ScanCandidateList> {
+  const limit = opts.limit ?? 10;
+  const starter = deps.starter ?? listStarterIssues;
+  const labeled = await starter(owner, repo, limit);
+  if (labeled.length > 0) return { issues: labeled, fallbackUsed: false };
+  if (opts.fallback === false) return { issues: [], fallbackUsed: false };
+  const recent = deps.recent ?? listRecentUnassignedIssues;
+  const issues = (await recent(owner, repo, 25)).slice(0, limit);
+  return { issues, fallbackUsed: true };
 }
 
 export type { GateKind };

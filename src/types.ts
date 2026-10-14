@@ -53,6 +53,7 @@ export interface ClaimSignal {
 /** A contribution gate parsed from CONTRIBUTING / repo policy. */
 export type GateKind =
   | "assignment_required"
+  | "claim_first"
   | "vouch_required"
   | "cla_required"
   | "dco_required"

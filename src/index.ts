@@ -9,7 +9,7 @@ import { z } from "zod";
 import {
   parseIssueUrl,
   buildIssueSnapshot,
-  listStarterIssues,
+  scanCandidates,
   fetchContributing,
   countStarterIssues,
   detectRepoPolicy,
@@ -25,7 +25,7 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.2.0" });
+const server = new McpServer({ name: "greenlight", version: "0.2.1" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -51,7 +51,7 @@ server.tool(
 
 server.tool(
   "scan_repo",
-  "Rank a repo's open good-first-issue / help-wanted issues by verdict, GO first. Use this to pick a winnable issue instead of a taken one.",
+  "Rank a repo's open issues by verdict, GO first. Starts with label-tagged good-first-issue / help-wanted issues; when the repo does not use those labels, falls back to the most recent open unassigned issues (flagged as fallback). Use this to pick a winnable issue instead of a taken one.",
   {
     repo: z.string().describe("owner/repo, e.g. PrefectHQ/fastmcp"),
   },
@@ -59,7 +59,7 @@ server.tool(
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
       if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
-      const issues = await listStarterIssues(m[1], m[2], 10);
+      const { issues, fallbackUsed } = await scanCandidates(m[1], m[2], { limit: 10 });
       const results = [];
       for (const issue of issues) {
         try {
@@ -72,7 +72,7 @@ server.tool(
       }
       const rank: Record<string, number> = { GO: 0, RISKY: 1, GATED: 2, STALE: 3, TAKEN: 4, ERROR: 5 };
       results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
-      return text({ repo, results });
+      return text({ repo, fallback: fallbackUsed, results });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -142,7 +142,7 @@ server.tool(
 
 server.tool(
   "prep_issue",
-  "Prepare to work an issue: check/create your fork and a branch named from the issue title, and write a local PREP.md checklist (verdict, gates, DCO reminders, next commands). Never clones. DRY RUN BY DEFAULT: no fork or branch is created unless execute is true; creating them requires GITHUB_TOKEN.",
+  "Prepare to work an issue: check/create your fork and a branch named from the issue title (learning the repo's branch convention from recent PRs when detectable), and write a local PREP.md checklist (verdict, gates, DCO reminders, next commands). Never clones. DRY RUN BY DEFAULT: no fork or branch is created unless execute is true; creating them requires GITHUB_TOKEN.",
   {
     issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
     execute: z.boolean().default(false).describe("Actually create the fork/branch. Defaults to false: dry run returns the plan only."),
@@ -158,6 +158,8 @@ server.tool(
         verdict: plan.verdict.verdict,
         reasons: plan.verdict.reasons,
         branch: plan.branch,
+        branchDefault: plan.branchDefault,
+        branchPatternNote: plan.branchPatternNote,
         forkReady: plan.forkReady,
         forkCreated: plan.forkCreated,
         branchReady: plan.branchReady,

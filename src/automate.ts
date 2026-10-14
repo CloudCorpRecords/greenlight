@@ -46,6 +46,8 @@ export interface GitHubClient {
     headOwner: string,
     headBranch: string
   ): Promise<{ aheadBy: number; commits: Array<{ sha: string; message: string }> }>;
+  /** Head branch names of recent closed PRs, used to learn the repo's branch convention. */
+  listClosedPullHeadRefs(owner: string, repo: string): Promise<string[]>;
   postIssueComment(owner: string, repo: string, number: number, body: string): Promise<string>;
   createPullRequest(
     owner: string,
@@ -107,6 +109,12 @@ export function createRestClient(): GitHubClient {
         })),
       };
     },
+    async listClosedPullHeadRefs(owner: string, repo: string) {
+      const r = (await apiGet(`/repos/${owner}/${repo}/pulls?state=closed&per_page=30`)) as Array<{
+        head?: { ref?: unknown };
+      }>;
+      return (r ?? []).map((p) => String(p.head?.ref ?? "")).filter((ref) => ref.length > 0);
+    },
     async postIssueComment(owner: string, repo: string, number: number, body: string) {
       const r = (await apiPost(`/repos/${owner}/${repo}/issues/${number}/comments`, { body })) as {
         html_url?: unknown;
@@ -137,21 +145,99 @@ function gateDetected(gates: Gate[], kind: Gate["kind"]): boolean {
   return gates.some((g) => g.kind === kind && g.detected);
 }
 
+/** Slugify an issue title: strip leading labels, lowercase, dashes, 40-char cap. */
+export function titleSlug(title: string): string {
+  return (
+    title
+      .replace(/^(?:block|feature|feat|fix|component|docs?|chore|refactor|test|bug):\s*/i, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40)
+      .replace(/-+$/, "") || "work"
+  );
+}
+
 /**
  * Branch name from an issue title: strip leading labels like "block:" or
  * "feat:", slugify, cap at 40 chars, append the issue number.
  *   "block: Resume" -> "feat/resume-61"
  */
 export function branchSlugFor(title: string, number: number): string {
-  const slug = title
-    .replace(/^(?:block|feature|feat|fix|component|docs?|chore|refactor|test|bug):\s*/i, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/, "");
-  return `feat/${slug || "work"}-${number}`;
+  return `feat/${titleSlug(title)}-${number}`;
+}
+
+/** A branch-name convention learned from a repo's recent closed PRs. */
+export interface BranchPattern {
+  /** Dominant prefix before the "/", e.g. "feat". */
+  prefix: string;
+  /** Dominant trailing token of the branch rest, e.g. "block", or null. */
+  suffix: string | null;
+}
+
+const PATTERN_THRESHOLD = 3;
+
+/**
+ * Learn a dominant branch naming pattern from recent closed PR head refs.
+ * Returns undefined when no prefix or suffix reaches the 3-branch
+ * threshold, so naming falls back to the default.
+ */
+export function detectBranchPattern(refs: string[]): BranchPattern | undefined {
+  if (refs.length === 0) return undefined;
+  const split = refs.map((r) => {
+    const i = r.indexOf("/");
+    return i < 0 ? { prefix: "", rest: r } : { prefix: r.slice(0, i), rest: r.slice(i + 1) };
+  });
+  const prefixCounts = new Map<string, number>();
+  for (const s of split) {
+    if (s.prefix.length > 0) prefixCounts.set(s.prefix, (prefixCounts.get(s.prefix) ?? 0) + 1);
+  }
+  const dominantPrefix = [...prefixCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const suffixCounts = new Map<string, number>();
+  for (const s of split) {
+    const tokens = s.rest.split("-");
+    const last = tokens.length >= 2 ? tokens[tokens.length - 1] : "";
+    if (/^[a-z]{2,}$/.test(last)) suffixCounts.set(last, (suffixCounts.get(last) ?? 0) + 1);
+  }
+  const dominantSuffix = [...suffixCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+  const prefix = dominantPrefix && dominantPrefix[1] >= PATTERN_THRESHOLD ? dominantPrefix[0] : undefined;
+  const suffix = dominantSuffix && dominantSuffix[1] >= PATTERN_THRESHOLD ? dominantSuffix[0] : undefined;
+  if (!prefix && !suffix) return undefined;
+  return { prefix: prefix ?? "feat", suffix: suffix ?? null };
+}
+
+export interface BranchSuggestion {
+  /** The branch name to use. */
+  branch: string;
+  /** The default name, for comparison when a pattern was found. */
+  defaultName: string;
+  /** Human-readable note about the learned pattern, empty when none. */
+  note: string;
+}
+
+/**
+ * Suggest a branch name, learning the repo's convention from recent closed
+ * PR head refs. A dominant suffix token (e.g. "-block" from
+ * feat/business-letter-block) replaces the issue number; a dominant
+ * prefix style replaces "feat/". Falls back to feat/<slug>-<number>.
+ */
+export function suggestBranchName(title: string, number: number, refs: string[]): BranchSuggestion {
+  const defaultName = branchSlugFor(title, number);
+  const pattern = detectBranchPattern(refs);
+  if (!pattern) return { branch: defaultName, defaultName, note: "" };
+  const slug = titleSlug(title);
+  let rest: string;
+  if (pattern.suffix) {
+    const tokens = slug.split("-");
+    rest = tokens[tokens.length - 1] === pattern.suffix ? slug : `${slug}-${pattern.suffix}`;
+  } else {
+    rest = `${slug}-${number}`;
+  }
+  const branch = `${pattern.prefix}/${rest}`;
+  if (branch === defaultName) return { branch: defaultName, defaultName, note: "" };
+  const note = `repo convention from recent PRs: ${pattern.prefix}/<slug>${pattern.suffix ? `-${pattern.suffix}` : ""}`;
+  return { branch, defaultName, note };
 }
 
 /**
@@ -193,6 +279,9 @@ export function gateActions(gates: Gate[]): string[] {
         break;
       case "assignment_required":
         actions.push("Get assigned on the issue before opening a PR; `greenlight claim` asks for assignment.");
+        break;
+      case "claim_first":
+        actions.push("Post a claim comment on the issue before starting work; `greenlight claim` posts one that satisfies the comment-first ritual.");
         break;
       case "vouch_required":
         actions.push("A maintainer must vouch for you first; this cannot be automated.");
@@ -272,10 +361,12 @@ export function renderPrepDoc(args: {
   verdict: VerdictResult;
   gates: Gate[];
   branch: string;
+  branchDefault?: string;
+  branchNote?: string;
   viewer: string;
   issueUrl: string;
 }): string {
-  const { snapshot, verdict, gates, branch, viewer, issueUrl } = args;
+  const { snapshot, verdict, gates, branch, branchDefault, branchNote, viewer, issueUrl } = args;
   const actions = gateActions(gates);
   const lines: string[] = [
     `# Greenlight prep: ${snapshot.owner}/${snapshot.repo}#${snapshot.number}`,
@@ -295,6 +386,14 @@ export function renderPrepDoc(args: {
   }
   lines.push(``, `## Issue`, ``, snapshot.title, ``);
   if (snapshot.body) lines.push(snapshot.body.trim().slice(0, 2000), ``);
+  if (branchNote) {
+    lines.push(
+      `## Branch`,
+      ``,
+      `${branch} (${branchNote}; the default name would be ${branchDefault})`,
+      ``
+    );
+  }
   lines.push(
     `## Next commands`,
     ``,
@@ -317,6 +416,8 @@ export interface PrepOptions {
 export interface PrepResult {
   verdict: VerdictResult;
   branch: string;
+  branchDefault: string;
+  branchPatternNote: string;
   forkReady: boolean;
   forkCreated: boolean;
   branchReady: boolean;
@@ -338,7 +439,22 @@ export async function prepIssue(
   const result = scoreIssue(snapshot);
   const gates = parseGates(snapshot.contributing);
   const { owner, repo, number } = snapshot;
-  const branch = branchSlugFor(snapshot.title, number);
+
+  // Learn the repo's branch convention from recent closed PRs (best effort).
+  const defaultBranchName = branchSlugFor(snapshot.title, number);
+  let suggestion: BranchSuggestion = {
+    branch: defaultBranchName,
+    defaultName: defaultBranchName,
+    note: "",
+  };
+  try {
+    const refs = await client.listClosedPullHeadRefs(owner, repo);
+    suggestion = suggestBranchName(snapshot.title, number, refs);
+  } catch {
+    /* branch naming falls back to the default when the PR list cannot be read */
+  }
+  const branch = suggestion.branch;
+
   const prepDir = opts.dir ?? join("greenlight-prep", `${repo}-${number}`);
   const prepFile = join(prepDir, "PREP.md");
 
@@ -397,6 +513,8 @@ export async function prepIssue(
       verdict: result,
       gates,
       branch,
+      branchDefault: suggestion.defaultName,
+      branchNote: suggestion.note || undefined,
       viewer: viewer ?? "<you>",
       issueUrl: snapshot.sourceUrl,
     }),
@@ -406,6 +524,8 @@ export async function prepIssue(
   return {
     verdict: result,
     branch,
+    branchDefault: suggestion.defaultName,
+    branchPatternNote: suggestion.note,
     forkReady,
     forkCreated,
     branchReady,
