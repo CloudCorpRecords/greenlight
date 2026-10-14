@@ -1,0 +1,29 @@
+{
+  "name": "squidbrake #74: comment-first gate only",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/batrapulkit/squidbrake/issues/74",
+    "owner": "batrapulkit",
+    "repo": "squidbrake",
+    "number": 74,
+    "state": "open",
+    "title": "Taint: tell the approver when an agent edits its own setup right after reading outside content",
+    "author": "batrapulkit",
+    "assignees": [],
+    "labels": [
+      "help wanted",
+      "hacktoberfest"
+    ],
+    "comments": [],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": "Comment before starting work on an issue so we know it is yours (claim first)."
+  },
+  "expect": {
+    "verdict": "RISKY",
+    "flags": [
+      "claim_first"
+    ]
+  }
+}

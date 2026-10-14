@@ -1,0 +1,42 @@
+{
+  "name": "pdfcn #61: open issue with the author's own closing PR open",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/shadcn-labs/pdfcn/issues/61",
+    "owner": "shadcn-labs",
+    "repo": "pdfcn",
+    "number": 61,
+    "state": "open",
+    "title": "block: Resume",
+    "author": "Aniket-508",
+    "assignees": [],
+    "labels": [
+      "enhancement",
+      "good first issue",
+      "help wanted"
+    ],
+    "comments": [
+      {
+        "author": "CloudCorpRecords",
+        "body": "Hi, I would like to work on this one.",
+        "createdAt": "2026-10-13T20:00:00Z"
+      }
+    ],
+    "linkedPRs": [
+      {
+        "number": 93,
+        "state": "open",
+        "title": "feat(blocks): add Resume block (takumi)",
+        "url": "https://github.com/shadcn-labs/pdfcn/pull/93",
+        "linkStrength": "closing"
+      }
+    ],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": ""
+  },
+  "expect": {
+    "verdict": "TAKEN",
+    "flags": []
+  }
+}

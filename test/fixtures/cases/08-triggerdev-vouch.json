@@ -1,0 +1,26 @@
+{
+  "name": "trigger.dev-style: vouch required",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/triggerdotdev/trigger.dev/issues/5016",
+    "owner": "triggerdotdev",
+    "repo": "trigger.dev",
+    "number": 5016,
+    "state": "open",
+    "title": "Improve retry backoff docs",
+    "author": "reporter",
+    "assignees": [],
+    "labels": [
+      "good first issue"
+    ],
+    "comments": [],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": "All outside contributors need a vouch from a community member before their first PR is accepted."
+  },
+  "expect": {
+    "verdict": "GATED",
+    "flags": []
+  }
+}

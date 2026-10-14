@@ -1,0 +1,30 @@
+{
+  "name": "pdfcn #65: claim-first plus DCO contributing, no claims",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/shadcn-labs/pdfcn/issues/65",
+    "owner": "shadcn-labs",
+    "repo": "pdfcn",
+    "number": 65,
+    "state": "open",
+    "title": "block: Quarterly Report",
+    "author": "Aniket-508",
+    "assignees": [],
+    "labels": [
+      "enhancement",
+      "good first issue",
+      "help wanted"
+    ],
+    "comments": [],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": "Comment before starting work on an issue to claim it.\n\nAll commits need a Signed-off-by line (DCO)."
+  },
+  "expect": {
+    "verdict": "RISKY",
+    "flags": [
+      "claim_first"
+    ]
+  }
+}

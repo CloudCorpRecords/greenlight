@@ -1,0 +1,26 @@
+{
+  "name": "clean small repo: no gates, claims, or PRs",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/acme/widget/issues/12",
+    "owner": "acme",
+    "repo": "widget",
+    "number": 12,
+    "state": "open",
+    "title": "Add a `--json` flag to the list command",
+    "author": "acmeowner",
+    "assignees": [],
+    "labels": [
+      "good first issue"
+    ],
+    "comments": [],
+    "linkedPRs": [],
+    "createdAt": "2026-10-13T09:00:00Z",
+    "updatedAt": "2026-10-13T09:00:00Z",
+    "contributing": ""
+  },
+  "expect": {
+    "verdict": "GO",
+    "flags": []
+  }
+}

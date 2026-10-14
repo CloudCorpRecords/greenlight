@@ -1,0 +1,38 @@
+{
+  "name": "pdfcn #71: a PR closing another issue only mentions it",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/shadcn-labs/pdfcn/issues/71",
+    "owner": "shadcn-labs",
+    "repo": "pdfcn",
+    "number": 71,
+    "state": "open",
+    "title": "component: Addresses",
+    "author": "Aniket-508",
+    "assignees": [],
+    "labels": [
+      "enhancement",
+      "good first issue",
+      "help wanted"
+    ],
+    "comments": [],
+    "linkedPRs": [
+      {
+        "number": 91,
+        "state": "open",
+        "title": "feat(blocks): add Quote block (takumi)",
+        "url": "https://github.com/shadcn-labs/pdfcn/pull/91",
+        "linkStrength": "mention"
+      }
+    ],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": ""
+  },
+  "expect": {
+    "verdict": "RISKY",
+    "flags": [
+      "weak-pr-mention"
+    ]
+  }
+}

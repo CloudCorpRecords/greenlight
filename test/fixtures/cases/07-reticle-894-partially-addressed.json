@@ -1,0 +1,49 @@
+{
+  "name": "reticle #894: half shipped via merged PRs, maintainer left it open for the rest",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/reticlehq/reticle/issues/894",
+    "owner": "reticlehq",
+    "repo": "reticle",
+    "number": 894,
+    "state": "open",
+    "title": "The destructive-action block names a retry a flow cannot perform",
+    "author": "divshekhar",
+    "assignees": [],
+    "labels": [
+      "bug",
+      "help wanted"
+    ],
+    "comments": [
+      {
+        "author": "divshekhar",
+        "body": "Half addressed by #905, merged to main in #915. Leaving this open for half B.",
+        "createdAt": "2026-10-12T10:00:00Z"
+      }
+    ],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": "",
+    "commentMentionedPRs": [
+      {
+        "number": 905,
+        "url": "https://github.com/reticlehq/reticle/pull/905",
+        "state": "merged",
+        "mentionsIssue": true
+      },
+      {
+        "number": 915,
+        "url": "https://github.com/reticlehq/reticle/pull/915",
+        "state": "merged",
+        "mentionsIssue": true
+      }
+    ]
+  },
+  "expect": {
+    "verdict": "RISKY",
+    "flags": [
+      "partially-addressed"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "60-day-old claim with no PR ever opened",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/modelcontextprotocol/python-sdk/issues/3287",
+    "owner": "modelcontextprotocol",
+    "repo": "python-sdk",
+    "number": 3287,
+    "state": "open",
+    "title": "Expose session resume in the public API",
+    "author": "maint",
+    "assignees": [],
+    "labels": [],
+    "comments": [
+      {
+        "author": "devjane",
+        "body": "I'd like to take this on, please assign it to me.",
+        "createdAt": "2026-08-15T10:00:00Z"
+      }
+    ],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-10T10:00:00Z",
+    "contributing": ""
+  },
+  "expect": {
+    "verdict": "RISKY",
+    "flags": [
+      "stale_claim"
+    ]
+  }
+}

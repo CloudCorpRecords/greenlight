@@ -1,0 +1,37 @@
+{
+  "name": "reticle #691: scoped claim on part of the work",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/reticlehq/reticle/issues/691",
+    "owner": "reticlehq",
+    "repo": "reticle",
+    "number": 691,
+    "state": "open",
+    "title": "Lease Chromium failures all report the same wrong cause",
+    "author": "divshekhar",
+    "assignees": [],
+    "labels": [
+      "bug",
+      "help wanted",
+      "P1"
+    ],
+    "comments": [
+      {
+        "author": "kushals256",
+        "body": "Taking the remaining fallback ask. When Chromium cannot be launched, the acquire path should fall back to the connected tab.",
+        "createdAt": "2026-09-08T10:00:00Z"
+      }
+    ],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": ""
+  },
+  "expect": {
+    "verdict": "RISKY",
+    "flags": [
+      "claimed",
+      "partial-claim"
+    ]
+  }
+}

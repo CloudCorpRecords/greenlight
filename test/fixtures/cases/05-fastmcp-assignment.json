@@ -1,0 +1,26 @@
+{
+  "name": "fastmcp-style: ask to be assigned",
+  "now": "2026-10-14T12:00:00Z",
+  "snapshot": {
+    "sourceUrl": "https://github.com/PrefectHQ/fastmcp/issues/5718",
+    "owner": "PrefectHQ",
+    "repo": "fastmcp",
+    "number": 5718,
+    "state": "open",
+    "title": "Support streaming tool output",
+    "author": "reporter",
+    "assignees": [],
+    "labels": [
+      "good first issue"
+    ],
+    "comments": [],
+    "linkedPRs": [],
+    "createdAt": "2026-09-24T10:00:00Z",
+    "updatedAt": "2026-10-14T10:00:00Z",
+    "contributing": "Before you start work, ask to be assigned to the issue by a maintainer."
+  },
+  "expect": {
+    "verdict": "GATED",
+    "flags": []
+  }
+}
