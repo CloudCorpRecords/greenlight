@@ -7,7 +7,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind } from "./types.js";
+import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, MentionedPR } from "./types.js";
 import { classifyLinkStrength, type LinkStrength } from "./linkstrength.js";
 
 const API = "https://api.github.com";
@@ -239,6 +239,20 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
   return prs;
 }
 
+/** Minimal PR detail needed for the comment-mention cross-check. */
+export interface PullRefDetail {
+  number: number;
+  state: "open" | "closed";
+  merged: boolean;
+  title: string;
+  body: string;
+  url: string;
+}
+
+export interface MentionedPRDeps {
+  fetchPull?: (owner: string, repo: string, number: number) => Promise<PullRefDetail | null>;
+}
+
 /** Fetch CONTRIBUTING.md raw text; returns undefined when the repo has none. */
 export async function fetchContributing(owner: string, repo: string): Promise<string | undefined> {
   const cached = cacheGet("contributing", [owner, repo]) as string | null | undefined;
@@ -260,6 +274,129 @@ export async function fetchContributing(owner: string, repo: string): Promise<st
   }
   cacheSet("contributing", [owner, repo], null);
   return undefined;
+}
+
+/**
+ * Extract PR references from comment bodies: bare #NNN mentions and full
+ * github.com/<owner>/<repo>/pull/NNN URLs. Returns deduplicated numbers in
+ * order of first appearance.
+ */
+export function extractPRReferences(
+  comments: CommentSignal[],
+  owner: string,
+  repo: string
+): number[] {
+  const esc = (s: string) => s.replace(/[^a-zA-Z0-9_.-]/g, "");
+  const urlRe = new RegExp(`github\\.com/${esc(owner)}/${esc(repo)}/pull/(\\d+)`, "gi");
+  const bareRe = /#(\d{1,6})\b/g;
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const comment of comments) {
+    for (const re of [urlRe, bareRe]) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(comment.body)) !== null) {
+        const n = Number(m[1]);
+        if (n > 0 && !seen.has(n)) {
+          seen.add(n);
+          out.push(n);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** True when text references issue number n via #n or a full issue/PR URL. */
+function mentionsIssueNumber(text: string, n: number): boolean {
+  const bare = text.match(/#(\d{1,6})\b/g) ?? [];
+  if (bare.some((r) => Number(r.slice(1)) === n)) return true;
+  return text.includes(`/issues/${n}`) || text.includes(`/pull/${n}`);
+}
+
+async function defaultFetchPull(
+  owner: string,
+  repo: string,
+  n: number
+): Promise<PullRefDetail | null> {
+  try {
+    const d = (await apiGet(`/repos/${owner}/${repo}/pulls/${n}`)) as {
+      number?: unknown;
+      state?: unknown;
+      merged_at?: unknown;
+      title?: unknown;
+      body?: unknown;
+      html_url?: unknown;
+    };
+    return {
+      number: Number(d.number ?? n),
+      state: d.state === "closed" ? "closed" : "open",
+      merged: d.merged_at != null,
+      title: String(d.title ?? ""),
+      body: String(d.body ?? ""),
+      url: String(d.html_url ?? ""),
+    };
+  } catch (e) {
+    // A 404 here means the reference was an issue number, not a PR: skip it.
+    if (e instanceof ApiNotFoundError) return null;
+    throw e;
+  }
+}
+
+/**
+ * Cross-check PR references found in comments against the PR API.
+ *
+ * Motivation: reticlehq/reticle#691 got a clean GO verdict while its comments
+ * contained a partial claim ("Taking the remaining fallback ask") and a
+ * heads-up that PR #861 covers that work. Neither signal existed in the
+ * timeline or the issue-number search, so both were missed.
+ *
+ * Only non-author comments are examined (a heads-up comes from someone else).
+ * References already found via the timeline/search, and the issue's own
+ * number, are skipped. Bounded at 5 PR fetches per call; the walk is
+ * best-effort and cached like the rest of the issue data.
+ */
+export async function fetchCommentMentionedPRs(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  comments: CommentSignal[],
+  knownPRNumbers: number[],
+  deps: MentionedPRDeps = {}
+): Promise<MentionedPR[]> {
+  // Injected fetch deps (tests) bypass the cache; live calls use it.
+  const useCache = !deps.fetchPull;
+  if (useCache) {
+    const cached = cacheGet("issue", [owner, repo, String(issueNumber), "mentioned-prs"]) as
+      | MentionedPR[]
+      | undefined;
+    if (cached) return cached;
+  }
+
+  const refs = extractPRReferences(comments, owner, repo)
+    .filter((n) => n !== issueNumber && !knownPRNumbers.includes(n))
+    .slice(0, 5);
+  const fetchPull = deps.fetchPull ?? defaultFetchPull;
+
+  const out: MentionedPR[] = [];
+  for (const n of refs) {
+    let detail: PullRefDetail | null;
+    try {
+      detail = await fetchPull(owner, repo, n);
+    } catch {
+      break; // best-effort: a failing provider ends the walk, keeps prior results
+    }
+    if (!detail) continue; // it was an issue number, not a PR
+    out.push({
+      number: detail.number,
+      url: detail.url,
+      state: detail.merged ? "merged" : detail.state,
+      mentionsIssue: mentionsIssueNumber(`${detail.title}\n${detail.body}`, issueNumber),
+    });
+  }
+
+  if (useCache) cacheSet("issue", [owner, repo, String(issueNumber), "mentioned-prs"], out);
+  return out;
 }
 
 /** Count open issues labelled good-first-issue or help-wanted. */
@@ -295,6 +432,20 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     fetchContributing(owner, repo),
   ]);
 
+  // Comment-mentioned PRs: references like "#861" in non-author comments,
+  // cross-checked against the PR API. Best-effort; never blocks the snapshot.
+  let commentMentionedPRs: MentionedPR[] = [];
+  try {
+    const issueAuthor = String((issue.user as Record<string, string> | undefined)?.login ?? "");
+    commentMentionedPRs = await fetchCommentMentionedPRs(
+      owner,
+      repo,
+      number,
+      comments.filter((c) => c.author !== issueAuthor),
+      linkedPRs.map((p) => p.number)
+    );
+  } catch { /* best-effort */ }
+
   const snapshot: IssueSnapshot = {
     sourceUrl: `https://github.com/${owner}/${repo}/issues/${number}`,
     owner,
@@ -308,6 +459,7 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     labels: ((issue.labels as Array<Record<string, string>> | undefined) ?? []).map((l) => l.name),
     comments,
     linkedPRs,
+    commentMentionedPRs,
     createdAt: String(issue.created_at),
     updatedAt: String(issue.updated_at),
     contributing,

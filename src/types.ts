@@ -22,6 +22,15 @@ export interface LinkedPR {
   linkStrength: "closing" | "mention";
 }
 
+/** A pull request referenced in an issue comment, fetched and checked for issue overlap. */
+export interface MentionedPR {
+  number: number;
+  url: string;
+  state: "open" | "closed" | "merged";
+  /** True when the PR title/body references this issue's number. */
+  mentionsIssue: boolean;
+}
+
 /** A snapshot of one issue: everything the verdict engine needs. */
 export interface IssueSnapshot {
   sourceUrl: string;
@@ -36,6 +45,8 @@ export interface IssueSnapshot {
   labels: string[];
   comments: CommentSignal[];
   linkedPRs: LinkedPR[];
+  /** PRs cited in non-author comments, scored for overlap with this issue. Absent on older fixtures. */
+  commentMentionedPRs?: MentionedPR[];
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
   contributing?: string; // raw CONTRIBUTING.md text, when fetched
@@ -48,6 +59,10 @@ export interface ClaimSignal {
   ageDays: number;
   strength: "strong" | "soft";
   phrase: string; // the matched pattern name
+  /** "full" claims the whole issue; "partial" scopes itself to part of the work. */
+  scope: "full" | "partial";
+  /** The scope word matched for partial claims (e.g. "fallback", "remaining"). */
+  scopeWord?: string;
 }
 
 /** A contribution gate parsed from CONTRIBUTING / repo policy. */

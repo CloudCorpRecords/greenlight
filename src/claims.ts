@@ -41,7 +41,20 @@ const SOFT_PATTERNS: ClaimPattern[] = [
   { name: "have-fork", regex: /\b(my fork|on my fork|branch on my fork)\b/i, strength: "soft" },
 ];
 
-const ALL_PATTERNS = [...STRONG_PATTERNS, ...SOFT_PATTERNS];
+// Scoped claims: the author takes part of the issue, not the whole thing.
+// Seen on reticlehq/reticle#691 ("Taking the remaining fallback ask") where
+// a scoped claim plus a cited PR were both missed, nearly causing duplicate
+// work. Each pattern carries a capture group for the scope word. These are
+// checked before the whole-issue patterns (more specific wins) and record
+// scope: "partial" instead of "full".
+const PARTIAL_PATTERNS: ClaimPattern[] = [
+  { name: "partial-taking", regex: /taking (the|this|on)\b.{0,40}?\b(ask|part|half|piece|fallback|remaining)\b/i, strength: "strong" },
+  { name: "partial-claiming", regex: /claiming (the|this)\b.{0,30}?\b(part|half|ask)\b/i, strength: "strong" },
+  { name: "partial-working-on", regex: /working on (the|this)\b.{0,30}?\b(part|half|piece)\b/i, strength: "strong" },
+  { name: "partial-will-take", regex: /i('ll| will) take (the|this)\b.{0,30}?\b(part|half|ask|fallback)\b/i, strength: "strong" },
+];
+
+const ALL_PATTERNS = [...PARTIAL_PATTERNS, ...STRONG_PATTERNS, ...SOFT_PATTERNS];
 
 // Authors that are not humans claiming work.
 const BOT_NAME_PATTERNS = [
@@ -80,10 +93,16 @@ export function detectClaims(
     if (isBotAuthor(author)) continue;
 
     let matched: ClaimPattern | undefined;
+    let scopeWord: string | undefined;
     for (const pattern of ALL_PATTERNS) {
-      if (pattern.regex.test(comment.body)) {
+      const m = pattern.regex.exec(comment.body);
+      if (m) {
         matched = pattern;
-        break; // strong patterns come first, so first match wins
+        if (pattern.name.startsWith("partial-")) {
+          // Partial patterns carry the scope word in the second capture group.
+          scopeWord = (m[2] ?? "").toLowerCase() || undefined;
+        }
+        break; // partial and strong patterns come first, so first match wins
       }
     }
     if (!matched) continue;
@@ -100,6 +119,8 @@ export function detectClaims(
       ageDays: daysBetween(new Date(comment.createdAt), now),
       strength: matched.strength,
       phrase: matched.name,
+      scope: matched.name.startsWith("partial-") ? "partial" : "full",
+      ...(scopeWord ? { scopeWord } : {}),
     };
     if (!existing) {
       byAuthor.set(author, signal);
