@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.2.2 (2026-10-14)
+
+Claim-detection gap closed from a live near-miss: `reticlehq/reticle#691`
+got a clean GO verdict while its comments held a partial claim ("Taking
+the remaining fallback ask" by kushals256) and a heads-up that PR #861
+covers that work. Both signals were invisible to the timeline and the
+issue-number search, and work was nearly duplicated.
+
+- **Scoped (partial) claims.** Four new claim patterns detect comments that
+  take part of an issue, not the whole thing ("taking the remaining
+  fallback ask", "claiming this half", "working on the remaining piece",
+  "I'll take the fallback part"). Claim records now carry
+  `scope: "partial"` (whole-issue claims stay `"full"`) plus the matched
+  scope word. A fresh partial claim does not take the issue, but it
+  downgrades an otherwise-GO verdict to RISKY with a reason naming the
+  claimer and the scope ("kushals256 claimed the remaining part 5 day(s)
+  ago; the rest may still be open"); stale partial claims get the same
+  treatment as other stale claims. Scoped claims never form a claim race.
+- **Comment-mentioned PR cross-check.** PR references (#NNN or full URLs)
+  in non-author comments are fetched against the PR API (at most 5 per
+  check; references that 404 are issue numbers and are skipped silently;
+  cached like the rest of the issue data). An open referenced PR whose
+  title or body mentions the issue number downgrades an otherwise-GO
+  verdict to RISKY with flag `comment-mentioned-pr` ("PR #NNN referenced
+  in comments may already cover part of this issue"). A merged one adds
+  only an informational note. This can never produce TAKEN; only closing
+  PRs do that.
+- 128 tests passing (22 new).
+
 ## 0.2.1 (2026-10-14)
 
 Three fixes from dogfooding the tool on real repos.

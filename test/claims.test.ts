@@ -79,3 +79,44 @@ describe("detectClaims", () => {
     assert.equal(claims.length, 0);
   });
 });
+
+describe("partial claim detection (reticle#691)", () => {
+  it("detects a scoped claim as strong and partial", () => {
+    const claims = detectClaims("reporter", [comment("kushals256", "Taking the remaining fallback ask.")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].author, "kushals256");
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].scope, "partial");
+    assert.equal(claims[0].scopeWord, "remaining");
+    assert.equal(claims[0].phrase, "partial-taking");
+  });
+
+  it("detects the other scoped phrasings", () => {
+    const cases: Array<[string, string]> = [
+      ["I'll take the fallback part of this.", "partial-will-take"],
+      ["claiming this half for now.", "partial-claiming"],
+      ["working on the remaining piece locally.", "partial-working-on"],
+    ];
+    for (const [body, phrase] of cases) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 1, body);
+      assert.equal(claims[0].scope, "partial", body);
+      assert.equal(claims[0].phrase, phrase, body);
+      assert.ok(claims[0].scopeWord, body);
+    }
+  });
+
+  it("keeps whole-issue claims scoped full", () => {
+    const claims = detectClaims("reporter", [comment("dev", "I would like to work on this issue.")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].scope, "full");
+    assert.equal(claims[0].scopeWord, undefined);
+  });
+
+  it("'taking this on' with no scope word stays a full claim", () => {
+    const claims = detectClaims("reporter", [comment("dev", "I will be taking this on tomorrow.")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].scope, "full");
+    assert.equal(claims[0].phrase, "taking-it");
+  });
+});
