@@ -30,6 +30,7 @@ export interface IssueSnapshot {
   number: number;
   state: "open" | "closed";
   title: string;
+  body?: string; // issue body markdown; used by automation commands (prep checklist)
   author: string; // issue author login (skipped in claim detection unless they announce a fix)
   assignees: string[];
   labels: string[];

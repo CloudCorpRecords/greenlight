@@ -17,8 +17,15 @@ import {
 import { scoreIssue } from "./verdict.js";
 import { parseGates } from "./gates.js";
 import { scoreFriction } from "./friction.js";
+import {
+  createRestClient,
+  claimIssue,
+  prepIssue,
+  openPr,
+  AutomationRefusal,
+} from "./automate.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.1.1" });
+const server = new McpServer({ name: "greenlight", version: "0.2.0" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -100,6 +107,98 @@ server.tool(
       });
       return text(report);
     } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "claim_issue",
+  "Post a claim comment on a GitHub issue, shaped by the repo's contribution gates. Runs the verdict pipeline first and refuses on TAKEN/STALE verdicts or vouch-gated repos. DRY RUN BY DEFAULT: returns the comment plan without posting unless execute is true, and posting requires GITHUB_TOKEN.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+    execute: z.boolean().default(false).describe("Post the comment for real. Defaults to false: dry run returns the plan only."),
+    force: z.boolean().default(false).describe("Claim even on a TAKEN or STALE verdict."),
+  },
+  async ({ issue_url, execute, force }) => {
+    try {
+      const { owner, repo, number } = parseIssueUrl(issue_url);
+      const snapshot = await buildIssueSnapshot(owner, repo, number);
+      const plan = await claimIssue(createRestClient(), snapshot, { yes: execute, force });
+      return text({
+        issue: snapshot.sourceUrl,
+        verdict: plan.verdict.verdict,
+        reasons: plan.verdict.reasons,
+        commentBody: plan.commentBody,
+        commentUrl: plan.commentUrl,
+        executed: plan.executed,
+      });
+    } catch (err) {
+      if (err instanceof AutomationRefusal) return text({ refused: true, reason: err.message });
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "prep_issue",
+  "Prepare to work an issue: check/create your fork and a branch named from the issue title, and write a local PREP.md checklist (verdict, gates, DCO reminders, next commands). Never clones. DRY RUN BY DEFAULT: no fork or branch is created unless execute is true; creating them requires GITHUB_TOKEN.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+    execute: z.boolean().default(false).describe("Actually create the fork/branch. Defaults to false: dry run returns the plan only."),
+    dir: z.string().optional().describe("Directory for PREP.md. Defaults to ./greenlight-prep/<repo>-<number>/"),
+  },
+  async ({ issue_url, execute, dir }) => {
+    try {
+      const { owner, repo, number } = parseIssueUrl(issue_url);
+      const snapshot = await buildIssueSnapshot(owner, repo, number);
+      const plan = await prepIssue(createRestClient(), snapshot, { yes: execute, dir });
+      return text({
+        issue: snapshot.sourceUrl,
+        verdict: plan.verdict.verdict,
+        reasons: plan.verdict.reasons,
+        branch: plan.branch,
+        forkReady: plan.forkReady,
+        forkCreated: plan.forkCreated,
+        branchReady: plan.branchReady,
+        branchCreated: plan.branchCreated,
+        prepFile: plan.prepFile,
+        nextCommands: plan.nextCommands,
+      });
+    } catch (err) {
+      if (err instanceof AutomationRefusal) return text({ refused: true, reason: err.message });
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "open_pr",
+  "Open a pull request for an issue from your fork branch. Verifies the branch exists, is ahead of upstream, and (on DCO repos) that every commit carries a Signed-off-by line. Composes the PR title and body (Closes #N plus verdict and gates at open time). DRY RUN BY DEFAULT: returns the composed PR without opening it unless execute is true; opening requires GITHUB_TOKEN.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+    branch: z.string().describe("Fork branch to open the PR from, e.g. feat/resume-61"),
+    execute: z.boolean().default(false).describe("Open the PR for real. Defaults to false: dry run returns the plan only."),
+    title: z.string().optional().describe("PR title override. Defaults to the branch's latest commit subject or the issue title."),
+  },
+  async ({ issue_url, branch, execute, title }) => {
+    try {
+      const { owner, repo, number } = parseIssueUrl(issue_url);
+      const snapshot = await buildIssueSnapshot(owner, repo, number);
+      const plan = await openPr(createRestClient(), snapshot, { branch, title, yes: execute });
+      return text({
+        issue: snapshot.sourceUrl,
+        branch: plan.branch,
+        head: plan.head,
+        base: plan.base,
+        title: plan.title,
+        body: plan.body,
+        checks: plan.checks,
+        prUrl: plan.prUrl,
+        executed: plan.executed,
+      });
+    } catch (err) {
+      if (err instanceof AutomationRefusal) return text({ refused: true, reason: err.message });
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
   }

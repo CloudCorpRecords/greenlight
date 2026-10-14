@@ -56,11 +56,19 @@ export class RateLimitError extends Error {
   }
 }
 
-export function githubToken(): string | undefined {
-  return process.env.GITHUB_TOKEN;
+/** Thrown by apiGet/apiPost for HTTP 404, so callers can treat "missing" as data. */
+export class ApiNotFoundError extends Error {
+  constructor(path: string) {
+    super(`GitHub API 404 for ${path}`);
+    this.name = "ApiNotFoundError";
+  }
 }
 
-async function apiGet(path: string): Promise<unknown> {
+export function githubToken(): string | undefined {
+  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+}
+
+export async function apiGet(path: string): Promise<unknown> {
   const headers: Record<string, string> = {
     "Accept": "application/vnd.github+json",
     "User-Agent": "greenlight-cli",
@@ -78,6 +86,35 @@ async function apiGet(path: string): Promise<unknown> {
       ? "Authenticated limit also exhausted."
       : "Set GITHUB_TOKEN (a classic PAT, no scopes needed for public repos) to raise the limit from 60 to 5000 req/hr.";
     throw new RateLimitError(`GitHub rate limit hit (${res.status}).${wait} ${hint} ${body.slice(0, 120)}`);
+  }
+  if (res.status === 404) {
+    throw new ApiNotFoundError(path);
+  }
+  if (!res.ok) {
+    throw new Error(`GitHub API ${res.status} for ${path}: ${(await res.text()).slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+/** POST helper for write operations (automation commands). Read paths use apiGet. */
+export async function apiPost(path: string, body: unknown): Promise<unknown> {
+  const headers: Record<string, string> = {
+    "Accept": "application/vnd.github+json",
+    "Content-Type": "application/json",
+    "User-Agent": "greenlight-cli",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  const token = githubToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${API}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  if (res.status === 403 || res.status === 429) {
+    const reset = res.headers.get("x-ratelimit-reset");
+    const wait = reset ? ` Rate limit resets at ${new Date(Number(reset) * 1000).toISOString()}.` : "";
+    throw new RateLimitError(`GitHub rate limit hit (${res.status}).${wait}`);
+  }
+  if (res.status === 404) {
+    throw new ApiNotFoundError(path);
   }
   if (!res.ok) {
     throw new Error(`GitHub API ${res.status} for ${path}: ${(await res.text()).slice(0, 200)}`);
@@ -265,6 +302,7 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     number,
     state: String(issue.state) as "open" | "closed",
     title: String(issue.title ?? ""),
+    body: String(issue.body ?? ""),
     author: ((issue.user as Record<string, string> | undefined)?.login ?? ""),
     assignees: ((issue.assignees as Array<Record<string, string>> | undefined) ?? []).map((a) => a.login),
     labels: ((issue.labels as Array<Record<string, string>> | undefined) ?? []).map((l) => l.name),
