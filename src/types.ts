@@ -29,6 +29,13 @@ export interface MentionedPR {
   state: "open" | "closed" | "merged";
   /** True when the PR title/body references this issue's number. */
   mentionsIssue: boolean;
+  /**
+   * True when the citing comment came from the issue author. The open-PR
+   * downgrade (rule 11) only trusts non-author heads-ups, but a
+   * maintainer narrating what already shipped (rule 12) is usually the
+   * issue author, so partially-addressed detection reads both.
+   */
+  fromAuthor?: boolean;
 }
 
 /** A snapshot of one issue: everything the verdict engine needs. */
@@ -40,6 +47,8 @@ export interface IssueSnapshot {
   state: "open" | "closed";
   title: string;
   body?: string; // issue body markdown; used by automation commands (prep checklist)
+  /** Per-file policy texts (CONTRIBUTING variants, AGENTS.md, CLAUDE.md). */
+  houseRules?: { file: string; text: string }[];
   author: string; // issue author login (skipped in claim detection unless they announce a fix)
   assignees: string[];
   labels: string[];
@@ -79,6 +88,8 @@ export interface Gate {
   kind: GateKind;
   detected: boolean;
   evidence: string; // short snippet or source note
+  /** File the gate evidence came from, e.g. "CONTRIBUTING.md" or "AGENTS.md". */
+  source?: string;
 }
 
 /** Signals used to score repo friction. Fields that cannot be computed stay null. */
@@ -100,6 +111,27 @@ export interface VerdictResult {
   claims: ClaimSignal[];
   gates: Gate[];
   flags: string[]; // e.g. "claimed", "stale_claim"
+}
+
+/**
+ * Repo conventions learned during prep: the local rituals a contributor
+ * must follow. All fields are best-effort; a repo may provide none.
+ */
+export interface RepoConventions {
+  /** Policy files present at the repo, e.g. ["CONTRIBUTING.md", "AGENTS.md"]. */
+  houseRuleFiles: string[];
+  /** Backticked run commands quoted in the house rules, e.g. ["pnpm verify"]. */
+  verifyCommands: string[];
+  /** True when a .changes/ or .changeset directory exists at the repo root. */
+  changesDir: boolean;
+  /** Which one was found, e.g. ".changes" or ".changeset". */
+  changesDirName?: string;
+  /** Root package.json script names worth running before pushing (subset of test/verify/lint/typecheck/build). */
+  packageScripts: string[];
+  /** True when 60%+ of the last 20 default-branch commits match Conventional Commits. */
+  conventionalCommits: boolean;
+  /** One short example commit subject when conventionalCommits is true. */
+  exampleCommit?: string;
 }
 
 /** A scored repo, stored in data/friction-index.json. */

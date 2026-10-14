@@ -253,27 +253,67 @@ export interface MentionedPRDeps {
   fetchPull?: (owner: string, repo: string, number: number) => Promise<PullRefDetail | null>;
 }
 
-/** Fetch CONTRIBUTING.md raw text; returns undefined when the repo has none. */
-export async function fetchContributing(owner: string, repo: string): Promise<string | undefined> {
-  const cached = cacheGet("contributing", [owner, repo]) as string | null | undefined;
-  if (cached !== undefined) return cached ?? undefined;
+/**
+ * Policy files fetched for gate extraction. Binding contribution rules
+ * increasingly live in house-rules files that CONTRIBUTING only links to
+ * (reticle keeps its claim-first, DCO, .changes and `pnpm verify` rules in
+ * AGENTS.md), so CONTRIBUTING variants are fetched together with AGENTS.md
+ * and CLAUDE.md at the root and under .github/.
+ */
+export const HOUSE_RULE_FILES = [
+  "CONTRIBUTING.md",
+  "contributing.md",
+  ".github/CONTRIBUTING.md",
+  "AGENTS.md",
+  "CLAUDE.md",
+  ".github/AGENTS.md",
+  ".github/CLAUDE.md",
+] as const;
+
+export interface HouseRuleDeps {
+  /** Test seam: fetch a repo-root file's raw text, or undefined when absent. */
+  fetchRaw?: (file: string) => Promise<string | undefined>;
+}
+
+/** Fetch all existing house-rules files for a repo (best-effort, cached). */
+export async function fetchHouseRules(
+  owner: string,
+  repo: string,
+  deps: HouseRuleDeps = {}
+): Promise<{ file: string; text: string }[]> {
+  if (!deps.fetchRaw) {
+    const cached = cacheGet("house-rules", [owner, repo]) as
+      | { file: string; text: string }[]
+      | undefined;
+    if (cached) return cached;
+  }
 
   const headers: Record<string, string> = { "User-Agent": "greenlight-cli" };
   const token = githubToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  const fetchRaw =
+    deps.fetchRaw ??
+    (async (file: string): Promise<string | undefined> => {
+      try {
+        const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/${file}`, { headers });
+        if (res.ok) return await res.text();
+      } catch { /* try next */ }
+      return undefined;
+    });
 
-  for (const name of ["CONTRIBUTING.md", "contributing.md", ".github/CONTRIBUTING.md"]) {
-    try {
-      const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/${name}`, { headers });
-      if (res.ok) {
-        const text = await res.text();
-        cacheSet("contributing", [owner, repo], text);
-        return text;
-      }
-    } catch { /* try next */ }
+  const out: { file: string; text: string }[] = [];
+  for (const file of HOUSE_RULE_FILES) {
+    const text = await fetchRaw(file);
+    if (text) out.push({ file, text });
   }
-  cacheSet("contributing", [owner, repo], null);
-  return undefined;
+  if (!deps.fetchRaw) cacheSet("house-rules", [owner, repo], out);
+  return out;
+}
+
+/** Fetch CONTRIBUTING.md raw text; returns undefined when the repo has none. */
+export async function fetchContributing(owner: string, repo: string): Promise<string | undefined> {
+  const rules = await fetchHouseRules(owner, repo);
+  return rules.find((r) => r.file.toLowerCase().includes("contributing"))?.text;
 }
 
 /**
@@ -301,6 +341,32 @@ export function extractPRReferences(
           seen.add(n);
           out.push(n);
         }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * PR references per citing comment author: number -> first comment author
+ * that cited it. Used to tag MentionedPRs with fromAuthor.
+ */
+export function extractPRReferenceAuthors(
+  comments: CommentSignal[],
+  owner: string,
+  repo: string
+): Map<number, string> {
+  const esc = (s: string) => s.replace(/[^a-zA-Z0-9_.-]/g, "");
+  const urlRe = new RegExp(`github\\.com/${esc(owner)}/${esc(repo)}/pull/(\\d+)`, "gi");
+  const bareRe = /#(\d{1,6})\b/g;
+  const out = new Map<number, string>();
+  for (const comment of comments) {
+    for (const re of [urlRe, bareRe]) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(comment.body)) !== null) {
+        const n = Number(m[1]);
+        if (n > 0 && !out.has(n)) out.set(n, comment.author);
       }
     }
   }
@@ -351,7 +417,11 @@ async function defaultFetchPull(
  * heads-up that PR #861 covers that work. Neither signal existed in the
  * timeline or the issue-number search, so both were missed.
  *
- * Only non-author comments are examined (a heads-up comes from someone else).
+ * All comments are scanned (PR references are cheap to extract), but each
+ * result records whether the citing comment came from the issue author.
+ * The open-PR downgrade (rule 11) only trusts non-author heads-ups; the
+ * partially-addressed rule (rule 12) also reads the author's, because the
+ * maintainer narrating what already shipped is usually the issue author.
  * References already found via the timeline/search, and the issue's own
  * number, are skipped. Bounded at 5 PR fetches per call; the walk is
  * best-effort and cached like the rest of the issue data.
@@ -362,7 +432,7 @@ export async function fetchCommentMentionedPRs(
   issueNumber: number,
   comments: CommentSignal[],
   knownPRNumbers: number[],
-  deps: MentionedPRDeps = {}
+  deps: MentionedPRDeps & { issueAuthor?: string } = {}
 ): Promise<MentionedPR[]> {
   // Injected fetch deps (tests) bypass the cache; live calls use it.
   const useCache = !deps.fetchPull;
@@ -378,6 +448,8 @@ export async function fetchCommentMentionedPRs(
     .slice(0, 5);
   const fetchPull = deps.fetchPull ?? defaultFetchPull;
 
+  const refAuthors = extractPRReferenceAuthors(comments, owner, repo);
+
   const out: MentionedPR[] = [];
   for (const n of refs) {
     let detail: PullRefDetail | null;
@@ -392,6 +464,9 @@ export async function fetchCommentMentionedPRs(
       url: detail.url,
       state: detail.merged ? "merged" : detail.state,
       mentionsIssue: mentionsIssueNumber(`${detail.title}\n${detail.body}`, issueNumber),
+      ...(deps.issueAuthor && refAuthors.get(detail.number) === deps.issueAuthor
+        ? { fromAuthor: true }
+        : {}),
     });
   }
 
@@ -426,14 +501,17 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
   if ((issue as { pull_request?: unknown }).pull_request) {
     throw new Error(`#${number} is a pull request, not an issue`);
   }
-  const [comments, linkedPRs, contributing] = await Promise.all([
+  const [comments, linkedPRs, houseRules] = await Promise.all([
     fetchComments(owner, repo, number),
     fetchLinkedPRs(owner, repo, number),
-    fetchContributing(owner, repo),
+    fetchHouseRules(owner, repo),
   ]);
 
-  // Comment-mentioned PRs: references like "#861" in non-author comments,
-  // cross-checked against the PR API. Best-effort; never blocks the snapshot.
+  // Comment-mentioned PRs: references like "#861" in comments, cross-checked
+  // against the PR API. The open-PR downgrade trusts only non-author
+  // heads-ups (see rule 11), but the partially-addressed rule also reads
+  // the author's, since the maintainer narrating shipped work is usually
+  // the issue author. Best-effort; never blocks the snapshot.
   let commentMentionedPRs: MentionedPR[] = [];
   try {
     const issueAuthor = String((issue.user as Record<string, string> | undefined)?.login ?? "");
@@ -441,8 +519,9 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
       owner,
       repo,
       number,
-      comments.filter((c) => c.author !== issueAuthor),
-      linkedPRs.map((p) => p.number)
+      comments,
+      linkedPRs.map((p) => p.number),
+      { issueAuthor }
     );
   } catch { /* best-effort */ }
 
@@ -462,7 +541,10 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     commentMentionedPRs,
     createdAt: String(issue.created_at),
     updatedAt: String(issue.updated_at),
-    contributing,
+    // Joined text kept for compatibility; the verdict engine prefers the
+    // per-file houseRules when present so gates record their source file.
+    contributing: houseRules.map((r) => r.text).join("\n\n"),
+    houseRules,
   };
   cacheSet("issue", [owner, repo, String(number), "snapshot"], snapshot);
   return snapshot;

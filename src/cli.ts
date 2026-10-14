@@ -210,6 +210,7 @@ async function cmdPrep(issueUrl: string, args: string[]): Promise<void> {
           branchCreated: plan.branchCreated,
           prepFile: plan.prepFile,
           nextCommands: plan.nextCommands,
+          conventions: plan.conventions ?? null,
         },
         null,
         2

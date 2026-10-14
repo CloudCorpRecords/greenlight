@@ -97,6 +97,44 @@ export interface ParseOptions {
   collaboratorsOnlyPolicy?: boolean;
 }
 
+/** One policy file's raw text: CONTRIBUTING variants, AGENTS.md, CLAUDE.md. */
+export interface PolicySource {
+  file: string;
+  text: string;
+}
+
+/**
+ * Parse several policy files at once. Binding rules increasingly live in
+ * house-rules files that CONTRIBUTING only links to (reticle keeps its
+ * claim-first, DCO, .changes and `pnpm verify` rules in AGENTS.md), so the
+ * same gate rules run over all of them. Sources are merged without
+ * duplicating kinds: CONTRIBUTING variants win ties, and each detected gate
+ * records the file its evidence came from.
+ */
+export function parseGatesFromSources(sources: PolicySource[]): Gate[] {
+  const contributingFirst = (f: string) => (f.toLowerCase().includes("contributing") ? 0 : 1);
+  const ordered = [...sources].sort((a, b) => contributingFirst(a.file) - contributingFirst(b.file));
+  const merged: Gate[] = RULES.map((r) => ({
+    kind: r.kind,
+    detected: false,
+    evidence: "",
+    source: undefined,
+  }));
+  for (const src of ordered) {
+    const gates = parseGates(src.text);
+    for (const g of gates) {
+      if (!g.detected) continue;
+      const m = merged.find((x) => x.kind === g.kind);
+      if (m && !m.detected) {
+        m.detected = true;
+        m.evidence = g.evidence;
+        m.source = src.file;
+      }
+    }
+  }
+  return merged;
+}
+
 /**
  * Parse contributing text into a gate list. Always returns all seven gates
  * with detected true/false, plus an evidence snippet when detected.

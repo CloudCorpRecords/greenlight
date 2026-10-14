@@ -18,7 +18,7 @@ import { join } from "node:path";
 import { scoreIssue } from "./verdict.js";
 import { parseGates, gateLabel } from "./gates.js";
 import { githubToken, apiGet, apiPost, ApiNotFoundError } from "./github.js";
-import type { IssueSnapshot, VerdictResult, Gate } from "./types.js";
+import type { IssueSnapshot, VerdictResult, Gate, RepoConventions } from "./types.js";
 
 /** Thrown when an automation command refuses to proceed. CLI exits 1 on this. */
 export class AutomationRefusal extends Error {
@@ -48,6 +48,12 @@ export interface GitHubClient {
   ): Promise<{ aheadBy: number; commits: Array<{ sha: string; message: string }> }>;
   /** Head branch names of recent closed PRs, used to learn the repo's branch convention. */
   listClosedPullHeadRefs(owner: string, repo: string): Promise<string[]>;
+  /** Names of files and directories at the repo root (best-effort conventions detection). */
+  repoRootNames(owner: string, repo: string): Promise<string[]>;
+  /** Raw text of a repo-root file, or undefined when absent. */
+  fetchRootFile(owner: string, repo: string, path: string): Promise<string | undefined>;
+  /** First lines of the most recent commit messages on a branch. */
+  listRecentCommitMessages(owner: string, repo: string, branch: string, count: number): Promise<string[]>;
   postIssueComment(owner: string, repo: string, number: number, body: string): Promise<string>;
   createPullRequest(
     owner: string,
@@ -114,6 +120,31 @@ export function createRestClient(): GitHubClient {
         head?: { ref?: unknown };
       }>;
       return (r ?? []).map((p) => String(p.head?.ref ?? "")).filter((ref) => ref.length > 0);
+    },
+    async repoRootNames(owner: string, repo: string) {
+      const r = (await apiGet(`/repos/${owner}/${repo}/contents/`)) as Array<{
+        name?: unknown;
+      }>;
+      return (r ?? []).map((e) => String(e.name ?? "")).filter((n) => n.length > 0);
+    },
+    async fetchRootFile(owner: string, repo: string, path: string) {
+      try {
+        const r = (await apiGet(`/repos/${owner}/${repo}/contents/${path}`)) as {
+          content?: unknown;
+          encoding?: unknown;
+        };
+        if (typeof r.content !== "string") return undefined;
+        return Buffer.from(r.content, r.encoding === "base64" ? "base64" : "utf8").toString("utf8");
+      } catch (err) {
+        if (err instanceof ApiNotFoundError) return undefined;
+        throw err;
+      }
+    },
+    async listRecentCommitMessages(owner: string, repo: string, branch: string, count: number) {
+      const r = (await apiGet(
+        `/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(branch)}&per_page=${count}`
+      )) as Array<{ commit?: { message?: unknown } }>;
+      return (r ?? []).map((c) => String(c.commit?.message ?? "").split("\n")[0] ?? "");
     },
     async postIssueComment(owner: string, repo: string, number: number, body: string) {
       const r = (await apiPost(`/repos/${owner}/${repo}/issues/${number}/comments`, { body })) as {
@@ -365,8 +396,9 @@ export function renderPrepDoc(args: {
   branchNote?: string;
   viewer: string;
   issueUrl: string;
+  conventions?: RepoConventions;
 }): string {
-  const { snapshot, verdict, gates, branch, branchDefault, branchNote, viewer, issueUrl } = args;
+  const { snapshot, verdict, gates, branch, branchDefault, branchNote, viewer, issueUrl, conventions } = args;
   const actions = gateActions(gates);
   const lines: string[] = [
     `# Greenlight prep: ${snapshot.owner}/${snapshot.repo}#${snapshot.number}`,
@@ -383,6 +415,34 @@ export function renderPrepDoc(args: {
     lines.push("No blocking gates detected.");
   } else {
     lines.push(...actions.map((a) => `- ${a}`));
+  }
+  lines.push(``, `## Repo conventions`, ``);
+  if (conventions) {
+    if (conventions.houseRuleFiles.length > 0) {
+      lines.push(`- House rules: ${conventions.houseRuleFiles.join(", ")}`);
+    }
+    if (conventions.verifyCommands.length > 0) {
+      lines.push(
+        `- Verify command from house rules: ${conventions.verifyCommands.map((c) => `\`${c}\``).join(", ")}`
+      );
+    }
+    if (conventions.changesDir) {
+      lines.push(
+        `- Add a ${conventions.changesDirName ?? ".changes"} entry (this repo assembles its changelog from ${conventions.changesDirName ?? ".changes"}/)`
+      );
+    }
+    if (conventions.packageScripts.length > 0) {
+      lines.push(
+        `- Run before pushing: ${conventions.packageScripts.map((s) => `\`pnpm ${s}\``).join(", ")}`
+      );
+    }
+    if (conventions.conventionalCommits) {
+      lines.push(
+        `- Commits follow Conventional Commits${conventions.exampleCommit ? `, e.g. "${conventions.exampleCommit}"` : ""}`
+      );
+    }
+  } else {
+    lines.push("No repo conventions detected (no house-rules files, package.json, or commit history found).");
   }
   lines.push(``, `## Issue`, ``, snapshot.title, ``);
   if (snapshot.body) lines.push(snapshot.body.trim().slice(0, 2000), ``);
@@ -424,6 +484,100 @@ export interface PrepResult {
   branchCreated: boolean;
   prepFile: string;
   nextCommands: string[];
+  /** Repo rituals learned during prep (best-effort; undefined when nothing was detectable). */
+  conventions?: RepoConventions;
+}
+
+/** Script names worth surfacing when found in the root package.json. */
+const INTERESTING_SCRIPTS = ["test", "verify", "lint", "typecheck", "build"];
+
+/** Conventional Commits subject prefix: feat(scope): ..., fix: ..., etc. */
+const CONVENTIONAL_COMMIT_RES = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: /;
+
+/**
+ * Extract backticked run commands quoted in house-rules text, e.g. the
+ * `pnpm verify` reticle's AGENTS.md insists on. Returns them deduplicated,
+ * in order of appearance, capped at five.
+ */
+export function extractVerifyCommands(text: string): string[] {
+  const out: string[] = [];
+  const re = /`((?:pnpm|npm|yarn|bun|make)\s+[a-zA-Z0-9:._-]+)`/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null && out.length < 5) {
+    if (!out.includes(m[1])) out.push(m[1]);
+  }
+  return out;
+}
+
+/**
+ * Learn the repo's contribution rituals for the PREP.md checklist:
+ * which house-rules files exist, the verify/test command they quote,
+ * whether the repo assembles its changelog from a .changes directory,
+ * which root package.json scripts exist, and whether recent commits
+ * follow Conventional Commits. Every probe is best-effort: a failing
+ * probe is skipped, never fatal.
+ */
+export async function gatherRepoConventions(
+  client: GitHubClient,
+  snapshot: IssueSnapshot
+): Promise<RepoConventions | undefined> {
+  const { owner, repo } = snapshot;
+  const houseRuleFiles = (snapshot.houseRules ?? []).map((h) => h.file);
+  const verifyCommands = extractVerifyCommands(
+    (snapshot.houseRules ?? []).map((h) => h.text).join("\n")
+  );
+
+  let changesDir = false;
+  let changesDirName: string | undefined;
+  try {
+    const names = await client.repoRootNames(owner, repo);
+    const found = names.find((n) => n === ".changes" || n === ".changeset");
+    if (found) {
+      changesDir = true;
+      changesDirName = found;
+    }
+  } catch { /* root listing failed; skip */ }
+
+  let packageScripts: string[] = [];
+  try {
+    const pkg = await client.fetchRootFile(owner, repo, "package.json");
+    if (pkg) {
+      const scripts = Object.keys((JSON.parse(pkg) as { scripts?: unknown }).scripts ?? {});
+      packageScripts = INTERESTING_SCRIPTS.filter((s) => scripts.includes(s));
+    }
+  } catch { /* no package.json or unparsable; skip */ }
+
+  let conventionalCommits = false;
+  let exampleCommit: string | undefined;
+  try {
+    const { defaultBranch } = await client.getRepo(owner, repo);
+    const messages = await client.listRecentCommitMessages(owner, repo, defaultBranch, 20);
+    const subjects = messages.map((m) => m.trim()).filter((m) => m.length > 0);
+    const matching = subjects.filter((m) => CONVENTIONAL_COMMIT_RES.test(m));
+    if (subjects.length > 0 && matching.length / subjects.length >= 0.6) {
+      conventionalCommits = true;
+      exampleCommit = matching[0].length > 60 ? matching[0].slice(0, 60) + "..." : matching[0];
+    }
+  } catch { /* commit history unavailable; skip */ }
+
+  if (
+    houseRuleFiles.length === 0 &&
+    verifyCommands.length === 0 &&
+    !changesDir &&
+    packageScripts.length === 0 &&
+    !conventionalCommits
+  ) {
+    return undefined;
+  }
+  return {
+    houseRuleFiles,
+    verifyCommands,
+    changesDir,
+    ...(changesDirName ? { changesDirName } : {}),
+    packageScripts,
+    conventionalCommits,
+    ...(exampleCommit ? { exampleCommit } : {}),
+  };
 }
 
 /**
@@ -505,6 +659,12 @@ export async function prepIssue(
     `greenlight pr ${snapshot.sourceUrl} --branch ${branch} --yes`,
   ];
 
+  // Learn the repo's contribution rituals (best-effort; never fatal).
+  let conventions: RepoConventions | undefined;
+  try {
+    conventions = await gatherRepoConventions(client, snapshot);
+  } catch { /* conventions are advisory; skip */ }
+
   mkdirSync(prepDir, { recursive: true });
   writeFileSync(
     prepFile,
@@ -517,6 +677,7 @@ export async function prepIssue(
       branchNote: suggestion.note || undefined,
       viewer: viewer ?? "<you>",
       issueUrl: snapshot.sourceUrl,
+      conventions,
     }),
     "utf8"
   );
@@ -532,6 +693,7 @@ export async function prepIssue(
     branchCreated,
     prepFile,
     nextCommands,
+    conventions,
   };
 }
 

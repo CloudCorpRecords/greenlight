@@ -25,7 +25,7 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.2.1" });
+const server = new McpServer({ name: "greenlight", version: "0.3.0" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -166,6 +166,7 @@ server.tool(
         branchCreated: plan.branchCreated,
         prepFile: plan.prepFile,
         nextCommands: plan.nextCommands,
+        conventions: plan.conventions ?? null,
       });
     } catch (err) {
       if (err instanceof AutomationRefusal) return text({ refused: true, reason: err.message });

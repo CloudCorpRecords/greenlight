@@ -41,11 +41,21 @@
  *     "comment-mentioned-pr" ("PR #NNN referenced in comments may already
  *     cover part of this issue"). A merged one is only an informational
  *     note; neither can produce TAKEN. Seen on reticlehq/reticle#691.
+ *  12. Partially-addressed: merged PRs that reference the issue number
+ *     (comment-mentioned or linked), or maintainer comments signaling part
+ *     of the work already shipped ("Half addressed", "leaving this open
+ *     for ...", "still open", "part of this is shipped in v..."), mean
+ *     part of the issue is done while the rest stays open. A plain GO
+ *     hides that. Add flag "partially-addressed", cap an otherwise-GO
+ *     verdict at RISKY with a scoping reason; never TAKEN. Seen on
+ *     reticlehq/reticle#894 (half A shipped in v3.1.0 via #905/#915,
+ *     half B still open).
  */
 import type { IssueSnapshot, VerdictResult, Verdict } from "./types.js";
 import { detectClaims, strongClaimants } from "./claims.js";
-import { parseGates, hardGates, gateLabel } from "./gates.js";
+import { parseGates, parseGatesFromSources, hardGates, gateLabel } from "./gates.js";
 import { isClosingPR } from "./linkstrength.js";
+import { extractPRReferences } from "./github.js";
 
 const FRESH_CLAIM_DAYS = 45;
 const STALE_INACTIVITY_DAYS = 180;
@@ -56,7 +66,12 @@ function daysSince(iso: string, now: Date): number {
 
 export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): VerdictResult {
   const claims = detectClaims(snapshot.author ?? "", snapshot.comments, now);
-  const gates = parseGates(snapshot.contributing);
+  // House-rules files (CONTRIBUTING variants, AGENTS.md, CLAUDE.md) are
+  // parsed per-file so each gate records which file its evidence came from.
+  const gates =
+    snapshot.houseRules && snapshot.houseRules.length > 0
+      ? parseGatesFromSources(snapshot.houseRules)
+      : parseGates(snapshot.contributing);
   const reasons: string[] = [];
   const flags: string[] = [];
 
@@ -181,9 +196,11 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   // Rule 11: comment-mentioned PR cross-check. A PR cited in a non-author
   // comment whose title/body mentions this issue number may already cover
   // part of the work: downgrade an otherwise-GO verdict to RISKY. A merged
-  // one is only an informational note. Neither can produce TAKEN.
+  // one is handled by rule 12 below; neither can produce TAKEN.
   const mentioned = snapshot.commentMentionedPRs ?? [];
-  const openMentioned = mentioned.filter((p) => p.state === "open" && p.mentionsIssue);
+  const openMentioned = mentioned.filter(
+    (p) => p.state === "open" && p.mentionsIssue && !p.fromAuthor
+  );
   const mergedMentioned = mentioned.filter((p) => p.state === "merged" && p.mentionsIssue);
   if (openMentioned.length > 0) {
     flags.push("comment-mentioned-pr");
@@ -194,11 +211,84 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
       verdict = "RISKY";
     }
   }
+
+  // Rule 12: partially-addressed. A merged PR is evidence that part of
+  // the issue already shipped when (a) its title/body references this
+  // issue number, or (b) a maintainer comment signaling shipped work
+  // cites it. Case (b) matters because maintainers often narrate shipped
+  // work ("Half addressed by #905, merged to main in #915") without the
+  // PR itself naming the issue. A plain GO hides the scoping work a
+  // contributor must do, so flag it and cap GO at RISKY. Never TAKEN:
+  // only an open closing PR does that (rule 3).
+  const shipperCitedNumbers = new Set<number>();
+  for (const c of snapshot.comments) {
+    if (
+      PARTIALLY_SHIPPED_COMMENT_RES.some((re) => re.test(c.body)) ||
+      hasShippedInVersionSignal([c], snapshot.number)
+    ) {
+      for (const n of extractPRReferences([c], snapshot.owner, snapshot.repo)) {
+        shipperCitedNumbers.add(n);
+      }
+    }
+  }
+  const shippedPRs = new Map<number, string>();
+  const addShipped = (n: number) => {
+    if (!shippedPRs.has(n)) shippedPRs.set(n, `PR #${n}, merged`);
+  };
+  for (const p of mentioned) {
+    if (p.state === "merged" && (p.mentionsIssue || shipperCitedNumbers.has(p.number))) {
+      addShipped(p.number);
+    }
+  }
+  for (const pr of snapshot.linkedPRs) {
+    if (pr.state === "merged" && (isClosingPR(pr) || shipperCitedNumbers.has(pr.number))) {
+      addShipped(pr.number);
+    }
+  }
+  const shippedParts = [...shippedPRs.values()];
+  const partiallyShippedComment =
+    snapshot.comments.some((c) => PARTIALLY_SHIPPED_COMMENT_RES.some((re) => re.test(c.body))) ||
+    hasShippedInVersionSignal(snapshot.comments, snapshot.number);
+  const consumedByRule12 = new Set<number>(shippedPRs.keys());
+  if (shippedParts.length > 0 || partiallyShippedComment) {
+    flags.push("partially-addressed");
+    const detail =
+      shippedParts.length > 0 ? shippedParts.join("; ") : "a maintainer comment";
+    reasons.push(`part of this issue already shipped (${detail}); scope your work to what remains`);
+    if (verdict === "GO") verdict = "RISKY";
+  }
+  // Rule 11's informational merged note, for merged references that did
+  // not already produce the rule-12 reason.
   for (const p of mergedMentioned) {
+    if (consumedByRule12.has(p.number)) continue;
     reasons.push(`PR #${p.number} (merged) referenced in comments; issue may be partially addressed`);
   }
 
   return { verdict, reasons, claims, gates, flags };
+}
+
+/**
+ * Comment shapes that signal part of an issue already shipped while the
+ * rest stays open. Seen on reticlehq/reticle#894: "Half addressed by #905,
+ * merged to main in #915", "leaving this open for half B", "Shipped in
+ * v3.1.0".
+ */
+const PARTIALLY_SHIPPED_COMMENT_RES: RegExp[] = [
+  /half (addressed|done|fixed)/i,
+  /leaving (this|it) open for/i,
+  /\bstill (open|remaining)\b/i,
+  /part of this (is|was) (fixed|shipped)/i,
+];
+
+/** "/shipped in v/i near an issue reference" is the last pattern; the
+ * four above run on every comment, and this one runs below with its
+ * issue-reference guard. */
+export function hasShippedInVersionSignal(comments: { body: string }[], issueNumber: number): boolean {
+  return comments.some(
+    (c) =>
+      /shipped in v/i.test(c.body) &&
+      (c.body.includes(`#${issueNumber}`) || /this issue/i.test(c.body))
+  );
 }
 
 export { FRESH_CLAIM_DAYS, STALE_INACTIVITY_DAYS };
