@@ -64,10 +64,10 @@ The verdict engine is deterministic (no LLM) and checks, in order:
 
 1. Closed issue: **TAKEN** (never landable).
 2. Any assignee: **TAKEN**.
-3. An open linked PR referencing the issue: **TAKEN**.
+3. An open linked PR that **closes** the issue: **TAKEN**. A PR that merely mentions the issue number (like pdfcn PR #91, which closes #70 but lists sibling issues in its body) only adds a `weak-pr-mention` flag and downgrades an otherwise-GO verdict to **RISKY**.
 4. Two or more strong claimants: **TAKEN** (claim race).
 5. One strong fresh claim (under 45 days): **RISKY** with the `claimed` flag.
-6. One strong claim older than 45 days with no linked PR: **RISKY** with the `stale_claim` flag. The claimant probably walked away, but nobody knows for sure.
+6. One strong claim older than 45 days with no closing PR: **RISKY** with the `stale_claim` flag. The claimant probably walked away, but nobody knows for sure.
 7. A hard gate (assignment, vouch, collaborators-only) with nobody assigned: **GATED**.
 8. No activity for 180+ days: **STALE**.
 9. Otherwise: **GO**.
