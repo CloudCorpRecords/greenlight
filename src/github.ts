@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind } from "./types.js";
+import { classifyLinkStrength, type LinkStrength } from "./linkstrength.js";
 
 const API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
@@ -122,15 +123,17 @@ export async function fetchComments(owner: string, repo: string, number: number)
 }
 
 /**
- * Find PRs that reference an issue: timeline cross-reference events plus
- * a search for the issue number in PR bodies of the repo. Keeps the live
- * search light by checking the timeline first.
+ * Find PRs that reference an issue. Timeline cross-references and a text
+ * search for the issue number are discovery only: every candidate PR is
+ * then fetched individually and scored with classifyLinkStrength, so a PR
+ * that merely lists a sibling issue (e.g. pdfcn #91 closing #70 while
+ * mentioning #61) is stored as a "mention", not a "closing" PR. See issue #1.
  */
 export async function fetchLinkedPRs(owner: string, repo: string, number: number): Promise<LinkedPR[]> {
   const cached = cacheGet("issue", [owner, repo, String(number), "prs"]) as LinkedPR[] | undefined;
   if (cached) return cached;
 
-  const found = new Map<number, LinkedPR>();
+  const found = new Map<number, { number: number; state: LinkedPR["state"]; title: string; url: string }>();
 
   try {
     const timeline = await paginate<Record<string, unknown>>(`/repos/${owner}/${repo}/issues/${number}/timeline`);
@@ -159,7 +162,6 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
       items: Array<{ number: number; state: string; title: string; html_url: string; pull_request?: { merged_at: string | null } }>;
     };
     for (const item of data.items ?? []) {
-      const existing = found.get(item.number);
       const state: LinkedPR["state"] =
         item.pull_request?.merged_at ? "merged" : item.state === "open" ? "open" : "closed";
       found.set(item.number, {
@@ -168,13 +170,34 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
         title: item.title,
         url: item.html_url,
       });
-      if (existing && existing.state === "open" && state !== "open") {
-        // keep the fresher search result
-      }
     }
   } catch { /* search is best-effort */ }
 
-  const prs = [...found.values()];
+  // Score each candidate with its real body and branch: discovery is not evidence.
+  const prs: LinkedPR[] = [];
+  for (const cand of found.values()) {
+    let linkStrength: LinkStrength = "mention";
+    let title = cand.title;
+    try {
+      const detail = (await apiGet(`/repos/${owner}/${repo}/pulls/${cand.number}`)) as {
+        title?: unknown;
+        body?: unknown;
+        head?: { ref?: unknown };
+      };
+      title = String(detail.title ?? cand.title);
+      const branch = String(detail.head?.ref ?? "");
+      linkStrength = classifyLinkStrength({
+        title,
+        body: String(detail.body ?? ""),
+        branch,
+        issueNumber: number,
+      });
+    } catch {
+      linkStrength = "mention"; // could not read the PR; treat as a weak reference
+    }
+    prs.push({ number: cand.number, state: cand.state, title, url: cand.url, linkStrength });
+  }
+
   cacheSet("issue", [owner, repo, String(number), "prs"], prs);
   return prs;
 }

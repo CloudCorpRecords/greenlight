@@ -18,6 +18,8 @@ export interface LinkedPR {
   state: "open" | "closed" | "merged";
   title: string;
   url: string;
+  /** How strongly the PR is tied to the issue. Only "closing" PRs take an issue. */
+  linkStrength: "closing" | "mention";
 }
 
 /** A snapshot of one issue: everything the verdict engine needs. */
