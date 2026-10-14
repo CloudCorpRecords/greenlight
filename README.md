@@ -97,8 +97,44 @@ Tools:
 * `check_issue` - verdict for one issue URL
 * `scan_repo` - rank a repo's starter issues, GO first
 * `repo_friction` - friction score for a repo
+* `claim_issue` - verdict-gated claim comment (dry run unless `execute: true`)
+* `prep_issue` - fork and branch check plus a local PREP.md checklist (dry run unless `execute: true`)
+* `open_pr` - DCO-aware PR opening from a fork branch (dry run unless `execute: true`)
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
+
+## Automation
+
+Greenlight 0.2.0 automates the contribution pipeline its author ran by hand
+for four real PRs (shadcn-labs/pdfcn #92-#95): verdict, claim comment, fork
+branch, and opening the PR, with DCO awareness throughout.
+
+```bash
+# 1. Claim the issue: verdict first, comment shaped by the repo's gates
+greenlight claim https://github.com/shadcn-labs/pdfcn/issues/65
+
+# 2. Prepare: fork/branch check plus a PREP.md checklist
+greenlight prep https://github.com/shadcn-labs/pdfcn/issues/65 --dir /tmp/prep65
+
+# 3. Open the PR from your fork branch (verifies DCO sign-off on DCO repos)
+greenlight pr https://github.com/shadcn-labs/pdfcn/issues/65 --branch feat/quarterly-report-65
+```
+
+Safety defaults, and this is a feature:
+
+* **Dry run by default.** All three commands print exactly what they would
+  post or create and exit. Nothing is posted or created without `--yes`
+  (CLI) or `execute: true` (MCP).
+* **Writes need a token.** Read ops work with no token at all. Write ops
+  require `GITHUB_TOKEN` (or `GH_TOKEN`); without one they print a clear
+  error naming the env var and exit non-zero.
+* **Verdict-gated.** `claim` refuses TAKEN or STALE verdicts unless
+  `--force`, and refuses vouch-gated repos outright (a vouch cannot be
+  automated). Assignment-gated repos get an assignment request instead of
+  an intent comment.
+* **DCO-aware.** On DCO repos, `pr` verifies every commit on the branch
+  carries a `Signed-off-by:` line and refuses, listing the unsigned
+  commits, when one is missing.
 
 ## The friction index
 

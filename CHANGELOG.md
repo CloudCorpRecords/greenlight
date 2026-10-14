@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.0 (2026-10-14)
+
+Contribution automation. Greenlight now runs the pipeline its author ran by
+hand for four real PRs (shadcn-labs/pdfcn #92-#95): verdict, claim comment,
+fork branch, PR opening, with DCO awareness throughout.
+
+- New `claim` command (MCP: `claim_issue`): runs the verdict pipeline first,
+  refuses TAKEN or STALE issues unless `--force`, shapes the claim comment
+  from the repo's gates (assignment-gated repos get an assignment request,
+  vouch-gated repos are refused outright since a vouch cannot be automated).
+- New `prep` command (MCP: `prep_issue`): checks (and with `--yes` creates)
+  your fork and a branch named from the issue title (`feat/<slug>-<number>`),
+  then writes a local PREP.md checklist with the verdict, gates, DCO
+  reminders, and the exact next commands. Never clones.
+- New `pr` command (MCP: `open_pr`): verifies the branch exists on the fork
+  and is ahead of upstream, verifies every ahead commit carries a
+  Signed-off-by line on DCO repos (refuses and lists the unsigned commits),
+  then composes the PR title and body ("Closes #N" plus verdict and gates).
+- Safety defaults: read ops stay tokenless; every write command is a DRY
+  RUN until `--yes` (CLI) or `execute: true` (MCP); write commands require
+  GITHUB_TOKEN (or GH_TOKEN).
+- REST client gained a POST helper and an ApiNotFoundError for 404s; issue
+  snapshots now carry the issue body for prep checklists.
+
 ## 0.1.1 (2026-10-13)
 
 Fixed the linked-PR false positive reported as issue #1. `check` and `scan` no
