@@ -24,6 +24,8 @@ const EXPECTED: Record<string, Verdict> = {
   "linked-pr-case.json": "TAKEN",
   "stale-case.json": "STALE",
   "closed-case.json": "TAKEN",
+  "pdfcn-61-mention.json": "RISKY",
+  "pdfcn-61-closing.json": "TAKEN",
 };
 
 describe("fixture verdicts reproduce hand-verified cases", () => {
@@ -55,6 +57,32 @@ describe("verdict details", () => {
     const result = scoreIssue(load("langchain-41185.json"), NOW);
     assert.ok(result.reasons[0].includes("claim race"));
     assert.equal(result.claims.filter((c) => c.strength === "strong").length, 3);
+  });
+
+  it("a mere PR mention does not take the issue (issue #1 regression)", () => {
+    // PR #91 closes #70 and lists siblings #60-#65 in its body; it must not
+    // mark #61 as TAKEN.
+    const result = scoreIssue(load("pdfcn-61-mention.json"), NOW);
+    assert.notEqual(result.verdict, "TAKEN");
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("weak-pr-mention"));
+    assert.ok(result.reasons.some((r) => r.includes("mentions this issue but does not close it")));
+    assert.ok(result.reasons.some((r) => r.includes("#91")));
+  });
+
+  it("a closing PR still takes the issue", () => {
+    const result = scoreIssue(load("pdfcn-61-closing.json"), NOW);
+    assert.equal(result.verdict, "TAKEN");
+    assert.ok(result.reasons[0].includes("closes this issue"));
+    assert.ok(result.reasons[0].includes("#91"));
+  });
+
+  it("an old cache entry without linkStrength is treated as a mention, not a close", () => {
+    const snapshot = load("pdfcn-61-mention.json");
+    delete (snapshot.linkedPRs[0] as Record<string, unknown>).linkStrength;
+    const result = scoreIssue(snapshot, NOW);
+    assert.notEqual(result.verdict, "TAKEN");
+    assert.ok(result.flags.includes("weak-pr-mention"));
   });
 
   it("fastmcp-5718 is GATED with assignment evidence", () => {
