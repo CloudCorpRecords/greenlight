@@ -68,8 +68,16 @@ describe("scoreFriction", () => {
     // trigger.dev: vouch gate -> 65
     const trigger = scoreFriction(base({ gates: gatesOn(["vouch_required"]) }));
     assert.equal(trigger.score, 65);
-    // squidbrake: claim-to-comment ritual counts as assignment_required -> 75
-    const squid = scoreFriction(base({ gates: gatesOn(["assignment_required"]) }));
-    assert.equal(squid.score, 75);
+    // squidbrake: comment-first claim ritual is a soft gate -> 95
+    const squid = scoreFriction(base({ gates: gatesOn(["claim_first"]) }));
+    assert.equal(squid.score, 95);
+  });
+
+  it("claim-first is a soft friction weight (-5, less than assignment)", () => {
+    const soft = scoreFriction(base({ gates: gatesOn(["claim_first"]) }));
+    const hard = scoreFriction(base({ gates: gatesOn(["assignment_required"]) }));
+    assert.equal(soft.score, 95);
+    assert.ok(soft.score > hard.score);
+    assert.ok(soft.reasons.some((x) => x.includes("comment first before starting") && x.includes("-5")));
   });
 });

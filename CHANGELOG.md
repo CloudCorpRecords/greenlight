@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.2.1 (2026-10-14)
+
+Three fixes from dogfooding the tool on real repos.
+
+- **claim_first is now its own soft gate.** `src/gates.ts` used to file
+  "comment before starting work" under `assignment_required`, which made
+  every shadcn-labs/pdfcn issue read GATED even though commenting first is
+  a ritual you satisfy by posting a comment (exactly what the sibling tool
+  gatefile calls `claim_first`). The two comment/claim patterns moved to a
+  new `claim_first` gate; `assignment_required` keeps only true assignment
+  patterns ("ask to be assigned", "must be assigned", assignment before
+  submitting). `claim_first` never produces a GATED verdict: like
+  `dco_required` and `discussion_first` it is soft, capping an
+  otherwise-GO verdict at RISKY with the note "repo asks contributors to
+  comment before starting (claim first)". Friction weight -5 (less than
+  assignment's -25). The `claim` command's default comment already
+  satisfies the ritual, and a test pins that claim-first repos do not get
+  the assignment-request variant.
+- **Removed `/\bprs welcome\b/i` from the gate parser.** A "prs welcome"
+  label is an alternative acceptance signal (seen on FastMCP), not a gate;
+  it no longer feeds any gate kind.
+- **`scan` falls back to recent open unassigned issues.** `greenlight scan`
+  used to report "no starter issues found" for active repos like
+  openclaw/openclaw and batrapulkit/squidbrake whose landable issues do
+  not carry good-first-issue / help-wanted labels. When the label pass
+  comes back empty, scan now lists the repo's recent open unassigned
+  issues (pull requests and assigned issues excluded, capped at 25) and
+  runs the same verdict checks on the newest 10, with a clear header note
+  that these come from the fallback pass. Opt out with `--no-fallback`.
+  The MCP `scan_repo` tool uses the same fallback.
+- **`prep` learns the repo's branch convention.** Instead of blindly
+  naming branches `feat/<slug>-<number>`, prep now reads the head branch
+  names of the repo's 30 most recent closed PRs. When at least 3 share a
+  dominant suffix token (like `-block` on shadcn-labs/pdfcn) or a common
+  prefix style, the suggested branch follows it
+  (`feat/quarterly-report-block`) while PREP.md still shows the default
+  (`feat/quarterly-report-65`). No pattern, no change.
+- The squidbrake friction-index hand entry was reclassified from
+  `assignment_required` to `claim_first` to match the new gate kinds.
+
 ## 0.2.0 (2026-10-14)
 
 Contribution automation. Greenlight now runs the pipeline its author ran by

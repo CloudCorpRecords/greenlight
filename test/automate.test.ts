@@ -11,6 +11,8 @@ import {
   buildClaimComment,
   renderPrepDoc,
   gateActions,
+  detectBranchPattern,
+  suggestBranchName,
   AutomationRefusal,
   type GitHubClient,
 } from "../src/automate.js";
@@ -80,6 +82,10 @@ class FakeClient implements GitHubClient {
   async compareCommits() {
     return { aheadBy: this.aheadBy, commits: this.aheadCommits };
   }
+  closedRefs: string[] = [];
+  async listClosedPullHeadRefs() {
+    return this.closedRefs;
+  }
   async postIssueComment() {
     this.writes.push("postIssueComment");
     return this.commentUrl;
@@ -135,6 +141,91 @@ describe("buildClaimComment", () => {
     const snap = makeSnapshot({ contributing: "Sign off every commit with git commit -s (DCO)." });
     const body = buildClaimComment(snap, parseGates(snap.contributing));
     assert.ok(body.includes("git commit -s"), body);
+  });
+  it("claim-first repo: normal intent comment, NOT the assignment-request variant", () => {
+    const snap = makeSnapshot({
+      contributing: "Do not claim an issue silently. Comment before starting work.",
+    });
+    const gates = parseGates(snap.contributing);
+    assert.equal(gates.find((g) => g.kind === "claim_first")!.detected, true);
+    const body = buildClaimComment(snap, gates, "tester");
+    assert.ok(body.includes("commenting first per the repo's contribution guidelines"), body);
+    assert.ok(!body.includes("assign this issue to me"), body);
+    assert.ok(!body.includes("won't start work until it's assigned"), body);
+  });
+});
+
+describe("gateActions", () => {
+  it("renders a claim-first action", () => {
+    const actions = gateActions(parseGates("Comment before starting work on the issue."));
+    assert.ok(actions.some((a) => a.includes("greenlight claim") && a.includes("comment-first")), actions.join(" | "));
+  });
+});
+
+describe("detectBranchPattern", () => {
+  const pdfcnRefs = [
+    "feat/business-letter-block",
+    "feat/resume-block",
+    "feat/cover-letter-block",
+    "feat/project-proposal-block",
+    "feat/quarterly-report-block",
+  ];
+  it("finds the dominant suffix token (pdfcn style)", () => {
+    const p = detectBranchPattern(pdfcnRefs)!;
+    assert.equal(p.prefix, "feat");
+    assert.equal(p.suffix, "block");
+  });
+  it("returns undefined for mixed refs with no dominant pattern", () => {
+    assert.equal(detectBranchPattern(["feat/a", "fix/b", "docs/c", "chore/d"]), undefined);
+  });
+  it("returns undefined below the 3-branch threshold", () => {
+    assert.equal(
+      detectBranchPattern(["feat/x-block", "feat/y-block", "fix/z-other"]),
+      undefined
+    );
+  });
+  it("numeric last tokens yield a prefix-only pattern (no suffix)", () => {
+    const p = detectBranchPattern(["feat/resume-61", "feat/addresses-71", "feat/letter-60"])!;
+    assert.equal(p.prefix, "feat");
+    assert.equal(p.suffix, null);
+  });
+  it("prefix-only pattern collapses back to the default name", () => {
+    const s = suggestBranchName("block: Resume", 61, ["feat/resume-9", "feat/other-8", "feat/more-7"]);
+    assert.equal(s.branch, "feat/resume-61");
+    assert.equal(s.note, "");
+  });
+});
+
+describe("suggestBranchName", () => {
+  const pdfcnRefs = [
+    "feat/business-letter-block",
+    "feat/resume-block",
+    "feat/cover-letter-block",
+    "feat/project-proposal-block",
+  ];
+  it("uses the repo suffix pattern instead of the issue number", () => {
+    const s = suggestBranchName("block: Quarterly Report", 65, pdfcnRefs);
+    assert.equal(s.branch, "feat/quarterly-report-block");
+    assert.equal(s.defaultName, "feat/quarterly-report-65");
+    assert.ok(s.note.includes("-block"), s.note);
+  });
+  it("falls back to the default with no pattern", () => {
+    const s = suggestBranchName("block: Quarterly Report", 65, ["feat/a", "fix/b"]);
+    assert.equal(s.branch, "feat/quarterly-report-65");
+    assert.equal(s.note, "");
+  });
+  it("adopts a dominant non-feat prefix and keeps the number when there is no suffix", () => {
+    const s = suggestBranchName("fix: parser bug", 12, ["fix/a-1", "fix/b-2", "fix/c-3"]);
+    assert.equal(s.branch, "fix/parser-bug-12");
+    assert.ok(s.note.includes("fix/"), s.note);
+  });
+  it("does not double the suffix when the title already ends with it", () => {
+    const s = suggestBranchName("block: Report block", 65, [
+      "feat/a-block",
+      "feat/b-block",
+      "feat/c-block",
+    ]);
+    assert.equal(s.branch, "feat/report-block");
   });
 });
 
@@ -213,6 +304,8 @@ describe("prepIssue", () => {
   it("dry run writes PREP.md but makes zero GitHub writes", async () => {
     const plan = await prepIssue(client, makeSnapshot(), { dir, yes: false });
     assert.equal(plan.branch, "feat/quarterly-report-65");
+    assert.equal(plan.branchDefault, "feat/quarterly-report-65");
+    assert.equal(plan.branchPatternNote, "");
     assert.equal(plan.forkReady, true);
     assert.equal(plan.branchReady, true);
     assert.equal(plan.forkCreated, false);
@@ -235,6 +328,20 @@ describe("prepIssue", () => {
     }
   });
 
+  it("learns the branch convention from recent closed PRs", async () => {
+    client.closedRefs = [
+      "feat/business-letter-block",
+      "feat/resume-block",
+      "feat/cover-letter-block",
+      "feat/project-proposal-block",
+    ];
+    const plan = await prepIssue(client, makeSnapshot(), { dir, yes: false });
+    assert.equal(plan.branch, "feat/quarterly-report-block");
+    assert.equal(plan.branchDefault, "feat/quarterly-report-65");
+    assert.ok(plan.branchPatternNote.includes("-block"), plan.branchPatternNote);
+    assert.ok(existsSync(plan.prepFile), "PREP.md was written");
+  });
+
   it("PREP.md includes gates and the DCO reminder for DCO repos", () => {
     const snap = makeSnapshot({ contributing: "Sign off every commit with git commit -s (DCO)." });
     const doc = renderPrepDoc({
@@ -250,9 +357,25 @@ describe("prepIssue", () => {
     assert.ok(doc.includes("greenlight pr"), "next commands present");
   });
 
+  it("PREP.md shows the learned branch pattern alongside the default", () => {
+    const snap = makeSnapshot();
+    const doc = renderPrepDoc({
+      snapshot: snap,
+      verdict: { verdict: "GO", reasons: ["fine"], claims: [], gates: [], flags: [] },
+      gates: [],
+      branch: "feat/quarterly-report-block",
+      branchDefault: "feat/quarterly-report-65",
+      branchNote: "repo convention from recent PRs: feat/<slug>-block",
+      viewer: "tester",
+      issueUrl: snap.sourceUrl,
+    });
+    assert.ok(doc.includes("feat/quarterly-report-block"), "suggested branch present");
+    assert.ok(doc.includes("feat/quarterly-report-65"), "default branch present");
+  });
+
   it("gateActions maps every gate kind to an action", () => {
     const gates = parseGates(
-      "Ask to be assigned before submitting a PR. Vouched authors only. Sign the CLA. Sign off every commit (DCO). Start a discussion before opening a PR."
+      "Ask to be assigned before submitting a PR. Vouched authors only. Sign the CLA. Sign off every commit (DCO). Start a discussion before opening a PR. Comment before starting work."
     );
     const actions = gateActions(gates);
     assert.ok(actions.some((a) => a.includes("assign")), "assignment action");
@@ -260,6 +383,7 @@ describe("prepIssue", () => {
     assert.ok(actions.some((a) => a.includes("Contributor License Agreement")), "CLA action");
     assert.ok(actions.some((a) => a.includes("git commit -s")), "DCO action");
     assert.ok(actions.some((a) => a.includes("discussion")), "discussion action");
+    assert.ok(actions.some((a) => a.includes("comment-first")), "claim-first action");
   });
 });
 

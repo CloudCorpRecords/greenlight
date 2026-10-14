@@ -91,6 +91,37 @@ describe("verdict details", () => {
     assert.ok(result.gates.some((g) => g.kind === "assignment_required" && g.detected));
   });
 
+  it("claim-first repo caps a clean issue at RISKY, never GATED (pdfcn style)", () => {
+    const base = load("pdfcn-58.json");
+    const snapshot: IssueSnapshot = {
+      ...base,
+      comments: [],
+      linkedPRs: [],
+      contributing: "Do not claim an issue silently. Comment before starting work. All commits need a Signed-off-by line per the DCO.",
+      updatedAt: NOW.toISOString(),
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.notEqual(result.verdict, "GATED");
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.reasons.some((r) => r.includes("claim first")));
+    assert.ok(result.flags.includes("claim_first"));
+    assert.ok(result.gates.some((g) => g.kind === "claim_first" && g.detected));
+    assert.ok(result.gates.some((g) => g.kind === "dco_required" && g.detected));
+    assert.ok(!result.gates.some((g) => g.kind === "assignment_required" && g.detected));
+  });
+
+  it("claim-first note stacks onto a weak-PR-mention RISKY", () => {
+    const base = load("pdfcn-61-mention.json");
+    const snapshot: IssueSnapshot = {
+      ...base,
+      contributing: "Do not claim an issue silently. Comment before starting work.",
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("weak-pr-mention"));
+    assert.ok(result.flags.includes("claim_first"));
+  });
+
   it("all fixture files are valid snapshots", () => {
     for (const file of readdirSync(FIXTURES)) {
       if (!file.endsWith(".json")) continue;

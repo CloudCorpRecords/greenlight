@@ -18,7 +18,7 @@ Every human and every coding agent doing OSS work hits this pre-flight problem a
 One engine, three surfaces:
 
 1. **Availability verdicts** for an issue: `GO`, `RISKY`, `TAKEN`, `GATED`, `STALE`. Signals: assignees, linked open/closed PRs (timeline + search), claim-comment heuristics (phrases like "please assign", "working on this", "fix ready", "PR incoming"), issue age and last activity.
-2. **Repo friction scores** (0-100, 100 = easiest): contribution gates parsed from CONTRIBUTING.md (assignment-first, vouch, CLA, DCO, discussion-first, collaborators-only), plus outcome signals where computable.
+2. **Repo friction scores** (0-100, 100 = easiest): contribution gates parsed from CONTRIBUTING.md (assignment-first, vouch, CLA, DCO, discussion-first, comment-first, collaborators-only), plus outcome signals where computable.
 3. **Scan mode**: rank a repo's open good-first-issue / help-wanted issues by verdict so a contributor (or agent) picks a winnable one first.
 
 ## Install
@@ -40,7 +40,8 @@ npx greenlight check https://github.com/batrapulkit/squidbrake/issues/74
 #   Taint: tell the approver when an agent edits its own setup right after reading outside content
 #   - open, unassigned, no linked PRs, no claim signals, no blocking gates
 
-# Rank a repo's starter issues, GO first
+# Rank a repo's starter issues, GO first (falls back to recent open
+# unassigned issues when the repo does not use those labels; --no-fallback to opt out)
 npx greenlight scan PrefectHQ/fastmcp
 
 # Friction score for a repo
@@ -70,11 +71,12 @@ The verdict engine is deterministic (no LLM) and checks, in order:
 6. One strong claim older than 45 days with no closing PR: **RISKY** with the `stale_claim` flag. The claimant probably walked away, but nobody knows for sure.
 7. A hard gate (assignment, vouch, collaborators-only) with nobody assigned: **GATED**.
 8. No activity for 180+ days: **STALE**.
-9. Otherwise: **GO**.
+9. A soft claim-first gate (the repo asks contributors to comment before starting, like pdfcn): never **GATED**; it caps an otherwise-GO verdict at **RISKY** with a note, the same downgrade shape as a weak PR mention.
+10. Otherwise: **GO**.
 
 Claim detection scans comments for explicit claim phrases, in-progress signals ("fix ready", "PR incoming", "opened a PR"), and soft offers ("happy to fix"). Bot authors are ignored, as are issue reporters unless they announce a ready fix.
 
-Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, discussion-first -10, CLA/DCO -5 each), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
+Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, discussion-first -10, claim-first -5, CLA/DCO -5 each), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
 
 ## MCP server
 
@@ -95,7 +97,7 @@ The same engine is exposed over stdio for coding agents (Claude, Cursor, Cline).
 Tools:
 
 * `check_issue` - verdict for one issue URL
-* `scan_repo` - rank a repo's starter issues, GO first
+* `scan_repo` - rank a repo's open issues, GO first (label-tagged starter issues, falling back to recent open unassigned issues)
 * `repo_friction` - friction score for a repo
 * `claim_issue` - verdict-gated claim comment (dry run unless `execute: true`)
 * `prep_issue` - fork and branch check plus a local PREP.md checklist (dry run unless `execute: true`)
@@ -113,11 +115,11 @@ branch, and opening the PR, with DCO awareness throughout.
 # 1. Claim the issue: verdict first, comment shaped by the repo's gates
 greenlight claim https://github.com/shadcn-labs/pdfcn/issues/65
 
-# 2. Prepare: fork/branch check plus a PREP.md checklist
+# 2. Prepare: fork/branch check (learning the repo's branch convention) plus a PREP.md checklist
 greenlight prep https://github.com/shadcn-labs/pdfcn/issues/65 --dir /tmp/prep65
 
 # 3. Open the PR from your fork branch (verifies DCO sign-off on DCO repos)
-greenlight pr https://github.com/shadcn-labs/pdfcn/issues/65 --branch feat/quarterly-report-65
+greenlight pr https://github.com/shadcn-labs/pdfcn/issues/65 --branch feat/quarterly-report-block
 ```
 
 Safety defaults, and this is a feature:
@@ -131,7 +133,11 @@ Safety defaults, and this is a feature:
 * **Verdict-gated.** `claim` refuses TAKEN or STALE verdicts unless
   `--force`, and refuses vouch-gated repos outright (a vouch cannot be
   automated). Assignment-gated repos get an assignment request instead of
-  an intent comment.
+  an intent comment; claim-first repos (comment before starting) get the
+  standard intent comment, which satisfies the ritual.
+* **Repo-aware branch names.** `prep` reads the head branches of recent
+  closed PRs and follows a dominant convention (pdfcn's `feat/<slug>-block`)
+  while still showing the `feat/<slug>-<number>` default.
 * **DCO-aware.** On DCO repos, `pr` verifies every commit on the branch
   carries a `Signed-off-by:` line and refuses, listing the unsigned
   commits, when one is missing.
