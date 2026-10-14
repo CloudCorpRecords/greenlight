@@ -227,13 +227,14 @@ describe("comment-mentioned PR cross-check", () => {
     assert.ok(!result.flags.includes("comment-mentioned-pr"));
   });
 
-  it("a merged cited PR is an informational note, never a downgrade", () => {
+  it("a merged cited PR that references the issue is partially-addressed, never TAKEN (rule 12)", () => {
     const snap = clean();
     snap.commentMentionedPRs = [{ number: 861, url: "https://github.com/r/r/pull/861", state: "merged", mentionsIssue: true }];
     const result = scoreIssue(snap, NOW);
-    assert.equal(result.verdict, "GO");
+    assert.equal(result.verdict, "RISKY");
     assert.ok(!result.flags.includes("comment-mentioned-pr"));
-    assert.ok(result.reasons.some((r) => r.includes("PR #861 (merged) referenced in comments; issue may be partially addressed")));
+    assert.ok(result.flags.includes("partially-addressed"));
+    assert.ok(result.reasons.some((r) => r.includes("PR #861, merged") && r.includes("scope your work to what remains")));
   });
 
   it("a closed (unmerged) cited PR changes nothing", () => {
@@ -242,5 +243,228 @@ describe("comment-mentioned PR cross-check", () => {
     const result = scoreIssue(snap, NOW);
     assert.equal(result.verdict, "GO");
     assert.ok(!result.flags.includes("comment-mentioned-pr"));
+  });
+});
+
+describe("partially-addressed (rule 12)", () => {
+  const base = (): IssueSnapshot => ({
+    sourceUrl: "https://github.com/reticlehq/reticle/issues/894",
+    owner: "reticlehq",
+    repo: "reticle",
+    number: 894,
+    state: "open",
+    title: "The destructive-action block names a retry a flow cannot perform",
+    author: "divshekhar",
+    assignees: [],
+    labels: ["bug", "help wanted"],
+    comments: [],
+    linkedPRs: [],
+    createdAt: "2026-09-08T10:00:00Z",
+    updatedAt: "2026-10-13T10:00:00Z",
+    contributing: "",
+  });
+
+  it("merged PRs referencing the issue downgrade GO to RISKY with the flag", () => {
+    const s = base();
+    s.commentMentionedPRs = [
+      { number: 905, url: "https://github.com/reticlehq/reticle/pull/905", state: "merged", mentionsIssue: true },
+      { number: 915, url: "https://github.com/reticlehq/reticle/pull/915", state: "merged", mentionsIssue: true },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("partially-addressed"));
+    assert.ok(r.reasons.some((x) => x.includes("PR #905, merged") && x.includes("scope your work to what remains")));
+  });
+
+  it("maintainer comment signals alone are enough", () => {
+    const s = base();
+    s.comments = [
+      {
+        author: "divshekhar",
+        body: "Half addressed so far. Leaving this open for half B.",
+        createdAt: "2026-10-12T10:00:00Z",
+      },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("partially-addressed"));
+    assert.ok(r.reasons.some((x) => x.includes("maintainer comment")));
+  });
+
+  it("detects 'Shipped in v3.1.0' next to the issue reference", () => {
+    const s = base();
+    s.comments = [
+      {
+        author: "divshekhar",
+        body: "Shipped in v3.1.0 (2026-09-18) for #894, verified by commit ancestry.",
+        createdAt: "2026-09-18T10:00:00Z",
+      },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("partially-addressed"));
+  });
+
+  it("does not fire on a plain open issue", () => {
+    const s = base();
+    s.comments = [
+      { author: "a", body: "I can reproduce this on Linux.", createdAt: "2026-10-10T10:00:00Z" },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "GO");
+    assert.ok(!r.flags.includes("partially-addressed"));
+  });
+
+  it("does not fire on a merged PR that does not reference the issue", () => {
+    const s = base();
+    s.commentMentionedPRs = [
+      { number: 900, url: "https://github.com/reticlehq/reticle/pull/900", state: "merged", mentionsIssue: false },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "GO");
+    assert.ok(!r.flags.includes("partially-addressed"));
+  });
+
+  it("never produces TAKEN from partial signals alone", () => {
+    const s = base();
+    s.commentMentionedPRs = [
+      { number: 905, url: "https://github.com/reticlehq/reticle/pull/905", state: "merged", mentionsIssue: true },
+    ];
+    s.comments = [
+      { author: "divshekhar", body: "Half addressed by #905, still open for the rest.", createdAt: "2026-10-12T10:00:00Z" },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.notEqual(r.verdict, "TAKEN");
+    assert.equal(r.verdict, "RISKY");
+  });
+
+  it("adds the reason to an already-RISKY verdict without changing it", () => {
+    const s = base();
+    s.comments = [
+      { author: "divshekhar", body: "Half addressed by #905, still open for the rest.", createdAt: "2026-10-12T10:00:00Z" },
+    ];
+    // weak mention makes it RISKY first via rule 10
+    s.linkedPRs = [
+      { number: 920, state: "open", title: "related refactor", url: "https://github.com/reticlehq/reticle/pull/920", linkStrength: "mention" },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("partially-addressed"));
+    assert.ok(r.flags.includes("weak-pr-mention"));
+  });
+});
+
+describe("fromAuthor tagging on mentioned PRs", () => {
+  const base = (): IssueSnapshot => ({
+    sourceUrl: "https://github.com/reticlehq/reticle/issues/894",
+    owner: "reticlehq",
+    repo: "reticle",
+    number: 894,
+    state: "open",
+    title: "The destructive-action block names a retry a flow cannot perform",
+    author: "divshekhar",
+    assignees: [],
+    labels: ["bug", "help wanted"],
+    comments: [],
+    linkedPRs: [],
+    createdAt: "2026-09-08T10:00:00Z",
+    updatedAt: "2026-10-13T10:00:00Z",
+    contributing: "",
+  });
+
+  it("an open PR cited only by the issue author does not downgrade", () => {
+    const s = base();
+    s.commentMentionedPRs = [
+      {
+        number: 1620,
+        url: "https://github.com/reticlehq/reticle/pull/1620",
+        state: "open",
+        mentionsIssue: true,
+        fromAuthor: true,
+      },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "GO");
+    assert.ok(!r.flags.includes("comment-mentioned-pr"));
+  });
+
+  it("a merged PR cited by the issue author still feeds partially-addressed", () => {
+    const s = base();
+    s.commentMentionedPRs = [
+      {
+        number: 905,
+        url: "https://github.com/reticlehq/reticle/pull/905",
+        state: "merged",
+        mentionsIssue: true,
+        fromAuthor: true,
+      },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("partially-addressed"));
+    assert.ok(r.reasons.some((x) => x.includes("PR #905, merged")));
+  });
+
+  it("an open PR cited by someone else still downgrades", () => {
+    const s = base();
+    s.commentMentionedPRs = [
+      {
+        number: 1620,
+        url: "https://github.com/reticlehq/reticle/pull/1620",
+        state: "open",
+        mentionsIssue: true,
+        fromAuthor: false,
+      },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("comment-mentioned-pr"));
+  });
+});
+
+describe("partially-addressed via maintainer-cited merged PRs", () => {
+  const base = (): IssueSnapshot => ({
+    sourceUrl: "https://github.com/reticlehq/reticle/issues/894",
+    owner: "reticlehq",
+    repo: "reticle",
+    number: 894,
+    state: "open",
+    title: "The destructive-action block names a retry a flow cannot perform",
+    author: "divshekhar",
+    assignees: [],
+    labels: ["bug", "help wanted"],
+    comments: [],
+    linkedPRs: [],
+    createdAt: "2026-09-08T10:00:00Z",
+    updatedAt: "2026-10-13T10:00:00Z",
+    contributing: "",
+  });
+
+  it("names a merged PR cited in a shipped-work comment even when the PR body never mentions the issue", () => {
+    const s = base();
+    s.comments = [
+      {
+        author: "divshekhar",
+        body: "Half addressed by #905, merged to main in #915. Leaving this open for half B.",
+        createdAt: "2026-10-12T10:00:00Z",
+      },
+    ];
+    s.commentMentionedPRs = [
+      {
+        number: 915,
+        url: "https://github.com/reticlehq/reticle/pull/915",
+        state: "merged",
+        mentionsIssue: false, // the PR body never names the issue
+        fromAuthor: true,
+      },
+    ];
+    s.linkedPRs = [
+      { number: 905, state: "merged", title: "fix(server): land half A", url: "https://github.com/reticlehq/reticle/pull/905", linkStrength: "mention" },
+    ];
+    const r = scoreIssue(s, new Date("2026-10-14T12:00:00Z"));
+    assert.equal(r.verdict, "RISKY");
+    assert.ok(r.flags.includes("partially-addressed"));
+    assert.ok(r.reasons.some((x) => x.includes("PR #915, merged")));
+    assert.ok(r.reasons.some((x) => x.includes("PR #905, merged")));
   });
 });

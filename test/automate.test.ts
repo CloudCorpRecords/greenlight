@@ -13,6 +13,8 @@ import {
   gateActions,
   detectBranchPattern,
   suggestBranchName,
+  extractVerifyCommands,
+  gatherRepoConventions,
   AutomationRefusal,
   type GitHubClient,
 } from "../src/automate.js";
@@ -85,6 +87,18 @@ class FakeClient implements GitHubClient {
   closedRefs: string[] = [];
   async listClosedPullHeadRefs() {
     return this.closedRefs;
+  }
+  rootNames: string[] = [];
+  async repoRootNames() {
+    return this.rootNames;
+  }
+  rootFiles: Record<string, string> = {};
+  async fetchRootFile(_owner: string, _repo: string, path: string) {
+    return this.rootFiles[path];
+  }
+  recentCommits: string[] = [];
+  async listRecentCommitMessages() {
+    return this.recentCommits;
   }
   async postIssueComment() {
     this.writes.push("postIssueComment");
@@ -461,5 +475,119 @@ describe("openPr", () => {
     const plan = await openPr(client, snap, { branch: "feat/dco-ok-1", yes: false });
     assert.ok(plan.checks.some((c) => c.includes("DCO")), `DCO check recorded, got: ${plan.checks.join(" | ")}`);
     assert.equal(client.writes.length, 0);
+  });
+});
+
+describe("extractVerifyCommands", () => {
+  it("finds backticked run commands in house-rules text", () => {
+    assert.deepEqual(
+      extractVerifyCommands("Run `pnpm verify` as one command, not `npm test`."),
+      ["pnpm verify", "npm test"]
+    );
+  });
+
+  it("dedupes and caps at five", () => {
+    const cmds = extractVerifyCommands("`pnpm a` `pnpm a` `pnpm b` `pnpm c` `pnpm d` `pnpm e` `pnpm f`");
+    assert.deepEqual(cmds, ["pnpm a", "pnpm b", "pnpm c", "pnpm d", "pnpm e"]);
+  });
+
+  it("returns nothing when no commands are quoted", () => {
+    assert.deepEqual(extractVerifyCommands("Run the checks."), []);
+  });
+});
+
+describe("gatherRepoConventions", () => {
+  const snapshotFor = (houseRules: { file: string; text: string }[]): IssueSnapshot => ({
+    sourceUrl: "https://github.com/reticlehq/reticle/issues/894",
+    owner: "reticlehq",
+    repo: "reticle",
+    number: 894,
+    state: "open",
+    title: "The destructive-action block names a retry a flow cannot perform",
+    author: "divshekhar",
+    assignees: [],
+    labels: [],
+    comments: [],
+    linkedPRs: [],
+    createdAt: "2026-09-08T10:00:00Z",
+    updatedAt: "2026-10-13T10:00:00Z",
+    houseRules,
+  });
+
+  it("detects house rules, verify command, .changes dir, scripts, and commit style", async () => {
+    const client = new FakeClient();
+    client.rootNames = ["AGENTS.md", ".changes", "package.json"];
+    client.rootFiles["package.json"] = JSON.stringify({
+      scripts: { test: "vitest", verify: "turbo run verify", lint: "eslint ." },
+    });
+    client.recentCommits = [
+      "fix(browser): judge selectable items by their own label",
+      "feat(server): fall back to the connected tab",
+      "chore(release): 3.7.0",
+    ];
+    const c = await gatherRepoConventions(
+      client,
+      snapshotFor([
+        { file: "AGENTS.md", text: "Run `pnpm verify` as one command." },
+        { file: "CONTRIBUTING.md", text: "Comment before starting work." },
+      ])
+    );
+    assert.ok(c);
+    assert.deepEqual(c.houseRuleFiles, ["AGENTS.md", "CONTRIBUTING.md"]);
+    assert.deepEqual(c.verifyCommands, ["pnpm verify"]);
+    assert.equal(c.changesDir, true);
+    assert.equal(c.changesDirName, ".changes");
+    assert.deepEqual(c.packageScripts, ["test", "verify", "lint"]);
+    assert.equal(c.conventionalCommits, true);
+    assert.ok(c.exampleCommit!.startsWith("fix(browser):"));
+  });
+
+  it("returns undefined when nothing is detectable", async () => {
+    const client = new FakeClient();
+    const c = await gatherRepoConventions(client, snapshotFor([]));
+    assert.equal(c, undefined);
+  });
+
+  it("survives failing probes individually", async () => {
+    const client = new FakeClient();
+    client.rootNames = [];
+    const c = await gatherRepoConventions(
+      client,
+      snapshotFor([{ file: "AGENTS.md", text: "Run the checks first." }])
+    );
+    assert.ok(c);
+    assert.deepEqual(c.houseRuleFiles, ["AGENTS.md"]);
+    assert.deepEqual(c.verifyCommands, []);
+    assert.equal(c.changesDir, false);
+    assert.deepEqual(c.packageScripts, []);
+    assert.equal(c.conventionalCommits, false);
+  });
+
+  it("does not claim Conventional Commits for a mixed history", async () => {
+    const client = new FakeClient();
+    client.recentCommits = [
+      "fix: thing",
+      "random message here",
+      "another random one",
+      "wip",
+    ];
+    const c = await gatherRepoConventions(client, snapshotFor([]));
+    assert.ok(c === undefined || c.conventionalCommits === false);
+  });
+
+  it("renders the conventions section in PREP.md", async () => {
+    const client = new FakeClient();
+    client.rootNames = [".changes"];
+    const plan = await prepIssue(
+      client,
+      snapshotFor([{ file: "AGENTS.md", text: "Run `pnpm verify` as one command." }]),
+      { yes: false, dir: "/tmp/greenlight-prep-test" }
+    );
+    assert.ok(plan.conventions);
+    const doc = readFileSync(plan.prepFile, "utf8");
+    assert.ok(doc.includes("## Repo conventions"));
+    assert.ok(doc.includes("AGENTS.md"));
+    assert.ok(doc.includes("pnpm verify"));
+    assert.ok(doc.includes(".changes"));
   });
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   extractPRReferences,
   fetchCommentMentionedPRs,
+  fetchHouseRules,
   type PullRefDetail,
 } from "../src/github.js";
 import type { CommentSignal } from "../src/types.js";
@@ -153,5 +154,24 @@ describe("fetchCommentMentionedPRs", () => {
     );
     assert.equal(out.length, 1);
     assert.equal(out[0].number, 861);
+  });
+});
+
+describe("fetchHouseRules", () => {
+  it("collects only the files that exist, in order", async () => {
+    const present: Record<string, string> = {
+      "CONTRIBUTING.md": "Comment before starting work.",
+      "AGENTS.md": "Sign off every commit (DCO).",
+    };
+    const rules = await fetchHouseRules("acme", "widget", {
+      fetchRaw: async (file: string) => present[file],
+    });
+    assert.deepEqual(rules.map((r) => r.file), ["CONTRIBUTING.md", "AGENTS.md"]);
+    assert.equal(rules[1].text, "Sign off every commit (DCO).");
+  });
+
+  it("returns an empty list when no policy file exists", async () => {
+    const rules = await fetchHouseRules("acme", "widget", { fetchRaw: async () => undefined });
+    assert.deepEqual(rules, []);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseGates, hardGates, gateLabel } from "../src/gates.js";
+import { parseGates, parseGatesFromSources, hardGates, gateLabel } from "../src/gates.js";
 
 describe("parseGates", () => {
   it("detects assignment requirement (FastMCP style)", () => {
@@ -81,5 +81,54 @@ describe("gateLabel", () => {
       assert.ok(gateLabel(g.kind).length > 0);
     }
     assert.equal(gateLabel("claim_first"), "comment first before starting");
+  });
+});
+
+describe("parseGatesFromSources", () => {
+  it("finds gates in AGENTS.md when CONTRIBUTING is silent (reticle style)", () => {
+    const gates = parseGatesFromSources([
+      {
+        file: "AGENTS.md",
+        text: "Claim the issue before you start, with a comment. Every commit needs a Signed-off-by line (DCO). Add one file to .changes/ for a user-facing change. Run `pnpm verify` as one command.",
+      },
+    ]);
+    const claim = gates.find((x) => x.kind === "claim_first")!;
+    const dco = gates.find((x) => x.kind === "dco_required")!;
+    assert.equal(claim.detected, true);
+    assert.equal(claim.source, "AGENTS.md");
+    assert.equal(dco.detected, true);
+    assert.equal(dco.source, "AGENTS.md");
+    assert.equal(gates.find((x) => x.kind === "assignment_required")!.detected, false);
+  });
+
+  it("merges without duplicating kinds, preferring CONTRIBUTING evidence on ties", () => {
+    const gates = parseGatesFromSources([
+      {
+        file: "CONTRIBUTING.md",
+        text: "Comment before starting work on an issue to claim it.",
+      },
+      {
+        file: "AGENTS.md",
+        text: "Before you start, claim the issue with a comment in the thread.",
+      },
+    ]);
+    const claim = gates.filter((x) => x.kind === "claim_first");
+    assert.equal(claim.length, 1, "exactly one gate entry per kind");
+    assert.equal(claim[0].detected, true);
+    assert.equal(claim[0].source, "CONTRIBUTING.md");
+  });
+
+  it("reads CLAUDE.md as well", () => {
+    const gates = parseGatesFromSources([
+      { file: "CLAUDE.md", text: "All outside contributors need a vouch from a community member." },
+    ]);
+    assert.equal(gates.find((x) => x.kind === "vouch_required")!.detected, true);
+    assert.equal(gates.find((x) => x.kind === "vouch_required")!.source, "CLAUDE.md");
+  });
+
+  it("returns all seven kinds even when nothing matches", () => {
+    const gates = parseGatesFromSources([{ file: "AGENTS.md", text: "Run the linter." }]);
+    assert.equal(gates.length, 7);
+    assert.ok(gates.every((g) => g.detected === false));
   });
 });
