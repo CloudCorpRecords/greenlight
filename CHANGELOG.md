@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.3.2 (2026-10-15)
+
+The toolkit release: Greenlight now ships on npm as @reneturcios/greenlight, is listed in the official MCP Registry, and consumes gatefile output directly.
+
+- **gatefile connection.** `check` and `scan` accept `--gates-file <path>` pointing at a contribution-gates.json produced by gatefile, and auto-detect `./contribution-gates.json` in the working directory when no flag is given. Machine-extracted gates merge over the prose-derived ones for any kind the prose pass missed, and their evidence strings are prefixed "gatefile:" so a verdict shows where each gate came from. Gatefile kinds map onto Greenlight's (discuss_first and issue_first become discussion_first; no_direct_prs becomes collaborators_only).
+- **`greenlight mcp` subcommand.** The MCP server now starts from the single published bin (`greenlight mcp`, stdio), which is what the npm package and the MCP Registry entry invoke. The standalone server entry still works from source.
+- **fastmcp-shaped contributing docs.** House-rule fetching now also reads docs/development/contributing.mdx and .md, where fastmcp keeps its binding rules behind a pointer CONTRIBUTING.md, and the assignment-gate rules match "must be assigned" / "must also be assigned" phrasings. Verified live: fastmcp #5755 verdicts GATED instead of GO.
+- 170 tests passing (3 new).
+
+
 ## 0.3.1 (2026-10-15)
 
 Two detection gaps closed from the same day's field work, both verified live after the fix.

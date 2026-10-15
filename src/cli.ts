@@ -2,8 +2,9 @@
 /**
  * Greenlight CLI.
  *
- *   greenlight check <issue-url> [--json]
- *   greenlight scan <owner/repo> [--json] [--no-fallback]
+ *   greenlight check <issue-url> [--json] [--gates-file path]
+ *   greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]
+ *   greenlight mcp
  *   greenlight friction <owner/repo> [--json]
  *   greenlight claim <issue-url> [--yes] [--force] [--json]
  *   greenlight prep <issue-url> [--dir path] [--yes] [--json]
@@ -23,7 +24,9 @@ import {
   RateLimitError,
 } from "./github.js";
 import { scoreIssue } from "./verdict.js";
-import { parseGates } from "./gates.js";
+import { parseGates, parseGatefileJson } from "./gates.js";
+import type { Gate } from "./types.js";
+import { existsSync, readFileSync } from "node:fs";
 import { scoreFriction } from "./friction.js";
 import {
   createRestClient,
@@ -71,9 +74,28 @@ function parseRepoRef(ref: string): { owner: string; repo: string } {
   return { owner: m[1], repo: m[2] };
 }
 
-async function cmdCheck(issueUrl: string, asJson: boolean): Promise<void> {
+/**
+ * Gates from a gatefile contribution-gates.json when one is in play: the
+ * --gates-file value when given, else ./contribution-gates.json in the
+ * working directory (the file gatefile exists to commit). This is the
+ * pipeline between the two tools: extract once with gatefile, and every
+ * later check/scan reads the committed answer instead of re-deriving it.
+ */
+function loadExternalGates(args: string[]): Gate[] | undefined {
+  const idx = args.indexOf("--gates-file");
+  const path = idx >= 0 ? args[idx + 1] : existsSync("contribution-gates.json") ? "contribution-gates.json" : undefined;
+  if (!path) return undefined;
+  try {
+    return parseGatefileJson(readFileSync(path, "utf8"));
+  } catch (err) {
+    throw new Error(`could not use gates file ${path}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Promise<void> {
   const { owner, repo, number } = parseIssueUrl(issueUrl);
   const snapshot = await buildIssueSnapshot(owner, repo, number);
+  snapshot.externalGates = loadExternalGates(args);
   const result = scoreIssue(snapshot);
   printVerdict(snapshot, result, asJson);
 }
@@ -89,10 +111,12 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     if (fallbackUsed) console.log(`The fallback pass (recent open unassigned issues) also found nothing.`);
     return;
   }
+  const externalGates = loadExternalGates(args);
   const results: Array<{ url: string; title: string; verdict: string; reasons: string[]; flags: string[] }> = [];
   for (const issue of issues) {
     try {
       const snapshot = await buildIssueSnapshot(owner, repo, issue.number);
+      snapshot.externalGates = externalGates;
       const scored = scoreIssue(snapshot);
       results.push({ url: issue.url, title: issue.title, verdict: scored.verdict, reasons: scored.reasons, flags: scored.flags });
     } catch (err) {
@@ -281,8 +305,9 @@ async function cmdPr(issueUrl: string, args: string[]): Promise<void> {
 function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
-  console.log("  greenlight check <issue-url> [--json]");
-  console.log("  greenlight scan <owner/repo> [--json] [--no-fallback]");
+  console.log("  greenlight check <issue-url> [--json] [--gates-file path]");
+  console.log("  greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]");
+  console.log("  greenlight mcp   (run the MCP server on stdio)");
   console.log("  greenlight friction <owner/repo> [--json]");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
@@ -301,7 +326,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file") {
       i++; // skip the value with its flag
       continue;
     }
@@ -310,7 +335,13 @@ async function main(): Promise<void> {
   const [command, target] = positional;
 
   try {
-    if (command === "check" && target) return await cmdCheck(target, args.includes("--json"));
+    if (command === "mcp") {
+      // Start the MCP server (stdio). The module connects on import; stdout
+      // stays pure JSON-RPC because everything above this dispatch is silent.
+      await import("./index.js");
+      return;
+    }
+    if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "claim" && target) return await cmdClaim(target, args);

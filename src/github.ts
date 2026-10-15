@@ -258,12 +258,16 @@ export interface MentionedPRDeps {
  * increasingly live in house-rules files that CONTRIBUTING only links to
  * (reticle keeps its claim-first, DCO, .changes and `pnpm verify` rules in
  * AGENTS.md), so CONTRIBUTING variants are fetched together with AGENTS.md
- * and CLAUDE.md at the root and under .github/.
+ * and CLAUDE.md at the root and under .github/. fastmcp moved its rules
+ * again in 2026, into docs/development/contributing.mdx behind a pointer
+ * CONTRIBUTING.md, which is why the development-guide paths are here too.
  */
 export const HOUSE_RULE_FILES = [
   "CONTRIBUTING.md",
   "contributing.md",
   ".github/CONTRIBUTING.md",
+  "docs/development/contributing.mdx",
+  "docs/development/contributing.md",
   "AGENTS.md",
   "CLAUDE.md",
   ".github/AGENTS.md",
