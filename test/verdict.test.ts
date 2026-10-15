@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scoreIssue } from "../src/verdict.js";
+import { parseGatefileJson } from "../src/gates.js";
 import type { IssueSnapshot, Verdict } from "../src/types.js";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -89,6 +90,27 @@ describe("verdict details", () => {
     const result = scoreIssue(load("fastmcp-5718.json"), NOW);
     assert.ok(result.reasons.some((r) => r.includes("assignment")));
     assert.ok(result.gates.some((g) => g.kind === "assignment_required" && g.detected));
+  });
+
+  it("a gatefile gates document gates a clean issue (no_direct_prs -> GATED)", () => {
+    const base = load("pdfcn-58.json");
+    const snapshot: IssueSnapshot = {
+      ...base,
+      comments: [],
+      linkedPRs: [],
+      contributing: "Contributions welcome, just open a PR.",
+      externalGates: parseGatefileJson(JSON.stringify({
+        version: 1,
+        repo: "shadcn-labs/pdfcn",
+        gates: [
+          { id: "no_direct_prs", kind: "no_direct_prs", severity: "block", evidence: "Maintainers open all PRs", source: "CONTRIBUTING.md" },
+        ],
+      })),
+      updatedAt: NOW.toISOString(),
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "GATED");
+    assert.ok(result.gates.some((g) => g.kind === "collaborators_only" && g.detected && g.evidence.startsWith("gatefile:")));
   });
 
   it("claim-first repo caps a clean issue at RISKY, never GATED (pdfcn style)", () => {

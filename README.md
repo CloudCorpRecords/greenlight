@@ -43,17 +43,36 @@ A validation corpus of ten real cases from the campaign (`test/fixtures/cases/`,
 ## Install
 
 ```bash
+npx @reneturcios/greenlight check <issue-url>
+```
+
+Or from source:
+
+```bash
 npm install
 npm run build
 ```
 
 Set `GITHUB_TOKEN` (a classic personal access token, no scopes needed for public repos) to raise the GitHub API rate limit from 60 to 5000 requests per hour. Greenlight caches API responses under `~/.cache/greenlight`.
 
+Run the MCP server with `npx @reneturcios/greenlight mcp` (stdio), or point your agent at the `greenlight` command with the single argument `mcp`.
+
+## The toolkit
+
+Greenlight is the front door of a four-tool lifecycle for open-source contribution work, all published under the same npm scope and cross-wired:
+
+1. **gatefile** (`npx @reneturcios/gatefile extract owner/repo`) extracts a repo's contribution gates into a committed `contribution-gates.json`. Greenlight consumes that file directly: `greenlight check <issue-url> --gates-file contribution-gates.json`, or automatically when the file sits in the working directory, so gates are answered once and reused instead of re-derived from prose.
+2. **greenlight** verdicts, scans, claims, prep, and PR opening (this tool).
+3. **claimcheck** (`npx @reneturcios/claimcheck claims owner/repo`) watches claimed issues for stale claims and finished fixes parked on forks, the two ways claimed work silently dies.
+4. **prwatch** (`npx @reneturcios/prwatch attention --user you`) triages your open PRs by what needs you right now: review threads, failing checks, conflicts, reviewer silence.
+
+Each tool is a CLI and an MCP server (`<tool> mcp`).
+
 ## CLI
 
 ```bash
 # Verdict for one issue
-npx greenlight check https://github.com/batrapulkit/squidbrake/issues/74
+npx @reneturcios/greenlight check https://github.com/batrapulkit/squidbrake/issues/74
 
 # [GO] batrapulkit/squidbrake#74
 #   Taint: tell the approver when an agent edits its own setup right after reading outside content
@@ -61,13 +80,13 @@ npx greenlight check https://github.com/batrapulkit/squidbrake/issues/74
 
 # Rank a repo's starter issues, GO first (falls back to recent open
 # unassigned issues when the repo does not use those labels; --no-fallback to opt out)
-npx greenlight scan PrefectHQ/fastmcp
+npx @reneturcios/greenlight scan PrefectHQ/fastmcp
 
 # Friction score for a repo
-npx greenlight friction triggerdotdev/trigger.dev
+npx @reneturcios/greenlight friction triggerdotdev/trigger.dev
 
 # JSON output for scripting
-npx greenlight check <issue-url> --json
+npx @reneturcios/greenlight check <issue-url> --json
 ```
 
 Real examples from our vetting:
@@ -107,8 +126,8 @@ The same engine is exposed over stdio for coding agents (Claude, Cursor, Cline).
 {
   "mcpServers": {
     "greenlight": {
-      "command": "node",
-      "args": ["/path/to/greenlight/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@reneturcios/greenlight", "mcp"],
       "env": { "GITHUB_TOKEN": "your-token" }
     }
   }

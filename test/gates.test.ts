@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseGates, parseGatesFromSources, hardGates, gateLabel } from "../src/gates.js";
+import { parseGates, parseGatesFromSources, parseGatefileJson, hardGates, gateLabel } from "../src/gates.js";
 
 describe("parseGates", () => {
   it("detects assignment requirement (FastMCP style)", () => {
@@ -61,6 +61,30 @@ describe("parseGates", () => {
       "**We accept issues, not pull requests.** Design and implementation are done by the repository maintainers.",
     );
     assert.equal(servers.find((x) => x.kind === "collaborators_only")!.detected, true);
+  });
+
+  it("parses a gatefile contribution-gates.json into Greenlight gates", () => {
+    const doc = JSON.stringify({
+      version: 1,
+      repo: "acme/widgets",
+      generatedFrom: ["CONTRIBUTING.md"],
+      gates: [
+        { id: "no_direct_prs", kind: "no_direct_prs", severity: "block", evidence: "Maintainers open all PRs", source: "CONTRIBUTING.md" },
+        { id: "discuss_first", kind: "discuss_first", severity: "warn", evidence: "Open a discussion first", source: "CONTRIBUTING.md" },
+        { id: "dco_required", kind: "dco_required", severity: "warn", evidence: "Sign off commits", source: "CONTRIBUTING.md" },
+        { id: "future_kind", kind: "some_future_kind", severity: "warn", evidence: "?", source: "CONTRIBUTING.md" },
+      ],
+      conventions: {},
+    });
+    const gates = parseGatefileJson(doc);
+    assert.deepEqual(gates.map((g) => g.kind).sort(), ["collaborators_only", "dco_required", "discussion_first"]);
+    assert.ok(gates.every((g) => g.detected));
+    assert.ok(gates.find((g) => g.kind === "collaborators_only")!.evidence.startsWith("gatefile:"));
+  });
+
+  it("rejects a document that is not a gates file", () => {
+    assert.throws(() => parseGatefileJson('{"hello": true}'), /not a contribution-gates\.json/);
+    assert.throws(() => parseGatefileJson("not json"));
   });
 
   it("does not fire collaborators_only on ordinary maintainer language", () => {
