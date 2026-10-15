@@ -79,6 +79,15 @@ const RULES: GateRule[] = [
       /collaborators-only/i,
       /only (repo )?collaborators/i,
       /external (prs|pull requests) (are not|will not be) accepted/i,
+      // Maintainer-only PR shops (field cases 2026-10-15): the MCP inspector
+      // and servers repos take issues and prompts, not outside PRs, and say
+      // so in workflow language rather than gate language — "Pull requests
+      // against this repo are opened by the repo maintainers only" and
+      // "We accept issues, not pull requests". Both scored GO with "no
+      // blocking gates" until these phrasings were added. The optional
+      // asterisks tolerate the Markdown bold both repos wrap the words in.
+      /pull requests? (against|in|on) this (repo|repository) are opened by (the )?(\*\*)?(repo |repository )?maintainers(\*\*)? only/i,
+      /accept issues, not pull requests?/i,
     ],
   },
 ];

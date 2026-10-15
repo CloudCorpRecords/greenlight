@@ -30,6 +30,10 @@ const STRONG_PATTERNS: ClaimPattern[] = [
   { name: "pr-incoming", regex: /\bpr (is |will be |to be )?(incoming|coming|ready|prepared)\b/i, strength: "strong" },
   { name: "started-work", regex: /\bi('ve| have) started (working )?on this/i, strength: "strong" },
   { name: "want-to-work", regex: /i('d| would) like to (take|pick) (this|it) (on|up)/i, strength: "strong" },
+  // "Hi, I'd like to take this. Plan: ..." — the fastmcp #5743 claim (2026-10-14) that scan
+  // missed because want-to-work above demands a trailing "on"/"up". The negative lookahead
+  // keeps "I'd like to take this opportunity to thank ..." from counting as a claim.
+  { name: "like-to-take", regex: /\bi('d| would) like to take (this|it)\b(?! (opportunity|moment|time) to)/i, strength: "strong" },
 ];
 
 // Soft: interest or an offer, not a claim. Used only to soften confidence, not to mark TAKEN.

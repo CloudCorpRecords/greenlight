@@ -37,6 +37,16 @@ const HAND: HandEntry[] = [
     note: "hand-verified 2026-10-13",
   },
   {
+    owner: "modelcontextprotocol", repo: "inspector",
+    gates: [gate("collaborators_only", "hand-verified 2026-10-15: AGENTS.md states PRs are opened by repo maintainers only; outsiders file detailed issues (verified while working #2723)")],
+    note: "hand-verified 2026-10-15",
+  },
+  {
+    owner: "modelcontextprotocol", repo: "servers",
+    gates: [gate("collaborators_only", "hand-verified 2026-10-15: CONTRIBUTING.md states 'We accept issues, not pull requests'; outsiders share the prompt behind a local fix (verified while working #5153)")],
+    note: "hand-verified 2026-10-15",
+  },
+  {
     owner: "triggerdotdev", repo: "trigger.dev",
     gates: [gate("vouch_required", "hand-verified 2026-10-13: unvouched-author PRs auto-closed; vouch-request issue required first")],
     note: "hand-verified 2026-10-13",
