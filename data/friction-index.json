@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-14T16:55:27.434Z",
+  "generated": "2026-10-15T21:26:18.663Z",
   "repos": [
     {
       "owner": "langchain-ai",
@@ -991,6 +991,190 @@
           },
           {
             "kind": "collaborators_only",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "modelcontextprotocol",
+      "repo": "inspector",
+      "score": 50,
+      "gates": [
+        {
+          "kind": "collaborators_only",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-15: AGENTS.md states PRs are opened by repo maintainers only; outsiders file detailed issues (verified while working #2723)"
+        },
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "claim_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: collaborators_only",
+        "PR creation restricted to collaborators (-50)"
+      ],
+      "signals": {
+        "owner": "modelcontextprotocol",
+        "repo": "inspector",
+        "gates": [
+          {
+            "kind": "collaborators_only",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-15: AGENTS.md states PRs are opened by repo maintainers only; outsiders file detailed issues (verified while working #2723)"
+          },
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "claim_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
+            "detected": false,
+            "evidence": ""
+          }
+        ],
+        "externalPRMergeRate": null,
+        "medianFirstReviewHours": null,
+        "maintainerIssueResponseHours": null,
+        "openGoodFirstIssueCount": null,
+        "note": "live 2026-10-13, merged with hand-verified gates"
+      }
+    },
+    {
+      "owner": "modelcontextprotocol",
+      "repo": "servers",
+      "score": 50,
+      "gates": [
+        {
+          "kind": "collaborators_only",
+          "detected": true,
+          "evidence": "hand-verified 2026-10-15: CONTRIBUTING.md states 'We accept issues, not pull requests'; outsiders share the prompt behind a local fix (verified while working #5153)"
+        },
+        {
+          "kind": "assignment_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "claim_first",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "vouch_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "cla_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "dco_required",
+          "detected": false,
+          "evidence": ""
+        },
+        {
+          "kind": "discussion_first",
+          "detected": false,
+          "evidence": ""
+        }
+      ],
+      "reasons": [
+        "HARD GATE: collaborators_only",
+        "PR creation restricted to collaborators (-50)"
+      ],
+      "signals": {
+        "owner": "modelcontextprotocol",
+        "repo": "servers",
+        "gates": [
+          {
+            "kind": "collaborators_only",
+            "detected": true,
+            "evidence": "hand-verified 2026-10-15: CONTRIBUTING.md states 'We accept issues, not pull requests'; outsiders share the prompt behind a local fix (verified while working #5153)"
+          },
+          {
+            "kind": "assignment_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "claim_first",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "vouch_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "cla_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "dco_required",
+            "detected": false,
+            "evidence": ""
+          },
+          {
+            "kind": "discussion_first",
             "detected": false,
             "evidence": ""
           }

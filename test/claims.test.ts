@@ -31,6 +31,23 @@ describe("detectClaims", () => {
     assert.equal(claims[0].strength, "strong");
   });
 
+  it("detects a bare 'I'd like to take this' as a strong claim", () => {
+    // fastmcp #5743, 2026-10-14: scan reported no claim signals for this
+    // comment because the older pattern demanded a trailing "on"/"up".
+    const claims = detectClaims("reporter", [
+      comment("anishgurjar", "Hi, I'd like to take this. Plan: give sync tools a way to see that their deadline has passed."),
+    ], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+  });
+
+  it("does not read 'take this opportunity to thank' as a claim", () => {
+    const claims = detectClaims("reporter", [
+      comment("dev9", "I'd like to take this opportunity to thank the maintainers for the report."),
+    ], NOW);
+    assert.equal(claims.length, 0);
+  });
+
   it("detects fix-ready and PR announcements as strong", () => {
     const claims = detectClaims("reporter", [
       comment("dev1", "The fix is ready on my fork."),

@@ -49,6 +49,27 @@ describe("parseGates", () => {
     assert.ok(g.evidence.includes("repo policy"));
   });
 
+  it("detects maintainer-only PR shops in their own workflow language", () => {
+    // The two field phrasings from 2026-10-15 (MCP inspector AGENTS.md, MCP
+    // servers CONTRIBUTING.md). Both repos take issues and prompts, not
+    // outside PRs, and both scored GO before these patterns existed.
+    const inspector = parseGates(
+      "Pull requests against this repo are opened by the **repo maintainers** only. Anyone else opens a detailed issue instead.",
+    );
+    assert.equal(inspector.find((x) => x.kind === "collaborators_only")!.detected, true);
+    const servers = parseGates(
+      "**We accept issues, not pull requests.** Design and implementation are done by the repository maintainers.",
+    );
+    assert.equal(servers.find((x) => x.kind === "collaborators_only")!.detected, true);
+  });
+
+  it("does not fire collaborators_only on ordinary maintainer language", () => {
+    const gates = parseGates(
+      "Only maintainers can merge pull requests and apply the release label. Contributors should open pull requests against the dev branch.",
+    );
+    assert.equal(gates.find((x) => x.kind === "collaborators_only")!.detected, false);
+  });
+
   it("returns all gates with false when nothing matches", () => {
     const gates = parseGates("Thanks for contributing! Just open a PR.");
     assert.equal(gates.length, 7);
