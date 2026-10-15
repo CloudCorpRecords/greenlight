@@ -72,6 +72,19 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     snapshot.houseRules && snapshot.houseRules.length > 0
       ? parseGatesFromSources(snapshot.houseRules)
       : parseGates(snapshot.contributing);
+  // A committed gatefile gates document outranks prose re-derivation for
+  // any kind the prose pass did not already detect: the repo extracted and
+  // committed those gates itself.
+  if (snapshot.externalGates) {
+    for (const eg of snapshot.externalGates) {
+      const m = gates.find((x) => x.kind === eg.kind);
+      if (m && !m.detected) {
+        m.detected = true;
+        m.evidence = eg.evidence;
+        m.source = eg.source;
+      }
+    }
+  }
   const reasons: string[] = [];
   const flags: string[] = [];
 

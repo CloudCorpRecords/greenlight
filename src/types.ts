@@ -59,6 +59,8 @@ export interface IssueSnapshot {
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
   contributing?: string; // raw CONTRIBUTING.md text, when fetched
+  /** Gates supplied from a gatefile contribution-gates.json, already mapped to Greenlight kinds. */
+  externalGates?: Gate[];
 }
 
 /** One detected claim signal from a comment. */

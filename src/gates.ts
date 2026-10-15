@@ -25,7 +25,7 @@ const RULES: GateRule[] = [
     regexes: [
       /ask (to be|for) (assigned|assignment)/i,
       /request (an )?assignment/i,
-      /must be assigned/i,
+      /must (also )?be assigned/i,
       /assign.*before (submitting|opening|a PR)/i,
       /please (wait|hold) (for|until).*assign/i,
       /\bgood first issue\b.{0,40}\bassign/i,
@@ -165,6 +165,58 @@ export function parseGates(text: string | undefined, options: ParseOptions = {})
       evidence: found ? snippet(body, found) : "",
     };
   });
+}
+
+/**
+ * gatefile's contribution-gates.json kinds mapped onto Greenlight kinds.
+ * The two tools share a taxonomy with a few aliases: gatefile's
+ * discuss_first and issue_first are Greenlight's discussion_first, and its
+ * no_direct_prs is the hard block Greenlight calls collaborators_only.
+ */
+const GATEFILE_KIND_MAP: Record<string, GateKind> = {
+  claim_first: "claim_first",
+  assignment_required: "assignment_required",
+  vouch_required: "vouch_required",
+  collaborators_only: "collaborators_only",
+  dco_required: "dco_required",
+  cla_required: "cla_required",
+  discuss_first: "discussion_first",
+  issue_first: "discussion_first",
+  no_direct_prs: "collaborators_only",
+};
+
+interface GatefileGate {
+  kind?: string;
+  evidence?: string;
+  source?: string;
+}
+
+/**
+ * Parse a gatefile contribution-gates.json document into Greenlight gates.
+ * gatefile (the companion tool) extracts a repo's gates once and commits
+ * them as JSON; a repo that carries that file has already answered the gate
+ * question, so its verdicts should use the committed answer instead of
+ * re-deriving it from prose. Returns only the detected gates, each with its
+ * evidence prefixed so a verdict can say where the gate came from. Unknown
+ * kinds are skipped; malformed JSON throws.
+ */
+export function parseGatefileJson(text: string): Gate[] {
+  const doc = JSON.parse(text) as { gates?: GatefileGate[] };
+  if (!doc || !Array.isArray(doc.gates)) {
+    throw new Error("not a contribution-gates.json document (no gates array)");
+  }
+  const out: Gate[] = [];
+  for (const g of doc.gates) {
+    const kind = g.kind ? GATEFILE_KIND_MAP[g.kind] : undefined;
+    if (!kind || out.some((x) => x.kind === kind)) continue;
+    out.push({
+      kind,
+      detected: true,
+      evidence: `gatefile: ${g.evidence ?? g.kind}`,
+      source: g.source ?? "contribution-gates.json",
+    });
+  }
+  return out;
 }
 
 /** Gates that block an outside PR before it can even be opened. */

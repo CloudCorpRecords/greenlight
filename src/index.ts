@@ -25,7 +25,7 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.0" });
+const server = new McpServer({ name: "greenlight", version: "0.3.2" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
