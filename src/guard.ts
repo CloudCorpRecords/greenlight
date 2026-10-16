@@ -44,6 +44,22 @@
  * "other-claim", "missing-artifact", "first-time", "protocol-claim");
  * unknown keys are ignored, a missing or unreadable file means every
  * check is on.
+ *
+ * Autopilot (check 6, maintainer-side action, off by default): the same
+ * config file may carry an "autopilot" section with a label map and a
+ * nudge toggle:
+ *
+ *   { "autopilot": { "labels": { "protocol-claim": "claim-conflict",
+ *                                "competing-fix": "duplicate-effort",
+ *                                "changeset-missing": "needs-changeset" },
+ *                    "nudge": true } }
+ *
+ * When enabled, the guard COMPUTES label decisions (check id -> label
+ * name, flags only) and ready-to-copy stale-claim nudge lines. It never
+ * applies labels or posts comments itself: the bundled GitHub Action
+ * reads the decisions from the guard JSON and applies the labels with
+ * the Actions token. The CLI reports the decisions with
+ * --labels-dry-run.
  */
 import { readFileSync } from "node:fs";
 import { apiGet, parsePullUrl, fetchLinkedPRs, fetchComments } from "./github.js";
@@ -55,7 +71,7 @@ import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 import { fetchProtocolState, type ProtocolFetchResult } from "./protocol-fetch.js";
 
-export const GUARD_VERSION = "0.5.0";
+export const GUARD_VERSION = "0.6.0";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
@@ -64,13 +80,49 @@ export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
 export const GUARD_CHECKS = ["competing-fix", "other-claim", "missing-artifact", "first-time", "protocol-claim"] as const;
 export type GuardCheckId = (typeof GUARD_CHECKS)[number];
 
-export type GuardConfig = Record<GuardCheckId, boolean>;
-
-export function defaultGuardConfig(): GuardConfig {
-  return { "competing-fix": true, "other-claim": true, "missing-artifact": true, "first-time": true, "protocol-claim": true };
+export interface AutopilotConfig {
+  /**
+   * Machine check id (e.g. "competing-fix", "protocol-claim",
+   * "changeset-missing") -> label name to apply. Only findings with
+   * severity "flag" can earn a label; notes never do.
+   */
+  labels: Record<string, string>;
+  /**
+   * When true, the guard comment includes ready-to-copy stale-claim nudge
+   * lines for the maintainer. The guard never posts them anywhere itself.
+   */
+  nudge: boolean;
 }
 
-/** Read .greenlight-guard.json from a directory (default cwd). Best-effort: anything unreadable means all checks on. */
+export interface GuardConfig extends Record<GuardCheckId, boolean> {
+  /** Autopilot is off when absent: the default. Maintainer opts in. */
+  autopilot?: AutopilotConfig | null;
+}
+
+export function defaultGuardConfig(): GuardConfig {
+  return { "competing-fix": true, "other-claim": true, "missing-artifact": true, "first-time": true, "protocol-claim": true, autopilot: null };
+}
+
+/** Parse the autopilot section of a raw config object. Anything malformed means off. */
+export function parseAutopilotConfig(raw: unknown): AutopilotConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const ap = obj["autopilot"];
+  if (!ap || typeof ap !== "object") return null;
+  const apObj = ap as Record<string, unknown>;
+  const labels: Record<string, string> = {};
+  const rawLabels = apObj["labels"];
+  if (rawLabels && typeof rawLabels === "object") {
+    for (const [k, v] of Object.entries(rawLabels as Record<string, unknown>)) {
+      if (typeof k === "string" && k.trim() && typeof v === "string" && v.trim()) {
+        labels[k.trim()] = v.trim();
+      }
+    }
+  }
+  return { labels, nudge: apObj["nudge"] === true };
+}
+
+/** Read .greenlight-guard.json from a directory (default cwd). Best-effort: anything unreadable means all checks on and autopilot off. */
 export function readGuardConfig(dir = process.cwd()): GuardConfig {
   const config = defaultGuardConfig();
   try {
@@ -78,8 +130,9 @@ export function readGuardConfig(dir = process.cwd()): GuardConfig {
     for (const id of GUARD_CHECKS) {
       if (typeof raw[id] === "boolean") config[id] = raw[id];
     }
+    config.autopilot = parseAutopilotConfig(raw);
   } catch {
-    // Missing or broken config: all checks stay on.
+    // Missing or broken config: all checks stay on, autopilot stays off.
   }
   return config;
 }
@@ -139,6 +192,21 @@ export interface GuardResult {
   summary: string;
   /** True when at least one finding has severity "flag". */
   hasFindings: boolean;
+  /**
+   * Autopilot label decisions: label names to apply, computed from the
+   * config's label map over severity-"flag" findings only. Empty unless
+   * the maintainer enabled autopilot in .greenlight-guard.json. The guard
+   * never applies these itself; the bundled Action does.
+   */
+  autopilotLabels: string[];
+  /** The check-by-check decisions behind autopilotLabels (for dry-run display). */
+  autopilotLabelDecisions: AutopilotLabelDecision[];
+  /**
+   * Ready-to-copy stale-claim nudge lines for the maintainer, included in
+   * the guard comment when autopilot.nudge is on. The guard never posts
+   * them anywhere itself.
+   */
+  staleClaimNudges: string[];
   /** The comment-ready markdown. */
   markdown: string;
 }
@@ -416,6 +484,70 @@ export function checkMissingArtifacts(args: {
   return findings;
 }
 
+/** A claim is stale when it is 14+ days old and no open PR has appeared on its issue. */
+export const STALE_CLAIM_NUDGE_DAYS = 14;
+
+export interface AutopilotLabelDecision {
+  check: string;
+  title: string;
+  label: string;
+}
+
+/**
+ * Decide autopilot labels: the config's label map over severity-"flag"
+ * findings only. Pure, so fixtures can prove the mapping and the default-off.
+ * Notes never earn labels.
+ */
+export function decideAutopilotLabels(
+  findings: GuardFinding[],
+  autopilot: AutopilotConfig | null | undefined
+): AutopilotLabelDecision[] {
+  if (!autopilot) return [];
+  const seen = new Set<string>();
+  const decisions: AutopilotLabelDecision[] = [];
+  for (const f of findings) {
+    if (f.severity !== "flag") continue;
+    const label = autopilot.labels[f.check];
+    if (typeof label !== "string" || label.trim().length === 0) continue;
+    const key = label.trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    decisions.push({ check: f.check, title: f.title, label: key });
+  }
+  return decisions;
+}
+
+/**
+ * Build ready-to-copy nudge lines for stale foreign claims: 14+ days old
+ * with no OTHER open PR on the same issue (the guarded PR is the new
+ * arrival; another open PR means the claim is not stale). The maintainer
+ * copies and posts them on the issue; the guard never posts on the issue
+ * itself (sovereignty). Pure over the guard's own claims and competing
+ * PRs.
+ */
+export function buildStaleClaimNudges(
+  claims: GuardClaim[],
+  competingPRs: GuardCompetingPR[],
+  guardedPrNumber: number
+): string[] {
+  const nudges: string[] = [];
+  for (const c of claims) {
+    if (c.claimedByAuthor) continue;
+    if (c.ageDays < STALE_CLAIM_NUDGE_DAYS) continue;
+    const ref = c.issueRef ?? undefined;
+    const hasCompeting = competingPRs.some(
+      (p) => p.issueNumber === c.issueNumber && (p.issueRef ?? undefined) === ref
+    );
+    if (hasCompeting) continue;
+    const label = c.issueRef ?? `#${c.issueNumber}`;
+    nudges.push(
+      `@${c.author} claimed ${label} ${c.ageDays} days ago and never opened a PR. ` +
+        `This PR (#${guardedPrNumber}) now addresses it — if you're still working on it, reply to keep your claim; otherwise the claim lapses.`
+    );
+  }
+  return nudges;
+}
+
 /** Light author-history signal. Null means the lookup failed: no finding. */
 export function checkFirstTime(author: string, priorMerged: number | null): GuardFinding | null {
   if (priorMerged === null) return null;
@@ -461,6 +593,14 @@ export function renderGuardMarkdown(result: Omit<GuardResult, "markdown">): stri
     lines.push("Notes:");
     for (const f of notes) {
       for (const e of f.evidence) lines.push(`- ${e}`);
+    }
+    lines.push("");
+  }
+
+  if (result.staleClaimNudges.length > 0) {
+    lines.push("For the maintainer (autopilot nudge lines — copy and paste onto the issue; the guard never posts these itself):");
+    for (const n of result.staleClaimNudges) {
+      lines.push(`> ${n}`);
     }
     lines.push("");
   }
@@ -848,6 +988,12 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
   }
 
   const { summary, hasFindings } = buildGuardSummary(findings);
+  // Autopilot: computed, never applied, here. Labels come from the
+  // maintainer's label map over severity-"flag" findings; nudge lines are
+  // ready-to-copy text the maintainer posts on the issue themselves.
+  const autopilot = config.autopilot ?? null;
+  const labelDecisions = decideAutopilotLabels(findings, autopilot);
+  const staleClaimNudges = autopilot?.nudge ? buildStaleClaimNudges(claims, competingPRs, number) : [];
   const result: GuardResult = {
     pr: prUrl,
     number,
@@ -860,8 +1006,35 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
     findings,
     summary,
     hasFindings,
+    autopilotLabels: labelDecisions.map((d) => d.label),
+    autopilotLabelDecisions: labelDecisions,
+    staleClaimNudges,
     markdown: "",
   };
   result.markdown = renderGuardMarkdown(result);
   return result;
+}
+
+/**
+ * The `--labels-dry-run` rendering: what autopilot WOULD do, in plain
+ * text, without touching anything. Never posts, never labels.
+ */
+export function renderLabelsDryRun(result: GuardResult): string {
+  const lines: string[] = [`Autopilot label dry run for ${result.repo}#${result.number}`];
+  const decisions = result.autopilotLabelDecisions;
+  if (decisions.length === 0) {
+    lines.push("No autopilot labels: the maintainer has not enabled autopilot, or no mapped flag fired.");
+  } else {
+    lines.push(
+      `Would apply ${decisions.length} label${decisions.length === 1 ? "" : "s"}: ${decisions.map((d) => d.label).join(", ")}`
+    );
+    for (const d of decisions) {
+      lines.push(`  "${d.check}" (${d.title}) -> "${d.label}"`);
+    }
+  }
+  if (result.staleClaimNudges.length > 0) {
+    lines.push("Stale-claim nudge lines (for the maintainer to post on the issue):");
+    for (const n of result.staleClaimNudges) lines.push(`  > ${n}`);
+  }
+  return lines.join("\n");
 }
