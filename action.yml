@@ -1,0 +1,72 @@
+name: Greenlight Guard
+description: >-
+  Post a maintainer-side guard report on a pull request: competing fix, prior
+  claims by someone other than the PR author, missing required artifacts
+  (changeset file, DCO sign-off, CLA status), and first-time contributor
+  signal. Greenlight itself never posts; this action posts one comment and
+  updates it on later pushes instead of spamming.
+inputs:
+  pr-url:
+    description: >-
+      Full GitHub PR URL to guard. Defaults to the pull request that
+      triggered the workflow.
+    required: false
+    default: ""
+  config-file:
+    description: >-
+      Repo-relative path to a .greenlight-guard.json file with per-check
+      toggles (competing-fix, other-claim, missing-artifact, first-time).
+      Defaults to the repo root.
+    required: false
+    default: ".greenlight-guard.json"
+outputs:
+  findings:
+    description: Number of flagged findings (severity flag) in the report.
+    value: ${{ steps.guard.outputs.findings }}
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+    - name: Run greenlight guard
+      id: guard
+      shell: bash
+      run: |
+        URL="${{ inputs.pr-url }}"
+        if [ -z "$URL" ]; then
+          URL="${{ github.event.pull_request.html_url }}"
+        fi
+        # guard exits 3 when findings exist; that is expected, not an error.
+        npx -y @reneturcios/greenlight@latest guard "$URL" --json > greenlight-guard.json || code=$?
+        if [ "${code:-0}" -ne 0 ] && [ "${code:-0}" -ne 3 ]; then
+          echo "::error::greenlight guard failed with exit $code"
+          exit "$code"
+        fi
+        COUNT=$(node -e "const r = require('./greenlight-guard.json'); console.log(r.findings.filter(f => f.severity === 'flag').length)")
+        echo "findings=$COUNT" >> "$GITHUB_OUTPUT"
+    - name: Post or update the guard comment
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require("fs");
+          const report = JSON.parse(fs.readFileSync("greenlight-guard.json", "utf8"));
+          const marker = "<!-- greenlight-guard -->";
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request.number;
+          const { data: comments } = await github.rest.issues.listComments({
+            owner,
+            repo,
+            issue_number,
+            per_page: 100,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+          const body = report.markdown;
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            core.info(`Updated guard comment ${existing.id}`);
+          } else {
+            const { data: created } = await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            core.info(`Created guard comment ${created.id}`);
+          }

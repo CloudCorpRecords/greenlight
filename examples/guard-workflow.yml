@@ -1,0 +1,31 @@
+# Greenlight Guard: one comment on every pull request, updated on pushes.
+#
+# Copy this file to .github/workflows/greenlight-guard.yml in your repo.
+# It needs pull-requests: write so the action can post its comment.
+# Optionally add a .greenlight-guard.json at your repo root to toggle
+# checks off:
+#
+#   { "competing-fix": true, "other-claim": true,
+#     "missing-artifact": true, "first-time": true }
+name: Greenlight Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Guard the PR
+        uses: CloudCorpRecords/greenlight@v0.3.9
+        id: guard
+      - name: Fail the check when the guard flags something
+        if: steps.guard.outputs.findings != '0'
+        run: |
+          echo "::warning::greenlight guard flagged ${{ steps.guard.outputs.findings }} things; see the guard comment on this PR"
