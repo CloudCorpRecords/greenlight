@@ -29,7 +29,7 @@ without it the tools still work but share the small anonymous budget.
 ## Verify it worked
 
 Ask the agent: "list your MCP tools." You should see the `greenlight`
-server with all 10 tools:
+server with all 12 tools:
 
 - `check_issue` — verdict on whether an issue is landable (GO / RISKY / TAKEN / GATED / STALE)
 - `scan_repo` — find starter issues worth working in a repo
@@ -41,6 +41,8 @@ server with all 10 tools:
 - `review_triage` — classify review findings and draft replies (never posts)
 - `guard_pr` — maintainer-side: competing fix, prior claims, missing artifacts, first-time contributor (never posts)
 - `repo_digest` — repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts (never posts)
+- `claim_status` — Claim Protocol pre-flight for one issue: who holds it, until when, who is queued, competing PRs, gates, whether the repo honors the protocol
+- `preflight` — the one-call answer: claim_status plus the repo friction summary
 
 ## Format notes
 
