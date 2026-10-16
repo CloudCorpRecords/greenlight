@@ -4,6 +4,10 @@ Greenlight checks a GitHub issue before you spend hours on it, and tells you in 
 
 **New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data.
 
+## Use Greenlight inside your AI coding tool
+
+Greenlight ships an agent drop-in pack in [`integrations/`](integrations/README.md): ready-to-copy MCP configs for Claude Code, Cursor, VS Code / Copilot, Windsurf, and Cline, plus instruction snippets that teach your agent the one behavior rule: **check Greenlight before it opens a PR.** Verify with a "list your MCP tools" prompt; the greenlight server carries 8 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage).
+
 ## The problem
 
 You find an issue that looks perfect. You code all evening. Then one of these happens:

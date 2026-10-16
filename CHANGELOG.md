@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 0.3.8 (2026-10-16)
+
+The agent drop-in pack: one-line installs that plug Greenlight into the major AI coding tools, so your agent checks before it opens a PR.
+
+- **`integrations/` ships in the npm package.** Ready-to-copy configs for Claude Code (`.mcp.json` + a CLAUDE.md snippet), Cursor (`.cursor/mcp.json` + a `greenlight.mdc` rule), VS Code / Copilot (`.vscode/mcp.json` using the `servers` key plus a `copilot-instructions.md` snippet), Windsurf (`mcp_config.json` for `~/.codeium/windsurf/mcp_config.json`), and Cline (`mcp_settings.json`), plus a canonical `mcp.json` for any other MCP client and an integrations README with the per-tool install table, the verification steps, and format notes with doc sources.
+- **The workflow the agent learns.** Before coding for an issue: `check_issue`; stop on TAKEN or GATED and report why. `prep_issue` before claiming. `ci_triage` on a red PR before changing code. `review_triage` on review feedback: fix likely-real first, ask on needs-decision, push back on likely-noise with evidence. Never post claims or PRs without the human's go-ahead.
+- All 8 tools verified over the real stdio server (`check_issue`, `scan_repo`, `repo_friction`, `claim_issue`, `prep_issue`, `open_pr`, `ci_triage`, `review_triage`); every config's command/args shape is asserted in the new `test/integrations.test.ts`. Honest limit: Cline and Windsurf config formats were verified against community docs rather than the vendors' own docs pages; everything else used official-adjacent references.
+
+
 ## 0.3.7 (2026-10-15)
 
 Solve-first, part 3: `greenlight prep` now answers how to actually sign what the repo demands, what release-note artifact it owes, whether the fix is even in this repo, and what the house rules are at a glance.
