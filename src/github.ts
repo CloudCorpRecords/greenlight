@@ -148,6 +148,13 @@ export function parseIssueUrl(url: string): IssueURL {
   return { owner: m[1], repo: m[2], number: Number(m[3]) };
 }
 
+/** Strict parser for PR URLs (ci triage only accepts /pull/ URLs). */
+export function parsePullUrl(url: string): IssueURL {
+  const m = /github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(url);
+  if (!m) throw new Error(`Not a GitHub pull request URL: ${url}`);
+  return { owner: m[1], repo: m[2], number: Number(m[3]) };
+}
+
 /** Fetch issue comments for claim detection. */
 export async function fetchComments(owner: string, repo: string, number: number): Promise<CommentSignal[]> {
   const cached = cacheGet("issue", [owner, repo, String(number), "comments"]) as CommentSignal[] | undefined;
