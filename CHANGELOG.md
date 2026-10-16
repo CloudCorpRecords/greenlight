@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.3.11 (2026-10-16)
+
+The repo digest: `greenlight digest <owner/repo>` (and the `repo_digest` MCP tool, the tenth tool) answers the maintainer's repo-level question: what needs my attention across the whole repo?
+
+- **Four sections, all evidence-carrying.** PR races: open PRs grouped by linked issue (same-repo closing links and cross-repo `owner/repo#N` references, reusing the guard's extractors), with first-claim arbitration — earliest claim author and date on the issue, earliest PR opened, and a one-line "the other PR(s) duplicate effort" summary. Claimed-by-other conflicts: open PRs whose linked issue carries a claim by someone other than the PR author that predates the PR (guard's claim matching, reused). Stale claims: open issues with a claim 14+ days old and no open PR in the issue's timeline, with "nudge @x" under 30 days and "release the claim" after. Assignment-gate conflicts: when the repo's gates require assignment before a PR, open PRs whose author is not among the issue's assignees (including issues assigned to nobody).
+- **Budget discipline.** Comment fetches are skipped for comment-less issues (a comment-count prefetch first), timeline walks happen only for candidate stale claims, and the summary header always states the list cap and the true open-PR total when capped (`--limit N`, default 50, max 100). A section that cannot be computed says so and why, never silently empty. `--json` for machines; `--fail-on-race` makes the exit code 3 when a race exists, mirroring the guard's contract.
+- **Live-corrections before shipping.** The first live digest of ComposioHQ/composio surfaced two precision bugs, both fixed: dependabot-style branches (`vitest-5.0.4`) were claiming issues #5 and #4, so dotted version sequences are now stripped before branch-token collection (shared with the guard's extractor, with regression tests); and race groups keyed on numbers that resolve to PRs, not issues, are skipped with a degraded note instead of reporting phantom races. The claimed-by-other section now counts only *strong* foreign claims as conflicts; soft claims ("happy to help") render as "possible interest" notes, because the live run showed soft patterns matching polite offers that are not claims of work.
+- **CI triage widening.** The base-branch comparison window grows from 5 to 12 commits, so long-running flakes (the reticle windows install-gate shape) stop misreading as yours. When a base commit has no check runs at all, the legacy combined-status endpoint (Travis/Jenkins/AppVeyor) now feeds the comparison as fallback evidence; classification semantics are unchanged.
+
+
 ## 0.3.10 (2026-10-16)
 
 Closes the three honest gaps from the v0.3.9 report:
