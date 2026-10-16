@@ -20,7 +20,7 @@ import { detectClaims, isBotAuthor } from "./claims.js";
 import { extractLinkedIssueNumbers, extractCrossRepoIssues, splitIssueClaims, type GuardClaim } from "./guard.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 
-export const DIGEST_VERSION = "0.5.0";
+export const DIGEST_VERSION = "0.6.0";
 
 /** Default cap for list fetches; --limit overrides. The true total is always reported. */
 export const DEFAULT_DIGEST_LIMIT = 50;
