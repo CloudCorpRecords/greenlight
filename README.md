@@ -109,6 +109,15 @@ npx @reneturcios/greenlight review https://github.com/n8n-io/n8n/pull/41235
 # [likely-real] interpolation drops `__proto__` (packages/bruno-cli/src/runner/interpolate-vars.js:42)
 #   why: anchor matches: the comment's quoted token Object.assign({}, params) is present in the anchored hunk
 #   draft reply: Good catch. Fixed in <next commit>: ...
+
+# Maintainer guard for an incoming PR: competing fix, prior claims, missing
+# artifacts (changeset / DCO / CLA), first-time contributor. Renders markdown
+# ready to post as one comment; Greenlight itself never posts.
+npx @reneturcios/greenlight guard https://github.com/owner/repo/pull/123
+
+# Greenlight guard: 1 thing to check
+#   - Missing release-note file (repo uses .changes/): expected .changes/123-slug.md
+npx @reneturcios/greenlight guard <pr-url> --quiet   # exit 3 when flagged, silent otherwise
 ```
 
 Real examples from our vetting:
@@ -170,6 +179,7 @@ Tools:
 * `open_pr` - DCO-aware PR opening from a fork branch (dry run unless `execute: true`)
 * `ci_triage` - classify each failing check on a PR as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker, by comparing against the base branch's recent check history
 * `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
+* `guard_pr` - maintainer-side analysis of an incoming PR: competing fix, prior claims by someone other than the author, missing artifacts (changeset / DCO / CLA), first-time contributor. Returns comment-ready markdown (never posts).
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
 
@@ -180,6 +190,10 @@ The first solve-side command. On a red PR, `ci` fetches the PR's base and head, 
 ### v0.3.7: prep hardening (solve-first)
 
 The third solve-side upgrade, to `greenlight prep`. The checklist now starts with the exact signing path the repo demands (CLA Assistant with its signature phrase, a repo-specific CLA bot's signing page, or DCO with `git commit -s`) and the release-note artifact it owes (`.changeset/`, `.changes/<issue>-slug.md`, towncrier fragments, or a CHANGELOG note). Before anything else, it runs the fix-lives-here check: the v0.3.4 server-side signal plus a satellite-repo hint that fires only on tight textual evidence, warning prominently when the fix may not be buildable from this repo. A house-rules block closes it out: claim style, PR title convention, draft-first norm, and the test command, each with its source file.
+
+### v0.3.9: the maintainer guard
+
+Guard flips the engine around: `greenlight guard <pr-url>` (or the `guard_pr` MCP tool) analyzes an *incoming* pull request and renders one short markdown report a maintainer can post as a comment. It checks for a competing fix (other open PRs already fixing the same issue, found via the issue's timeline), prior claims by someone other than the PR author, missing required artifacts (a `.changes/` or `.changeset/` file the repo assembles its changelog from, DCO sign-off trailers, CLA status), and whether the author is a first-time contributor. Output starts with a one-line summary ("Greenlight guard: nothing flagged" or "N things to check"), `--quiet` stays silent unless flagged, and exit code 3 tells a workflow when findings exist. The repo ships a composite GitHub Action (`action.yml`) that posts or updates a single comment on each PR, an `examples/guard-workflow.yml` a maintainer copies into `.github/workflows/`, and per-repo check toggles through `.greenlight-guard.json`.
 
 ### v0.3.6: review triage (solve-first)
 
