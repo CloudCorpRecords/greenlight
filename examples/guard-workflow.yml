@@ -15,6 +15,10 @@ on:
 
 permissions:
   pull-requests: write
+  # issues: write is needed only for Autopilot label application
+  # (the autopilot.labels map in .greenlight-guard.json). Without it the
+  # label step degrades to a warning and the guard comment still posts.
+  issues: write
 
 jobs:
   guard:
@@ -23,7 +27,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
       - name: Guard the PR
-        uses: CloudCorpRecords/greenlight@v0.5.0
+        uses: CloudCorpRecords/greenlight@v0.6.0
         id: guard
       - name: Fail the check when the guard flags something
         if: steps.guard.outputs.findings != '0'

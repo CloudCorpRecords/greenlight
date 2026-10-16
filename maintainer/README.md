@@ -68,6 +68,50 @@ instead of duplicating"); a claim held by the PR author is a pass note, and
 completed claims are neither. Toggleable per repo with the
 `"protocol-claim"` key above.
 
+## Maintainer Autopilot (opt-in)
+
+The guard reports by default. Autopilot lets it act — only when you say
+so, and only in two narrow ways. Add an `autopilot` section to your
+`.greenlight-guard.json`:
+
+```json
+{
+  "protocol-claim": true,
+  "autopilot": {
+    "labels": {
+      "protocol-claim": "claim-conflict",
+      "competing-fix": "duplicate-effort",
+      "changeset-missing": "needs-changeset"
+    },
+    "nudge": true
+  }
+}
+```
+
+**Labels.** The map is check id to label name (the machine keys: `competing-fix`,
+`other-claim`, `protocol-claim`, `changeset-missing`, `dco-missing`, `cla-status`,
+`first-time`). Only findings with severity "flag" can earn a label; notes
+never do. The guard computes the decisions into the report JSON
+(`autopilotLabels`); the Action applies them with the Actions token,
+creating a label that does not exist yet. A label failure degrades to a
+warning and never fails the run. For the labels step you need
+`issues: write` alongside `pull-requests: write` in the workflow
+permissions (see `examples/guard-workflow.yml`).
+
+**Nudge lines.** When `nudge` is on, a linked issue carrying a stale
+foreign claim (14+ days old, no other open PR on the issue) gains a
+ready-to-copy nudge line inside the guard comment: "@x claimed #N N days
+ago and never opened a PR. This PR (#M) now addresses it — if you're still
+working on it, reply to keep your claim; otherwise the claim lapses."
+You post it on the issue yourself. The guard never posts on the issue
+(maintainer sovereignty).
+
+**What autopilot never does.** It never closes PRs, never merges, and
+never posts anything beyond the single guard comment it already wrote.
+To see exactly what it would do before enabling it, run
+`greenlight guard <pr-url> --labels-dry-run` — plain text, no changes,
+no exit 3.
+
 The CLI honors the same file when you run it locally:
 
 ```bash
