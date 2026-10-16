@@ -57,6 +57,11 @@ import {
   type VerifiedCommentInput,
 } from "./verify-comment.js";
 import { verifyRepo } from "./verify.js";
+import { babysit, defaultStatePath } from "./babysit.js";
+import { buildEvidencePack } from "./evidence.js";
+import { buildPassport } from "./passport.js";
+import { renderLabelsDryRun } from "./guard.js";
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 // The one real fact the verified-comment footer is allowed to state about
@@ -513,6 +518,12 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
   const asJson = args.includes("--json");
   const quiet = args.includes("--quiet");
   const result = await guardPr(prUrl, {}, readGuardConfig());
+  if (args.includes("--labels-dry-run")) {
+    // Autopilot transparency: what the guard WOULD label and nudge, in
+    // plain text. Never posts, never labels, never exits 3.
+    console.log(renderLabelsDryRun(result));
+    return;
+  }
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else if (!quiet || result.hasFindings) {
@@ -521,6 +532,71 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
   // Exit code 3 means findings exist, so a GitHub Action can decide whether
   // to comment or block. Nothing flagged is exit 0, usage errors are exit 1.
   if (result.hasFindings) process.exitCode = 3;
+}
+
+/**
+ * `greenlight babysit`: the PR babysitter. Watches your open PRs and
+ * reports the one prioritized action list: needs you now, waiting on
+ * them, quiet. Cron-friendly: exit 0 unless usage is wrong; --fail-on-action
+ * gives exit 3 when "needs you now" is non-empty.
+ */
+async function cmdBabysit(args: string[]): Promise<void> {
+  const prsRaw = flagValue(args, "--prs");
+  const mine = args.includes("--mine");
+  const reposRaw = flagValue(args, "--repos");
+  const statePath = flagValue(args, "--state") ?? defaultStatePath();
+  const prs = prsRaw ? prsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
+  const repos = reposRaw ? reposRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
+  if (prs.length === 0 && !mine) {
+    console.error("Error: give --prs <url,...> or --mine --repos <owner/repo,...> (e.g. greenlight babysit --mine --repos acme/widgets)");
+    process.exitCode = 1;
+    return;
+  }
+  const run = await babysit({ prs, mine, repos, statePath });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(run.json, null, 2));
+  } else {
+    console.log(run.markdown);
+  }
+  if (args.includes("--fail-on-action") && run.needsYouNow.length > 0) process.exitCode = 3;
+}
+
+/**
+ * `greenlight evidence`: the Verified PR evidence pack. Assembles the
+ * guard verdict, CI triage, review triage, and protocol status of linked
+ * issues into one markdown pack where every claim cites its source.
+ */
+async function cmdEvidence(prUrl: string, args: string[]): Promise<void> {
+  const pack = await buildEvidencePack(prUrl, { verifyJsonPath: flagValue(args, "--verify-json") });
+  const out = flagValue(args, "--out");
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(pack.json, null, 2));
+  } else {
+    console.log(pack.markdown);
+  }
+  if (out) {
+    writeFileSync(out, pack.markdown + "\n", "utf8");
+    if (!args.includes("--json")) console.log(`\nPack written to ${out}`);
+  }
+}
+
+/**
+ * `greenlight passport`: the contributor passport. Protocol claims from
+ * the Claim Ledger plus merged PRs from the GitHub search API.
+ */
+async function cmdPassport(login: string, args: string[]): Promise<void> {
+  const clean = login.replace(/^@/, "");
+  if (!/^[A-Za-z0-9-]+$/.test(clean)) {
+    console.error(`Error: expected a GitHub login, got: ${login}`);
+    process.exitCode = 1;
+    return;
+  }
+  const passport = await buildPassport(clean);
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(passport.json, null, 2));
+  } else {
+    console.log(passport.markdown);
+  }
 }
 
 async function cmdDigest(repoRef: string, args: string[]): Promise<void> {
@@ -628,8 +704,11 @@ function usage(): void {
   console.log("  greenlight friction <owner/repo> [--json]");
   console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
   console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
-  console.log("  greenlight guard <pr-url> [--json] [--quiet]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged)");
+  console.log("  greenlight guard <pr-url> [--json] [--quiet] [--labels-dry-run]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged; dry-run shows autopilot label decisions)");
   console.log("  greenlight digest <owner/repo> [--json] [--limit N] [--fail-on-race]   (repo-level: PR races, claimed-by-other, stale claims, assignment conflicts)");
+  console.log("  greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--state path] [--json] [--fail-on-action]   (watch your open PRs: needs-you-now first; exit 0 unless --fail-on-action)");
+  console.log("  greenlight evidence <pr-url> [--out file.md] [--verify-json path] [--json]   (Verified PR evidence pack: every claim cites its source)");
+  console.log("  greenlight passport <github-login> [--json]   (contributor passport: protocol claims from the Claim Ledger + merged PRs)");
   console.log("  greenlight verify-comment <issue-url> [--json] [--from-file notes.md] [--claim t] [--env t] [--repro t] [--observed t] [--expected t] [--root-cause t] [--fix t] [--ran t] [--by name]   (draft the verified-finding comment for maintainer-only repos; never posts)");
   console.log("  greenlight verify [--base <ref>] [--cmd \"<test command>\"] [--parser node:test|pytest] [--timeout-secs N] [--allow-dirty] [--json]   (honest red-green test delta: base vs working tree; exit 3 on new failures, 1 when unverifiable)");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json]");
@@ -644,12 +723,12 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--state" || a === "--out" || a === "--verify-json") {
       i++; // skip the value with its flag
       continue;
     }
@@ -677,6 +756,9 @@ async function main(): Promise<void> {
     if (command === "pr" && target) return await cmdPr(target, args);
     if (command === "verify-comment" && target) return await cmdVerifyComment(target, args);
     if (command === "verify") return await cmdVerify(args);
+    if (command === "babysit") return await cmdBabysit(args);
+    if (command === "evidence" && target) return await cmdEvidence(target, args);
+    if (command === "passport" && target) return await cmdPassport(target, args);
     usage();
     process.exitCode = command ? 1 : 0;
   } catch (err) {

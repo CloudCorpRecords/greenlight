@@ -24,6 +24,8 @@ import {
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
+import { babysit, defaultStatePath } from "./babysit.js";
+import { buildEvidencePack } from "./evidence.js";
 import { digestRepo } from "./digest.js";
 import {
   buildVerifiedComment,
@@ -41,7 +43,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.5.0" });
+const server = new McpServer({ name: "greenlight", version: "0.6.0" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -355,6 +357,46 @@ server.tool(
         GREENLIGHT_VERSION
       );
       return text({ issue: issue_url, markdown: built.markdown, gaps: built.gaps, posted: false });
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "babysit_prs",
+  "Watch your open PRs and get the one prioritized action list: needs you now (new review findings, CI failing on your code, merge conflicts, new guard flags, stuck checks), waiting on them (checks running, green with no feedback yet), quiet. Compares against stored watermarks so reruns report only what changed since the last check. Cron-friendly: always succeeds unless the input is wrong.",
+  {
+    pr_urls: z.array(z.string()).default([]).describe("Full GitHub PR URLs to watch, e.g. [\"https://github.com/owner/repo/pull/123\"]. Empty when using mine."),
+    mine: z.boolean().default(false).describe("Discover the author's open PRs across the repos list via the GitHub search API."),
+    repos: z.array(z.string()).default([]).describe("owner/repo list for mine discovery, e.g. [\"acme/widgets\"]."),
+    author: z.string().default("CloudCorpRecords").describe("Author whose open PRs to discover with mine."),
+    state_path: z.string().optional().describe("Watermark file. Defaults to ~/.greenlight/babysit.json."),
+  },
+  async ({ pr_urls, mine, repos, author, state_path }) => {
+    try {
+      if (pr_urls.length === 0 && !mine) {
+        return text({ error: "Give pr_urls or set mine with repos." });
+      }
+      const run = await babysit({ prs: pr_urls, mine, repos, author, statePath: state_path ?? defaultStatePath() });
+      return text(run.json);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "evidence_pack",
+  "The Verified PR evidence pack for one pull request: the guard verdict, CI triage, review triage, and Claim Protocol status of the linked issues, in one markdown document where every claim cites its source (check run, review anchor, claim comment URL). Call this when a maintainer, a recruiter, or your future self needs proof, not a summary.",
+  {
+    pr_url: z.string().describe("Full GitHub PR URL, e.g. https://github.com/owner/repo/pull/123"),
+    verify_json: z.string().optional().describe("Path to a prior `greenlight verify --json` report to include the honest red-green test delta. The pack never runs suites itself."),
+  },
+  async ({ pr_url, verify_json }) => {
+    try {
+      const pack = await buildEvidencePack(pr_url, { verifyJsonPath: verify_json });
+      return { content: [{ type: "text" as const, text: pack.markdown }] };
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
