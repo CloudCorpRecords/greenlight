@@ -11,6 +11,7 @@ import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, Gate, MentionedP
 import { classifyLinkStrength, type LinkStrength } from "./linkstrength.js";
 import { detectWorkflowGates, type WorkflowFile } from "./gates.js";
 import { isBotAuthor } from "./claims.js";
+import { detectServerSideOnly } from "./server-side.js";
 
 const API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
@@ -193,24 +194,17 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
   const cached = cacheGet("issue", [owner, repo, String(number), "prs"]) as LinkedPR[] | undefined;
   if (cached) return cached;
 
-  const found = new Map<number, { number: number; state: LinkedPR["state"]; title: string; url: string }>();
+  const found = new Map<number, { number: number; state: LinkedPR["state"]; title: string; url: string; via: LinkedPR["via"] }>();
 
   {
     const timeline = await fetchTimelineEvents(owner, repo, number);
-    for (const event of timeline) {
-      if (event.event !== "cross-referenced") continue;
-      const src = event.source as Record<string, unknown> | undefined;
-      if (!src || src.type !== "issue") continue;
-      const pull = (src as Record<string, unknown>).pull_request as Record<string, unknown> | undefined;
-      if (!pull) continue;
-      const prUrl = String((src as Record<string, unknown>).html_url ?? "");
-      const nm = /\/pull\/(\d+)/.exec(prUrl);
-      if (!nm) continue;
-      found.set(Number(nm[1]), {
-        number: Number(nm[1]),
-        state: "open", // refined below via search state
-        title: String((src as Record<string, unknown>).title ?? ""),
-        url: prUrl,
+    for (const ref of extractTimelineCrossRefPRs(timeline)) {
+      found.set(ref.number, {
+        number: ref.number,
+        state: "open", // refined below via search state or the individual PR fetch
+        title: ref.title,
+        url: ref.url,
+        via: "timeline",
       });
     }
   }
@@ -224,11 +218,13 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
     for (const item of data.items ?? []) {
       const state: LinkedPR["state"] =
         item.pull_request?.merged_at ? "merged" : item.state === "open" ? "open" : "closed";
+      const existing = found.get(item.number);
       found.set(item.number, {
         number: item.number,
         state,
         title: item.title,
         url: item.html_url,
+        via: existing?.via ?? "search",
       });
     }
   } catch { /* search is best-effort */ }
@@ -238,13 +234,19 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
   for (const cand of found.values()) {
     let linkStrength: LinkStrength = "mention";
     let title = cand.title;
+    let state = cand.state;
     try {
       const detail = (await apiGet(`/repos/${owner}/${repo}/pulls/${cand.number}`)) as {
         title?: unknown;
         body?: unknown;
+        state?: unknown;
+        merged_at?: unknown;
         head?: { ref?: unknown };
       };
       title = String(detail.title ?? cand.title);
+      // The individual PR fetch is authoritative on state (covers
+      // timeline-only PRs the search pass never saw).
+      state = detail.merged_at != null ? "merged" : detail.state === "closed" ? "closed" : "open";
       const branch = String(detail.head?.ref ?? "");
       linkStrength = classifyLinkStrength({
         title,
@@ -255,7 +257,7 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
     } catch {
       linkStrength = "mention"; // could not read the PR; treat as a weak reference
     }
-    prs.push({ number: cand.number, state: cand.state, title, url: cand.url, linkStrength });
+    prs.push({ number: cand.number, state, title, url: cand.url, linkStrength, via: cand.via });
   }
 
   cacheSet("issue", [owner, repo, String(number), "prs"], prs);
@@ -694,6 +696,19 @@ export interface AttemptPRLink {
   url: string;
 }
 
+/**
+ * Normalize a comment body line-by-line for fix-announcement matching:
+ * strip leading emoji and non-word characters from each line. Seen on
+ * actualbudget/actual#8429, where a bot posted "🤖 Opened #8474 with a
+ * focused fix" and the announcement regex missed it entirely.
+ */
+export function normalizeCommentText(body: string): string {
+  return body
+    .split("\n")
+    .map((line) => line.replace(/^[^\p{L}\p{N}#/@]+/u, ""))
+    .join("\n");
+}
+
 // Comments that announce work is happening, whose PR URLs are race signals:
 // "/attempt #5563" style commands, and narratives like "Submitted fix for
 // bug #1 ... in https://github.com/<o>/<r>/pull/<n>". A bare PR link
@@ -702,6 +717,9 @@ const FIX_ANNOUNCE_RES: RegExp[] = [
   /^\s*\/(attempt|claim)\b/i,
   /submitted (a |the )?fix/i,
   /opened (a |the )?pr/i,
+  // "Opened #8474 with a focused fix" — the announcement names the issue
+  // number directly instead of the word "PR" (actualbudget/actual#8429).
+  /opened\s+#\d+/i,
   /implemented (a |the )?fix/i,
 ];
 const CROSS_REPO_PR_URL_RE = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/gi;
@@ -711,17 +729,19 @@ const CROSS_REPO_PR_URL_RE = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull
  * from the issue author are skipped. The URLs routinely point at sibling
  * repos in the same org (tscircuit/tscircuit#5563's fixes live in
  * tscircuit/core and tscircuit/checks), so they are not limited to the
- * issue's own repo. Pure; tests drive it directly. Bounded at 5 links.
+ * issue's own repo. Bodies are normalized (emoji-stripped) before
+ * matching. Pure; tests drive it directly. Bounded at 5 links.
  */
 export function extractAttemptLinkedPRs(comments: CommentSignal[], issueAuthor: string): AttemptPRLink[] {
   const seen = new Set<string>();
   const out: AttemptPRLink[] = [];
   for (const c of comments) {
     if (c.author === issueAuthor || isBotAuthor(c.author)) continue;
-    if (!FIX_ANNOUNCE_RES.some((re) => re.test(c.body))) continue;
+    const body = normalizeCommentText(c.body);
+    if (!FIX_ANNOUNCE_RES.some((re) => re.test(body))) continue;
     CROSS_REPO_PR_URL_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = CROSS_REPO_PR_URL_RE.exec(c.body)) !== null) {
+    while ((m = CROSS_REPO_PR_URL_RE.exec(body)) !== null) {
       const url = m[0];
       if (seen.has(url)) continue;
       seen.add(url);
@@ -729,6 +749,36 @@ export function extractAttemptLinkedPRs(comments: CommentSignal[], issueAuthor: 
     }
   }
   return out.slice(0, 5);
+}
+
+/**
+ * Extract PR references from timeline cross-referenced events. GitHub nests
+ * the referenced issue one level down: event.source.issue.html_url, with
+ * source.pull_request present when the reference is a PR. The older reader
+ * looked at source.html_url directly, which the API never fills, so the
+ * timeline walk silently found nothing. Pure; tests drive it directly.
+ */
+export function extractTimelineCrossRefPRs(
+  events: Record<string, unknown>[]
+): Array<{ number: number; title: string; url: string }> {
+  const out: Array<{ number: number; title: string; url: string }> = [];
+  for (const event of events) {
+    if (event.event !== "cross-referenced") continue;
+    const src = event.source as Record<string, unknown> | undefined;
+    if (!src || src.type !== "issue") continue;
+    // Real shape: { type: "issue", issue: { html_url, title, pull_request } }.
+    const inner = (src.issue as Record<string, unknown> | undefined) ?? src;
+    const pull = inner.pull_request as Record<string, unknown> | undefined;
+    if (!pull) continue;
+    const prUrl = String(inner.html_url ?? "");
+    const nm = /\/pull\/(\d+)/.exec(prUrl);
+    if (!nm) continue;
+    const n = Number(nm[1]);
+    if (!out.some((o) => o.number === n)) {
+      out.push({ number: n, title: String(inner.title ?? ""), url: prUrl });
+    }
+  }
+  return out;
 }
 
 /** Count open issues labelled good-first-issue or help-wanted. */
@@ -821,6 +871,16 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     duplicateOf = await fetchDuplicateTargets(owner, repo, number, comments);
   } catch { /* best-effort */ }
 
+  // Server-side-only signal: when a quoted error string from the issue
+  // body has zero hits in the repo, the check may live outside it
+  // (ComposioHQ/composio#4852: a closed backend enforced the 422). The
+  // detector degrades to "no evidence" on any API failure.
+  let serverSide: IssueSnapshot["serverSide"];
+  try {
+    const signal = await detectServerSideOnly(owner, repo, String(issue.body ?? ""));
+    if (signal) serverSide = signal;
+  } catch { /* best-effort */ }
+
   const snapshot: IssueSnapshot = {
     sourceUrl: `https://github.com/${owner}/${repo}/issues/${number}`,
     owner,
@@ -843,6 +903,7 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     houseRules,
     workflowGates,
     duplicateOf,
+    ...(serverSide ? { serverSide } : {}),
   };
   cacheSet("issue", [owner, repo, String(number), "snapshot"], snapshot);
   return snapshot;
