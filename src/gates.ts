@@ -90,6 +90,31 @@ const RULES: GateRule[] = [
       /accept issues, not pull requests?/i,
     ],
   },
+  {
+    // Field case 2026-10-15: activepieces paused unsolicited outside PRs
+    // and auto-closed two finished PRs within about a minute. The policy
+    // sits in CONTRIBUTING in plain prose ("We've temporarily paused
+    // unsolicited pull requests from outside the core team"), blamed on
+    // AI-generated PR volume. This is a hard block: an outside PR will
+    // not survive even if the code is perfect.
+    kind: "unsolicited_prs_paused",
+    regexes: [
+      /paused.{0,60}(unsolicited|solicited|external)? ?(pull requests?|prs?)/i,
+      /not accepting (external )?(contributions|pull requests?)/i,
+      /unsolicited pull requests?/i,
+    ],
+  },
+  {
+    // The automation end of the same policy: prose that says outside PRs
+    // get closed automatically (trigger.dev's auto-close is caught by the
+    // vouch rule; this is the generic version for every other repo).
+    kind: "external_prs_closed",
+    regexes: [
+      /automatically.{0,60}(external|outside).{0,40}(pull requests?|prs?)/i,
+      /auto-?clos\w*.{0,80}(external|outside).{0,40}(pull requests?|prs?)/i,
+      /(external|outside).{0,40}(pull requests?|prs?).{0,60}(auto-?clos|will be closed)/i,
+    ],
+  },
 ];
 
 /** Cut a short evidence snippet around the first regex match. */
@@ -145,7 +170,7 @@ export function parseGatesFromSources(sources: PolicySource[]): Gate[] {
 }
 
 /**
- * Parse contributing text into a gate list. Always returns all seven gates
+ * Parse contributing text into a gate list. Always returns all nine gates
  * with detected true/false, plus an evidence snippet when detected.
  */
 export function parseGates(text: string | undefined, options: ParseOptions = {}): Gate[] {
@@ -220,7 +245,7 @@ export function parseGatefileJson(text: string): Gate[] {
 }
 
 /** Gates that block an outside PR before it can even be opened. */
-const HARD_GATES: GateKind[] = ["assignment_required", "vouch_required", "collaborators_only"];
+const HARD_GATES: GateKind[] = ["assignment_required", "vouch_required", "collaborators_only", "unsolicited_prs_paused", "external_prs_closed"];
 
 export function hardGates(gates: Gate[]): Gate[] {
   return gates.filter((g) => g.detected && HARD_GATES.includes(g.kind));
@@ -236,5 +261,47 @@ export function gateLabel(kind: GateKind): string {
     case "dco_required": return "DCO sign-off required";
     case "discussion_first": return "discussion first";
     case "collaborators_only": return "PR creation restricted to collaborators";
+    case "unsolicited_prs_paused": return "unsolicited PRs paused";
+    case "external_prs_closed": return "external PRs closed by automation";
   }
+}
+
+/** One workflow file from .github/workflows: name plus raw text when fetchable. */
+export interface WorkflowFile {
+  name: string;
+  content?: string;
+}
+
+/**
+ * Scan workflow files for auto-close automation aimed at outside PRs.
+ * Field case 2026-10-15: activepieces runs a workflow literally named
+ * "Close external PRs" that closed two finished outside PRs within about
+ * a minute. Returns a single external_prs_closed gate (detected-only);
+ * name match wins, but a content match catches innocuously named files
+ * whose steps close PRs from non-members.
+ */
+export function detectWorkflowGates(files: WorkflowFile[]): Gate[] {
+  const NAME_RE = /clos(e|ing|ure).*(external|outside)|(external|outside).*clos(e|ing|ure)/i;
+  // Order-agnostic: "close ... outside contributors' PRs" and "close PRs
+  // from outside contributors" both count. "prs?\b" catches "PR", "prs",
+  // and the standalone in "gh pr close" without eating "press".
+  const PR_RE = "(pull.?requests?|prs?\\b)";
+  const CONTENT_RE = new RegExp(
+    `(close)[\\s\\S]{0,200}((external|outside)[\\s\\S]{0,80}${PR_RE}|${PR_RE}[\\s\\S]{0,80}(external|outside))`,
+    "i"
+  );
+  const hit = files.find((f) => NAME_RE.test(f.name)) ??
+    files.find((f) => f.content !== undefined && CONTENT_RE.test(f.content));
+  if (!hit) return [];
+  const byName = NAME_RE.test(hit.name);
+  return [
+    {
+      kind: "external_prs_closed",
+      detected: true,
+      evidence: byName
+        ? `workflow file: ${hit.name}`
+        : `workflow file: ${hit.name} (closes external PRs: "${snippet(hit.content ?? "", CONTENT_RE)}")`,
+      source: `.github/workflows/${hit.name}`,
+    },
+  ];
 }

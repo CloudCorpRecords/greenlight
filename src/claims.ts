@@ -34,6 +34,11 @@ const STRONG_PATTERNS: ClaimPattern[] = [
   // missed because want-to-work above demands a trailing "on"/"up". The negative lookahead
   // keeps "I'd like to take this opportunity to thank ..." from counting as a claim.
   { name: "like-to-take", regex: /\bi('d| would) like to take (this|it)\b(?! (opportunity|moment|time) to)/i, strength: "strong" },
+  // "/attempt #1234" (or "/claim #1234") — bot-style commands some contributors post to
+  // announce they are taking the issue. tscircuit/tscircuit#5563 (2026-10-15) carried five
+  // of these from one contributor before anyone linked the actual fix PRs; without this
+  // pattern the issue scored clean while every sub-bug already had work in flight.
+  { name: "attempt-command", regex: /^\s*\/(attempt|claim)\b/i, strength: "strong" },
 ];
 
 // Soft: interest or an offer, not a claim. Used only to soften confidence, not to mark TAKEN.

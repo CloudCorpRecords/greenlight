@@ -8,6 +8,8 @@
  *     assignment_required  -25
  *     vouch_required       -35
  *     collaborators_only   -50
+ *     unsolicited_prs_paused -40
+ *     external_prs_closed  -50
  *     discussion_first     -10
  *     claim_first           -5
  *     cla_required          -5
@@ -31,6 +33,8 @@ const GATE_WEIGHTS: Record<string, number> = {
   assignment_required: -25,
   vouch_required: -35,
   collaborators_only: -50,
+  unsolicited_prs_paused: -40,
+  external_prs_closed: -50,
   discussion_first: -10,
   claim_first: -5,
   cla_required: -5,

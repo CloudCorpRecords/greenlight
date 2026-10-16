@@ -48,9 +48,9 @@ const SYMBOL: Record<string, string> = {
   STALE: "[STALE]",
 };
 
-function printVerdict(snapshot: { sourceUrl: string; title: string; owner: string; repo: string; number: number }, result: VerdictResult, asJson: boolean): void {
+function printVerdict(snapshot: { sourceUrl: string; title: string; owner: string; repo: string; number: number; duplicateOf?: Array<{ number: number; url: string; state: string; stateReason?: string }> }, result: VerdictResult, asJson: boolean): void {
   if (asJson) {
-    console.log(JSON.stringify({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: result.verdict, reasons: result.reasons, flags: result.flags, claims: result.claims, gates: result.gates }, null, 2));
+    console.log(JSON.stringify({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: result.verdict, reasons: result.reasons, flags: result.flags, claims: result.claims, gates: result.gates, duplicateOf: snapshot.duplicateOf ?? [] }, null, 2));
     return;
   }
   console.log(`${SYMBOL[result.verdict]} ${snapshot.owner}/${snapshot.repo}#${snapshot.number}`);
