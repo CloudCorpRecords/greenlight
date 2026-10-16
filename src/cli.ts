@@ -6,6 +6,7 @@
  *   greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]
  *   greenlight mcp
  *   greenlight friction <owner/repo> [--json]
+ *   greenlight ci <pr-url> [--json]
  *   greenlight claim <issue-url> [--yes] [--force] [--json]
  *   greenlight prep <issue-url> [--dir path] [--yes] [--json]
  *   greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]
@@ -40,6 +41,7 @@ import {
 } from "./automate.js";
 import type { VerdictResult } from "./types.js";
 import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
+import { triagePr } from "./ci-triage.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -316,6 +318,30 @@ async function cmdPr(issueUrl: string, args: string[]): Promise<void> {
   }
 }
 
+async function cmdCi(prUrl: string, asJson: boolean): Promise<void> {
+  const result = await triagePr(prUrl);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(`CI triage for ${result.pr}`);
+  console.log(`  ${result.title}`);
+  console.log(`  head ${result.headSha.slice(0, 7)} <- base ${result.baseRef}`);
+  if (result.checks.length === 0) {
+    console.log(`  No failing checks on the PR head.`);
+    console.log(`Verdict: ${result.verdict}`);
+    return;
+  }
+  for (const c of result.checks) {
+    console.log(`  [${c.class}] ${c.name}`);
+    console.log(`    ${c.evidence}`);
+    if (c.lean) console.log(`    lean: ${c.lean}`);
+    if (c.detailsUrl) console.log(`    ${c.detailsUrl}`);
+    if (c.failureLines) for (const line of c.failureLines) console.log(`    > ${line}`);
+  }
+  console.log(`Verdict: ${result.verdict}`);
+}
+
 function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
@@ -323,6 +349,7 @@ function usage(): void {
   console.log("  greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]");
   console.log("  greenlight mcp   (run the MCP server on stdio)");
   console.log("  greenlight friction <owner/repo> [--json]");
+  console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
   console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
@@ -358,6 +385,7 @@ async function main(): Promise<void> {
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
+    if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);

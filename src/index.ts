@@ -25,8 +25,9 @@ import {
   openPr,
   AutomationRefusal,
 } from "./automate.js";
+import { triagePr } from "./ci-triage.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.4" });
+const server = new McpServer({ name: "greenlight", version: "0.3.5" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -209,6 +210,22 @@ server.tool(
       });
     } catch (err) {
       if (err instanceof AutomationRefusal) return text({ refused: true, reason: err.message });
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "ci_triage",
+  "Answer the red-PR question: is this failure mine or pre-existing? Fetches the failing check runs on the PR head, compares them against the base branch's recent check history, and classifies each failing check as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker (deploy/auth failures like Vercel). Call this on any PR with failing CI before spending time debugging.",
+  {
+    pr_url: z.string().describe("Full GitHub PR URL, e.g. https://github.com/owner/repo/pull/123"),
+  },
+  async ({ pr_url }) => {
+    try {
+      const result = await triagePr(pr_url);
+      return text(result);
+    } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
   }
