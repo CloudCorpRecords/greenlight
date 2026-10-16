@@ -2,6 +2,8 @@
 
 Greenlight checks a GitHub issue before you spend hours on it, and tells you in plain words whether your pull request is likely to land.
 
+**New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data.
+
 ## The problem
 
 You find an issue that looks perfect. You code all evening. Then one of these happens:
