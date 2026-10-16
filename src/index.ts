@@ -27,8 +27,9 @@ import {
 } from "./automate.js";
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
+import { guardPr, readGuardConfig } from "./guard.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.8" });
+const server = new McpServer({ name: "greenlight", version: "0.3.9" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -245,6 +246,22 @@ server.tool(
   async ({ pr_url }) => {
     try {
       const result = await triageReview(pr_url);
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "guard_pr",
+  "Maintainer-side analysis of an incoming pull request: competing fix (other open PRs already fixing the same issue), prior claims by someone other than the PR author, missing required artifacts (changeset file, DCO sign-off, CLA status), and whether the author is a first-time contributor. Returns markdown ready to post as one PR comment plus structured findings. Reads a .greenlight-guard.json in the working directory for per-repo check toggles. Never posts anything. Call this from a GitHub Action or before reviewing an incoming PR.",
+  {
+    pr_url: z.string().describe("Full GitHub PR URL, e.g. https://github.com/owner/repo/pull/123"),
+  },
+  async ({ pr_url }) => {
+    try {
+      const result = await guardPr(pr_url, {}, readGuardConfig());
       return text(result);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });

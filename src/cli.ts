@@ -44,6 +44,7 @@ import type { VerdictResult } from "./types.js";
 import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
+import { guardPr, readGuardConfig } from "./guard.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -398,6 +399,20 @@ async function cmdReview(prUrl: string, asJson: boolean): Promise<void> {
   console.log(`Verdict: ${result.verdict}`);
 }
 
+async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const quiet = args.includes("--quiet");
+  const result = await guardPr(prUrl, {}, readGuardConfig());
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else if (!quiet || result.hasFindings) {
+    console.log(result.markdown);
+  }
+  // Exit code 3 means findings exist, so a GitHub Action can decide whether
+  // to comment or block. Nothing flagged is exit 0, usage errors are exit 1.
+  if (result.hasFindings) process.exitCode = 3;
+}
+
 function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
@@ -407,6 +422,7 @@ function usage(): void {
   console.log("  greenlight friction <owner/repo> [--json]");
   console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
   console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
+  console.log("  greenlight guard <pr-url> [--json] [--quiet]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged)");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
   console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
@@ -419,7 +435,7 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -444,6 +460,7 @@ async function main(): Promise<void> {
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
+    if (command === "guard" && target) return await cmdGuard(target, args);
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);
