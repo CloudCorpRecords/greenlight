@@ -184,3 +184,101 @@ describe("attempt-command claims (field case 2026-10-15)", () => {
     assert.equal(claims.length, 0);
   });
 });
+
+describe("bare-take soft claims (field case 2026-10-16)", () => {
+  it("detects the common bare claim phrasings as soft", () => {
+    const bodies = [
+      "I'll take this",
+      "I'll take it.",
+      "I take this.",
+      "Taking this.",
+      "I'll take this one",
+      "let me take this",
+      "I'll take this, I have a patch in mind.",
+    ];
+    for (const body of bodies) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 1, body);
+      assert.equal(claims[0].strength, "soft", body);
+      assert.equal(claims[0].phrase, "bare-take", body);
+    }
+  });
+
+  it("does not read non-claim continuations as claims", () => {
+    const bodies = [
+      "I'll take this into account.",
+      "I'll take this offline.",
+      "Take this with a grain of salt, but the repro looks right.",
+      "I'll take this opportunity to thank the maintainers for the report.",
+      "I'd like to take this opportunity to help, if that's okay.",
+      "Taking this offline for now, will report back.",
+    ];
+    for (const body of bodies) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 0, body);
+    }
+  });
+
+  it("keeps 'take this on' strong via taking-it, not bare-take", () => {
+    const claims = detectClaims("reporter", [comment("dev", "I'll take this on.")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].phrase, "taking-it");
+  });
+
+  it("a bare take with a plan is still just a soft signal on its own", () => {
+    // The plan detail does not promote it; "like-to-take" style strong
+    // claims carry an explicit "I'd like to" commitment shape.
+    const claims = detectClaims("reporter", [comment("dev", "I'll take this. Plan: rewrite the widget loop.")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "soft");
+  });
+});
+
+describe("pick-up family and work-availability (firecrawl#839)", () => {
+  it("detects 'I can pick it up' style claims as soft", () => {
+    // firecrawl#839 (2026-10-16): "If not, I can pick it up." was missed by
+    // every existing pattern.
+    const bodies = [
+      "If not, I can pick it up.",
+      "I can pick this up.",
+      "I'll pick this up tomorrow.",
+      "let me pick it up",
+      "Can I pick this up?",
+    ];
+    for (const body of bodies) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 1, body);
+      assert.equal(claims[0].strength, "soft", body);
+      assert.equal(claims[0].phrase, "pick-up-offer", body);
+    }
+  });
+
+  it("detects availability asks paired with work intent as soft", () => {
+    // The other missed firecrawl#839 comment.
+    const bodies = [
+      "Can i still work on this, is this open.",
+      "Can I work on this?",
+      "Can I please work on this?",
+    ];
+    for (const body of bodies) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 1, body);
+      assert.equal(claims[0].strength, "soft", body);
+      assert.equal(claims[0].phrase, "work-availability", body);
+    }
+  });
+
+  it("does not read physical pickups or the pace idiom as claims", () => {
+    const bodies = [
+      "I can pick it up from the store on my way home.",
+      "Can I pick it up from the office tomorrow?",
+      "Let's pick up the pace on this one.",
+      "We should pick up the pace here.",
+    ];
+    for (const body of bodies) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 0, body);
+    }
+  });
+});

@@ -1,6 +1,6 @@
 /**
  * Tests for the maintainer guard: pure detectors over injected data,
- * six corpus fixtures in campaign style, and the orchestration seam
+ * eight corpus fixtures in campaign style, and the orchestration seam
  * (network injected, never live).
  */
 import { describe, it } from "node:test";
@@ -10,6 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   extractLinkedIssueNumbers,
+  extractCrossRepoIssues,
   findCompetingPRs,
   splitIssueClaims,
   commitHasSignoff,
@@ -25,6 +26,8 @@ import {
   type GuardIssueDetail,
   type GuardRepoConventions,
 } from "../src/guard.js";
+import { detectChangesetConvention } from "../src/prep-detail.js";
+import { titleSlug } from "../src/automate.js";
 
 /** Minimal structural YAML check: indentation-based key paths. */
 function yamlGet(doc: string, path: string[]): unknown {
@@ -273,8 +276,8 @@ describe("readGuardConfig", () => {
 describe("guard corpus fixtures", () => {
   const dir = join(__dirname, "fixtures", "guard-cases");
   const names = readdirSync(dir).filter((f) => f.endsWith(".json"));
-  it("loads the six guard fixtures", () => {
-    assert.equal(names.length, 6);
+  it("loads the eight guard fixtures", () => {
+    assert.equal(names.length, 8);
   });
   for (const name of names) {
     it(`fixture ${name} has the expected shape`, () => {
@@ -300,12 +303,12 @@ async function runFixture(name: string) {
   const conventions: GuardRepoConventions = fx.conventions ?? { dcoRequired: false, claRequired: false };
   const result = await guardPr(fx.prUrl, {
     fetchPull: async () => pull,
-    fetchIssue: async (_o, _r, n) => {
-      const issue = issues[String(n)];
+    fetchIssue: async (o, r, n) => {
+      const issue = issues[`${o}/${r}#${n}`] ?? issues[String(n)];
       if (!issue) throw new Error(`no fixture issue ${n}`);
       return issue;
     },
-    fetchLinkedPRs: async (_o, _r, n) => linkedPRs[String(n)] ?? [],
+    fetchLinkedPRs: async (o, r, n) => linkedPRs[`${o}/${r}#${n}`] ?? linkedPRs[String(n)] ?? [],
     fetchPRAuthor: async (_o, _r, n) => authors[String(n)] ?? "unknown",
     fetchConventions: async () => conventions,
     fetchPriorMerged: async () => (typeof fx.priorMerged === "number" ? fx.priorMerged : null),
@@ -355,12 +358,30 @@ describe("guard fixture scenarios", () => {
     assert.ok(result.findings.some((f) => f.check === "competing-fix" && f.severity === "flag"));
     assert.ok(result.markdown.includes("#47"));
   });
-  it("foreign-claim flags the earlier claim with claimant and date", async () => {
-    const { result } = await runFixture("foreign-claim.json");
+  it("stale-claim flags the old claim and notes its age", async () => {
+    // firecrawl#839 shape: "If not, I can pick it up." posted 374 days
+    // before the PR. The flag must survive, with an age annotation.
+    const { result } = await runFixture("stale-claim.json");
     const flag = result.findings.find((f) => f.check === "other-claim");
     assert.ok(flag);
-    assert.ok(flag.evidence.join(" ").includes("@rival"));
-    assert.ok(flag.evidence.join(" ").includes("2026-10-12"));
+    const text = flag.evidence.join(" ");
+    assert.ok(text.includes("@rival"));
+    assert.ok(text.includes("374 days"));
+    assert.ok(text.includes("may have been abandoned"));
+    assert.equal(flag.severity, "flag");
+  });
+  it("changeset example uses a title slug, never a doubled number", () => {
+    // Regression for the guard rendering ".changeset/4668-pr-4668.md":
+    // the slug fed to detectChangesetConvention must be a title slug
+    // (what prep passes), not `pr-<issueNumber>`.
+    const convention = detectChangesetConvention({
+      rootNames: [".changeset"],
+      policyText: "",
+      issueNumber: 4668,
+      slug: titleSlug("Fix time format"),
+    });
+    assert.ok(convention);
+    assert.equal(convention.example, ".changeset/4668-fix-time-format.md");
   });
   it("author-claim is a note, not a flag", async () => {
     const { result } = await runFixture("author-claim.json");
@@ -384,5 +405,76 @@ describe("guard fixture scenarios", () => {
     assert.equal(result.hasFindings, false);
     assert.equal(result.summary, "Greenlight guard: nothing flagged");
     assert.ok(result.markdown.includes("nothing flagged"));
+  });
+
+  it("cross-repo fixture flags the competing fix and the foreign claim with cross-repo evidence", async () => {
+    // PR opened in otherorg/repo-b with body "Fixes acme/widgets#123";
+    // the widgets issue has a foreign strong claim predating the PR and
+    // another open PR in widgets claiming it.
+    const { result } = await runFixture("cross-repo.json");
+    assert.equal(result.hasFindings, true);
+    const checks = result.findings.map((f) => f.check).sort();
+    assert.deepEqual(checks, ["competing-fix", "other-claim"]);
+    const comp = result.findings.find((f) => f.check === "competing-fix");
+    assert.ok(comp);
+    assert.ok(comp.title.includes("acme/widgets#123"), comp.title);
+    assert.ok(comp.evidence.join(" ").includes("acme/widgets#123"));
+    assert.ok(comp.evidence.join(" ").includes("#99"), "names the competing PR");
+    const claim = result.findings.find((f) => f.check === "other-claim");
+    assert.ok(claim);
+    assert.ok(claim.evidence.join(" ").includes("acme/widgets#123"));
+    assert.ok(claim.evidence.join(" ").includes("@rival"));
+    // The linked issue resolves to the referenced repo's issue page.
+    assert.ok(result.linkedIssues.some((i) => i.url === "https://github.com/acme/widgets/issues/123"));
+    // The claims and competing PRs carry the cross-repo reference.
+    assert.ok(result.claims.some((c) => c.issueRef === "acme/widgets#123"));
+    assert.ok(result.competingPRs.some((c) => c.issueRef === "acme/widgets#123"));
+  });
+});
+
+describe("extractCrossRepoIssues", () => {
+  const own = (title: string, body: string) => extractCrossRepoIssues(title, body, "otherorg", "repo-b");
+
+  it("parses 'Fixes owner/repo#123' as a cross-repo closing reference", () => {
+    assert.deepEqual(own("Fix widgets", "Fixes acme/widgets#123"), [
+      { owner: "acme", repo: "widgets", number: 123 },
+    ]);
+  });
+
+  it("parses closing keyword plus a full issue URL", () => {
+    assert.deepEqual(own("Fix widgets", "Closes https://github.com/acme/widgets/issues/123"), [
+      { owner: "acme", repo: "widgets", number: 123 },
+    ]);
+  });
+
+  it("parses an issue URL in the title as author intent", () => {
+    assert.deepEqual(own("https://github.com/acme/widgets/issues/123: fix the bug", "no links"), [
+      { owner: "acme", repo: "widgets", number: 123 },
+    ]);
+  });
+
+  it("ignores plain mentions without closing intent", () => {
+    assert.deepEqual(own("Fix widgets", "see acme/widgets#123 for context, related to foo/bar#7"), []);
+  });
+
+  it("does not treat same-repo '#123' as cross-repo", () => {
+    assert.deepEqual(own("Fix #123", "Fixes #123"), []);
+  });
+
+  it("skips references pointing back at the PR's own repo", () => {
+    assert.deepEqual(own("Fix", "Fixes otherorg/repo-b#61"), []);
+  });
+
+  it("collects multiple references and dedupes", () => {
+    assert.deepEqual(own("Fix", "Fixes acme/widgets#123 and closes foo/bar#456. Also fixes acme/widgets#123."), [
+      { owner: "acme", repo: "widgets", number: 123 },
+      { owner: "foo", repo: "bar", number: 456 },
+    ]);
+  });
+
+  it("requires the reference to follow a closing keyword, not the keyword itself later", () => {
+    // "Fixes the widget. acme/widgets#123 is the issue" — the reference
+    // is not aimed at a closing keyword, so it must not count.
+    assert.deepEqual(own("Fix", "Fixes the widget. acme/widgets#123 is the issue"), []);
   });
 });
