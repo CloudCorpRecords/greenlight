@@ -7,8 +7,10 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, MentionedPR } from "./types.js";
+import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, Gate, MentionedPR, DuplicateTarget } from "./types.js";
 import { classifyLinkStrength, type LinkStrength } from "./linkstrength.js";
+import { detectWorkflowGates, type WorkflowFile } from "./gates.js";
+import { isBotAuthor } from "./claims.js";
 
 const API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
@@ -160,6 +162,27 @@ export async function fetchComments(owner: string, repo: string, number: number)
 }
 
 /**
+ * Fetch raw issue timeline events (cached). Shared by the linked-PR walk
+ * and duplicate-of detection so the timeline is fetched once per issue.
+ */
+async function fetchTimelineEvents(
+  owner: string,
+  repo: string,
+  number: number
+): Promise<Record<string, unknown>[]> {
+  const cached = cacheGet("issue", [owner, repo, String(number), "timeline"]) as
+    | Record<string, unknown>[]
+    | undefined;
+  if (cached) return cached;
+  let events: Record<string, unknown>[] = [];
+  try {
+    events = await paginate<Record<string, unknown>>(`/repos/${owner}/${repo}/issues/${number}/timeline`);
+  } catch { /* timeline is best-effort */ }
+  cacheSet("issue", [owner, repo, String(number), "timeline"], events);
+  return events;
+}
+
+/**
  * Find PRs that reference an issue. Timeline cross-references and a text
  * search for the issue number are discovery only: every candidate PR is
  * then fetched individually and scored with classifyLinkStrength, so a PR
@@ -172,8 +195,8 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
 
   const found = new Map<number, { number: number; state: LinkedPR["state"]; title: string; url: string }>();
 
-  try {
-    const timeline = await paginate<Record<string, unknown>>(`/repos/${owner}/${repo}/issues/${number}/timeline`);
+  {
+    const timeline = await fetchTimelineEvents(owner, repo, number);
     for (const event of timeline) {
       if (event.event !== "cross-referenced") continue;
       const src = event.source as Record<string, unknown> | undefined;
@@ -190,7 +213,7 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
         url: prUrl,
       });
     }
-  } catch { /* timeline is best-effort */ }
+  }
 
   // Search PRs in the repo that mention the issue number, to get states.
   try {
@@ -478,6 +501,236 @@ export async function fetchCommentMentionedPRs(
   return out;
 }
 
+export interface WorkflowDeps {
+  /** Test seam: list .github/workflows file names, or undefined when the directory is absent. */
+  listFiles?: () => Promise<string[] | undefined>;
+  /** Test seam: fetch one workflow file's raw text, or undefined when absent. */
+  fetchRaw?: (name: string) => Promise<string | undefined>;
+}
+
+const WORKFLOW_CAP = 12;
+
+/**
+ * List the repo's .github/workflows files and fetch their contents
+ * (best-effort, cached). Contents fetch uses raw.githubusercontent, so it
+ * does not consume the api.github.com rate limit. Capped at 12 files: a
+ * repo with more workflows still shows the signal on the suspiciously
+ * named ones first (they are not reordered; name matching catches them).
+ */
+export async function listWorkflows(
+  owner: string,
+  repo: string,
+  deps: WorkflowDeps = {}
+): Promise<WorkflowFile[]> {
+  const useCache = !deps.listFiles;
+  if (useCache) {
+    const cached = cacheGet("workflows", [owner, repo]) as WorkflowFile[] | undefined;
+    if (cached) return cached;
+  }
+  let names: string[] = [];
+  if (deps.listFiles) {
+    names = (await deps.listFiles()) ?? [];
+  } else {
+    try {
+      const items = (await apiGet(`/repos/${owner}/${repo}/contents/.github/workflows`)) as Array<{
+        name?: unknown;
+        type?: unknown;
+      }>;
+      names = items
+        .filter((i) => i.type === "file")
+        .map((i) => String(i.name ?? ""));
+    } catch { /* no workflows dir or empty */ }
+  }
+  const yaml = names.filter((n) => /\.(ya?ml)$/i.test(n)).slice(0, WORKFLOW_CAP);
+  const headers: Record<string, string> = { "User-Agent": "greenlight-cli" };
+  const token = githubToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const out: WorkflowFile[] = [];
+  for (const name of yaml) {
+    let content: string | undefined;
+    if (deps.fetchRaw) {
+      content = await deps.fetchRaw(name);
+    } else {
+      try {
+        const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/.github/workflows/${name}`, { headers });
+        if (res.ok) content = await res.text();
+      } catch { /* one bad file must not sink the scan */ }
+    }
+    out.push({ name, content });
+  }
+  if (useCache) cacheSet("workflows", [owner, repo], out);
+  return out;
+}
+
+/** Scan a repo's workflows for auto-close automation; returns detected-only gates. */
+export async function scanWorkflowGates(
+  owner: string,
+  repo: string,
+  deps: WorkflowDeps = {}
+): Promise<Gate[]> {
+  try {
+    return detectWorkflowGates(await listWorkflows(owner, repo, deps));
+  } catch {
+    return [];
+  }
+}
+
+const DUP_URL = "https?:\\/\\/github\\.com\\/[\\w.-]+\\/[\\w.-]+\\/issues\\/(\\d+)";
+const DUPLICATE_COMMENT_RES: RegExp[] = [
+  /marked as (a )?duplicate of #(\d+)/gi,
+  /duplicate of #(\d+)/gi,
+  /closed as (a )?duplicate of #(\d+)/gi,
+  // "duplicate of https://github.com/<o>/<r>/issues/<n>" — the n8n #41215
+  // comment wrote the full URL instead of #40803.
+  new RegExp(`marked as (a )?duplicate of ${DUP_URL}`, "gi"),
+  new RegExp(`duplicate of ${DUP_URL}`, "gi"),
+  new RegExp(`closed as (a )?duplicate of ${DUP_URL}`, "gi"),
+];
+
+/**
+ * Extract duplicate target issue numbers from comment bodies ("duplicate
+ * of #N", GitHub's "This issue has been marked as a duplicate of #N").
+ * Pure; tests drive it directly. The last capture group always holds the
+ * number.
+ */
+export function extractDuplicateTargets(comments: CommentSignal[]): number[] {
+  const out: number[] = [];
+  for (const c of comments) {
+    for (const re of DUPLICATE_COMMENT_RES) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(c.body)) !== null) {
+        const n = Number(m[m.length - 1]);
+        if (n > 0 && !out.includes(n)) out.push(n);
+      }
+    }
+  }
+  return out;
+}
+
+export interface DuplicateTargetDeps {
+  /** Test seam: issue timeline events, used instead of the live call. */
+  timelineEvents?: Array<Record<string, unknown>>;
+  /** Test seam: fetch a referenced issue's live state. */
+  fetchIssue?: (owner: string, repo: string, number: number) => Promise<{ state: string; stateReason?: string } | null>;
+}
+
+/**
+ * Find other issues this one is marked a duplicate of. Signals: "duplicate
+ * of #N" comments (n8n's bot posts "marked as a duplicate of #N"), and
+ * marked_as_duplicate timeline events when the API surfaces them. Each
+ * unique target is fetched for its current state (bounded at 3), because
+ * only a target closed as completed means the work already shipped and a
+ * build here is wasted.
+ */
+export async function fetchDuplicateTargets(
+  owner: string,
+  repo: string,
+  number: number,
+  comments: CommentSignal[],
+  deps: DuplicateTargetDeps = {}
+): Promise<DuplicateTarget[]> {
+  // The issue's own number ("/attempt #5563" style commands name it) is
+  // not a duplicate target.
+  const targets = new Set<number>(
+    extractDuplicateTargets(comments).filter((n) => n !== number)
+  );
+  let events = deps.timelineEvents;
+  if (!events) {
+    try {
+      events = await fetchTimelineEvents(owner, repo, number);
+    } catch {
+      events = [];
+    }
+  }
+  for (const e of events) {
+    if (String(e.event) !== "marked_as_duplicate") continue;
+    const src = e.source as Record<string, unknown> | undefined;
+    const srcIssue = src?.issue as Record<string, unknown> | undefined;
+    const n = Number(srcIssue?.number ?? 0);
+    if (n > 0 && n !== number) targets.add(n);
+  }
+  const out: DuplicateTarget[] = [];
+  const fetchIssue =
+    deps.fetchIssue ??
+    (async (o: string, r: string, n: number) => {
+      try {
+        const d = (await apiGet(`/repos/${o}/${r}/issues/${n}`)) as {
+          state?: unknown;
+          state_reason?: unknown;
+        };
+        return {
+          state: String(d.state ?? ""),
+          stateReason: d.state_reason == null ? undefined : String(d.state_reason),
+        };
+      } catch {
+        return null;
+      }
+    });
+  for (const n of [...targets].slice(0, 3)) {
+    let detail: { state: string; stateReason?: string } | null = null;
+    try {
+      detail = await fetchIssue(owner, repo, n);
+    } catch {
+      continue;
+    }
+    if (!detail) continue;
+    out.push({
+      number: n,
+      url: `https://github.com/${owner}/${repo}/issues/${n}`,
+      state: detail.state === "closed" ? "closed" : "open",
+      ...(detail.stateReason ? { stateReason: detail.stateReason } : {}),
+    });
+  }
+  return out;
+}
+
+/** A PR URL found in a fix-announcement comment, possibly in another repo of the same org. */
+export interface AttemptPRLink {
+  author: string;
+  owner: string;
+  repo: string;
+  number: number;
+  url: string;
+}
+
+// Comments that announce work is happening, whose PR URLs are race signals:
+// "/attempt #5563" style commands, and narratives like "Submitted fix for
+// bug #1 ... in https://github.com/<o>/<r>/pull/<n>". A bare PR link
+// posted as prior art (no announcement language) does not qualify.
+const FIX_ANNOUNCE_RES: RegExp[] = [
+  /^\s*\/(attempt|claim)\b/i,
+  /submitted (a |the )?fix/i,
+  /opened (a |the )?pr/i,
+  /implemented (a |the )?fix/i,
+];
+const CROSS_REPO_PR_URL_RE = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/gi;
+
+/**
+ * Extract PR links from fix-announcement comments. Comments from bots and
+ * from the issue author are skipped. The URLs routinely point at sibling
+ * repos in the same org (tscircuit/tscircuit#5563's fixes live in
+ * tscircuit/core and tscircuit/checks), so they are not limited to the
+ * issue's own repo. Pure; tests drive it directly. Bounded at 5 links.
+ */
+export function extractAttemptLinkedPRs(comments: CommentSignal[], issueAuthor: string): AttemptPRLink[] {
+  const seen = new Set<string>();
+  const out: AttemptPRLink[] = [];
+  for (const c of comments) {
+    if (c.author === issueAuthor || isBotAuthor(c.author)) continue;
+    if (!FIX_ANNOUNCE_RES.some((re) => re.test(c.body))) continue;
+    CROSS_REPO_PR_URL_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = CROSS_REPO_PR_URL_RE.exec(c.body)) !== null) {
+      const url = m[0];
+      if (seen.has(url)) continue;
+      seen.add(url);
+      out.push({ author: c.author, owner: m[1], repo: m[2], number: Number(m[3]), url });
+    }
+  }
+  return out.slice(0, 5);
+}
+
 /** Count open issues labelled good-first-issue or help-wanted. */
 export async function countStarterIssues(owner: string, repo: string): Promise<number | null> {
   try {
@@ -505,10 +758,12 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
   if ((issue as { pull_request?: unknown }).pull_request) {
     throw new Error(`#${number} is a pull request, not an issue`);
   }
-  const [comments, linkedPRs, houseRules] = await Promise.all([
+  const issueAuthor = String((issue.user as Record<string, string> | undefined)?.login ?? "");
+  const [comments, linkedPRs, houseRules, workflowGates] = await Promise.all([
     fetchComments(owner, repo, number),
     fetchLinkedPRs(owner, repo, number),
     fetchHouseRules(owner, repo),
+    scanWorkflowGates(owner, repo),
   ]);
 
   // Comment-mentioned PRs: references like "#861" in comments, cross-checked
@@ -518,7 +773,6 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
   // the issue author. Best-effort; never blocks the snapshot.
   let commentMentionedPRs: MentionedPR[] = [];
   try {
-    const issueAuthor = String((issue.user as Record<string, string> | undefined)?.login ?? "");
     commentMentionedPRs = await fetchCommentMentionedPRs(
       owner,
       repo,
@@ -527,6 +781,44 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
       linkedPRs.map((p) => p.number),
       { issueAuthor }
     );
+  } catch { /* best-effort */ }
+
+  // Attempt-linked PRs: fix-announcement comments ("Submitted fix for bug
+  // #1 ... in <PR url>", "/attempt #N" commands) whose PRs often live in
+  // sibling repos the timeline and the issue-number search never see.
+  // Fetched best-effort (bounded at 5, the extractor's own cap) and merged
+  // into commentMentionedPRs with attemptLinked so the verdict engine
+  // quotes them as race evidence.
+  try {
+    const known = new Set([
+      ...linkedPRs.map((p) => p.url),
+      ...commentMentionedPRs.map((p) => p.url),
+    ]);
+    for (const link of extractAttemptLinkedPRs(comments, issueAuthor).slice(0, 5)) {
+      if (known.has(link.url)) continue;
+      known.add(link.url);
+      let detail: PullRefDetail | null;
+      try {
+        detail = await defaultFetchPull(link.owner, link.repo, link.number);
+      } catch {
+        break; // best-effort: one failing provider ends the walk
+      }
+      if (!detail) continue;
+      commentMentionedPRs.push({
+        number: detail.number,
+        url: link.url,
+        state: detail.merged ? "merged" : detail.state,
+        mentionsIssue: mentionsIssueNumber(`${detail.title}\n${detail.body}`, number),
+        attemptLinked: true,
+      });
+    }
+  } catch { /* best-effort */ }
+
+  // Duplicate-of targets: "duplicate of #N" comments and marked-as-duplicate
+  // timeline signals, each fetched for its live state. Best-effort.
+  let duplicateOf: DuplicateTarget[] = [];
+  try {
+    duplicateOf = await fetchDuplicateTargets(owner, repo, number, comments);
   } catch { /* best-effort */ }
 
   const snapshot: IssueSnapshot = {
@@ -549,6 +841,8 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
     // per-file houseRules when present so gates record their source file.
     contributing: houseRules.map((r) => r.text).join("\n\n"),
     houseRules,
+    workflowGates,
+    duplicateOf,
   };
   cacheSet("issue", [owner, repo, String(number), "snapshot"], snapshot);
   return snapshot;

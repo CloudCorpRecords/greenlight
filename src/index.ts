@@ -25,7 +25,7 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.2" });
+const server = new McpServer({ name: "greenlight", version: "0.3.3" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -42,7 +42,7 @@ server.tool(
       const { owner, repo, number } = parseIssueUrl(issue_url);
       const snapshot = await buildIssueSnapshot(owner, repo, number);
       const result = scoreIssue(snapshot);
-      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: result.verdict, reasons: result.reasons, flags: result.flags, claims: result.claims, gates: result.gates });
+      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: result.verdict, reasons: result.reasons, flags: result.flags, claims: result.claims, gates: result.gates, duplicateOf: snapshot.duplicateOf ?? [] });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

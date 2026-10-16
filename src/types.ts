@@ -30,6 +30,15 @@ export interface MentionedPR {
   /** True when the PR title/body references this issue's number. */
   mentionsIssue: boolean;
   /**
+   * True when the PR was linked from a fix-announcement comment: a
+   * "/attempt" (or "/claim") bot command, or a "Submitted fix for ... in
+   * <PR url>" narrative. Seen on tscircuit/tscircuit#5563, where a
+   * contributor posted /attempt comments and then linked fix PRs for each
+   * sub-bug (in other repos of the same org) that no list view surfaced.
+   * These count as race signals even when the PR does not name the issue.
+   */
+  attemptLinked?: boolean;
+  /**
    * True when the citing comment came from the issue author. The open-PR
    * downgrade (rule 11) only trusts non-author heads-ups, but a
    * maintainer narrating what already shipped (rule 12) is usually the
@@ -61,6 +70,15 @@ export interface IssueSnapshot {
   contributing?: string; // raw CONTRIBUTING.md text, when fetched
   /** Gates supplied from a gatefile contribution-gates.json, already mapped to Greenlight kinds. */
   externalGates?: Gate[];
+  /** Detected-only gates from the .github/workflows scan (external_prs_closed). */
+  workflowGates?: Gate[];
+  /**
+   * Other issues this issue is marked a duplicate of (from "duplicate of
+   * #N" comments and marked-as-duplicate timeline signals), each fetched
+   * for its current state. n8n-io/n8n#41215 was a duplicate of #40803,
+   * already closed as completed: a full build was nearly wasted on it.
+   */
+  duplicateOf?: DuplicateTarget[];
 }
 
 /** One detected claim signal from a comment. */
@@ -84,7 +102,28 @@ export type GateKind =
   | "cla_required"
   | "dco_required"
   | "discussion_first"
-  | "collaborators_only";
+  | "collaborators_only"
+  /**
+   * The repo has paused unsolicited outside PRs. Seen on
+   * activepieces/activepieces#16580/#16581: CONTRIBUTING said unsolicited
+   * PRs from outside the core team were paused, and two finished PRs were
+   * auto-closed within about a minute.
+   */
+  | "unsolicited_prs_paused"
+  /**
+   * A repo workflow closes external PRs automatically ("Close external
+   * PRs" style), the sharp end of the paused-PR policy above.
+   */
+  | "external_prs_closed";
+
+/** Another issue this one is marked a duplicate of, with its live state. */
+export interface DuplicateTarget {
+  number: number;
+  url: string;
+  state: "open" | "closed";
+  /** GitHub's state_reason: "completed" | "not_planned" | "reopened" | undefined. */
+  stateReason?: string;
+}
 
 export interface Gate {
   kind: GateKind;
