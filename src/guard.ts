@@ -27,6 +27,12 @@
  *   4. first-time — the author's prior merged-PR count in the repo (one
  *      search call, capped); zero means first-time contributor. Best
  *      effort: null on failure, no finding then.
+ *   5. protocol-claim — the Claim Protocol state of each linked issue: an
+ *      active or linked protocol claim held by someone other than the PR
+ *      author is a flag (with the claim's expiry and the public queue);
+ *      a claim held by the author is a pass note; completed claims are
+ *      neither. Best effort: an unreadable issue means no protocol
+ *      finding for it.
  *
  * The classifier is pure over injected data; the fetch layer follows the
  * ci-triage / review-triage test-seam pattern (GuardDeps). The command
@@ -35,8 +41,9 @@
  *
  * Per-repo silencing: `.greenlight-guard.json` in the working directory,
  * a JSON object with boolean keys per check ("competing-fix",
- * "other-claim", "missing-artifact", "first-time"); unknown keys are
- * ignored, a missing or unreadable file means every check is on.
+ * "other-claim", "missing-artifact", "first-time", "protocol-claim");
+ * unknown keys are ignored, a missing or unreadable file means every
+ * check is on.
  */
 import { readFileSync } from "node:fs";
 import { apiGet, parsePullUrl, fetchLinkedPRs, fetchComments } from "./github.js";
@@ -46,20 +53,21 @@ import { detectClaPath, detectChangesetConvention } from "./prep-detail.js";
 import { titleSlug } from "./automate.js";
 import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
+import { fetchProtocolState, type ProtocolFetchResult } from "./protocol-fetch.js";
 
-export const GUARD_VERSION = "0.3.11";
+export const GUARD_VERSION = "0.4.0";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
 
 /** Check ids, also the keys of .greenlight-guard.json. */
-export const GUARD_CHECKS = ["competing-fix", "other-claim", "missing-artifact", "first-time"] as const;
+export const GUARD_CHECKS = ["competing-fix", "other-claim", "missing-artifact", "first-time", "protocol-claim"] as const;
 export type GuardCheckId = (typeof GUARD_CHECKS)[number];
 
 export type GuardConfig = Record<GuardCheckId, boolean>;
 
 export function defaultGuardConfig(): GuardConfig {
-  return { "competing-fix": true, "other-claim": true, "missing-artifact": true, "first-time": true };
+  return { "competing-fix": true, "other-claim": true, "missing-artifact": true, "first-time": true, "protocol-claim": true };
 }
 
 /** Read .greenlight-guard.json from a directory (default cwd). Best-effort: anything unreadable means all checks on. */
@@ -109,7 +117,7 @@ export interface GuardClaim {
 }
 
 export interface GuardFinding {
-  /** Machine key, e.g. "competing-fix" / "changeset-missing" / "dco-missing" / "cla-status" / "first-time". */
+  /** Machine key, e.g. "competing-fix" / "protocol-claim" / "changeset-missing" / "dco-missing" / "cla-status" / "first-time". */
   check: string;
   /** "flag" counts toward the summary and the exit code; "note" is information. */
   severity: "flag" | "note";
@@ -513,6 +521,7 @@ export interface GuardDeps {
   fetchPRAuthor?: (owner: string, repo: string, number: number) => Promise<string>;
   fetchConventions?: (owner: string, repo: string, issueNumber: number) => Promise<GuardRepoConventions>;
   fetchPriorMerged?: (owner: string, repo: string, author: string) => Promise<number | null>;
+  fetchProtocol?: (owner: string, repo: string, issueNumber: number) => Promise<ProtocolFetchResult | null>;
 }
 
 async function paginateFiles(owner: string, repo: string, number: number): Promise<string[]> {
@@ -759,6 +768,51 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
             evidence: [`@${pull.author} claimed ${label} in the issue comments before opening this PR — expected, no conflict`],
           });
         }
+      }
+    }
+  }
+
+  if (config["protocol-claim"]) {
+    // The Claim Protocol is the machine-readable claim layer: an active
+    // or linked protocol claim is a lease with an expiry and a public
+    // queue, which is stronger evidence than a comment-phrase heuristic.
+    // A claim held by someone other than the PR author is the
+    // highest-confidence flag this guard can raise; a claim held by the
+    // author is a pass note; completed claims are neither (the work is
+    // done). Best effort: an unreadable issue means no protocol finding
+    // for it.
+    const fetchProtocol = deps.fetchProtocol ?? fetchProtocolState;
+    for (const ref of linkedRefs) {
+      let proto: ProtocolFetchResult | null = null;
+      try {
+        proto = await fetchProtocol(ref.iOwner, ref.iRepo, ref.number);
+      } catch {
+        proto = null;
+      }
+      const active = proto?.computation.active ?? null;
+      if (!active || active.state === "completed") continue;
+      const expiry = active.expiresAt.slice(0, 10);
+      const claimed = active.claimedAt.slice(0, 10);
+      if (active.claimant === pull.author) {
+        findings.push({
+          check: "protocol-claim",
+          severity: "note",
+          title: "Protocol claim held by the PR author",
+          evidence: [
+            `@${pull.author} holds an active protocol claim on ${ref.label} (claimed ${claimed}, expires ${expiry}) — expected, no conflict`,
+          ],
+        });
+      } else {
+        const queue = (proto?.computation.queue ?? []).map((q) => `@${q.claimant}`).join(", ");
+        findings.push({
+          check: "protocol-claim",
+          severity: "flag",
+          title: `Active protocol claim on ${ref.label} held by @${active.claimant}`,
+          evidence: [
+            `@${active.claimant} holds an active protocol claim (${active.state}) on ${ref.label}, claimed ${claimed}, expires ${expiry}`,
+            `the queue is public${queue ? ` (${queue} waiting)` : ""} — join it instead of duplicating${active.commentUrl ? `: ${active.commentUrl}` : ""}`,
+          ],
+        });
       }
     }
   }
