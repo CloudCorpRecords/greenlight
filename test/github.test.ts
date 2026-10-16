@@ -296,6 +296,76 @@ describe("extractAttemptLinkedPRs", () => {
     );
     assert.deepEqual(out, []);
   });
+
+  it("catches a bot-emoji-prefixed 'Opened #NNN' announcement (actualbudget #8429)", async () => {
+    // A bot posted "🤖 Opened #8474 with a focused fix" and v0.3.3 missed
+    // it: the emoji prefix and the missing word "PR" both defeated the
+    // old matchers.
+    const { extractAttemptLinkedPRs, normalizeCommentText } = await import("../src/github.js");
+    assert.equal(
+      normalizeCommentText("🤖 Opened #8474 with a focused fix"),
+      "Opened #8474 with a focused fix"
+    );
+    const out = extractAttemptLinkedPRs(
+      [
+        comment(
+          "pnlabs-dev",
+          "🤖 Opened #8474 with a focused fix\n\nhttps://github.com/actualbudget/actual/pull/8474"
+        ),
+      ],
+      "reporter"
+    );
+    assert.equal(out.length, 1);
+    assert.deepEqual([out[0].owner, out[0].repo, out[0].number], ["actualbudget", "actual", 8474]);
+  });
+
+  it("still matches an emoji-prefixed /attempt command", async () => {
+    const { extractAttemptLinkedPRs } = await import("../src/github.js");
+    const out = extractAttemptLinkedPRs(
+      [comment("dev", "🤖/attempt #5563\nhttps://github.com/tscircuit/core/pull/4575")],
+      "reporter"
+    );
+    assert.equal(out.length, 1);
+    assert.equal(out[0].number, 4575);
+  });
+});
+
+describe("extractTimelineCrossRefPRs", () => {
+  // The real GitHub shape: event.source.issue.html_url, with a
+  // pull_request key marking the reference as a PR. Reading
+  // event.source.html_url directly finds nothing.
+  const xrefEvent = (n: number, title: string, isPR = true): Record<string, unknown> => ({
+    event: "cross-referenced",
+    source: {
+      type: "issue",
+      issue: {
+        html_url: `https://github.com/acme/widget/pull/${n}`,
+        title,
+        ...(isPR ? { pull_request: { url: `https://api.github.com/repos/acme/widget/pulls/${n}` } } : {}),
+      },
+    },
+  });
+
+  it("reads the nested source.issue shape and keeps only PRs", async () => {
+    const { extractTimelineCrossRefPRs } = await import("../src/github.js");
+    const out = extractTimelineCrossRefPRs([
+      xrefEvent(4907, "Fix Pydantic field aliases in Python tool execution"),
+      { event: "cross-referenced", source: { type: "issue", html_url: "https://github.com/acme/widget/pull/9", issue: { pull_request: {} } } },
+      xrefEvent(5000, "An issue reference", false),
+      { event: "commented" },
+    ]);
+    assert.deepEqual(out.map((o) => o.number), [4907]);
+    assert.equal(out[0].title, "Fix Pydantic field aliases in Python tool execution");
+  });
+
+  it("dedupes repeated cross-references", async () => {
+    const { extractTimelineCrossRefPRs } = await import("../src/github.js");
+    const out = extractTimelineCrossRefPRs([
+      xrefEvent(4907, "Fix Pydantic field aliases"),
+      xrefEvent(4907, "Fix Pydantic field aliases"),
+    ]);
+    assert.equal(out.length, 1);
+  });
 });
 
 describe("listWorkflows and scanWorkflowGates", () => {
