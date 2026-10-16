@@ -55,7 +55,7 @@ import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 import { fetchProtocolState, type ProtocolFetchResult } from "./protocol-fetch.js";
 
-export const GUARD_VERSION = "0.4.1";
+export const GUARD_VERSION = "0.5.0";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
