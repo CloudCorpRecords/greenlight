@@ -28,7 +28,7 @@ import {
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.6" });
+const server = new McpServer({ name: "greenlight", version: "0.3.7" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -176,6 +176,10 @@ server.tool(
         prepFile: plan.prepFile,
         nextCommands: plan.nextCommands,
         conventions: plan.conventions ?? null,
+        claPath: plan.prepDetail?.claPath ?? null,
+        changeset: plan.prepDetail?.changeset ?? null,
+        fixLivesHereWarnings: plan.prepDetail?.fixLivesHereWarnings ?? [],
+        houseRulesSummary: plan.prepDetail?.houseRulesSummary ?? [],
       });
     } catch (err) {
       if (err instanceof AutomationRefusal) return text({ refused: true, reason: err.message });

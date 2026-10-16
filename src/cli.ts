@@ -253,12 +253,31 @@ async function cmdPrep(issueUrl: string, args: string[]): Promise<void> {
           prepFile: plan.prepFile,
           nextCommands: plan.nextCommands,
           conventions: plan.conventions ?? null,
+          claPath: plan.prepDetail?.claPath ?? null,
+          changeset: plan.prepDetail?.changeset ?? null,
+          fixLivesHereWarnings: plan.prepDetail?.fixLivesHereWarnings ?? [],
+          houseRulesSummary: plan.prepDetail?.houseRulesSummary ?? [],
         },
         null,
         2
       )
     );
     return;
+  }
+  if (plan.prepDetail && plan.prepDetail.fixLivesHereWarnings.length > 0) {
+    for (const w of plan.prepDetail.fixLivesHereWarnings) console.log(`\n${w.line}`);
+  }
+  if (plan.prepDetail && plan.prepDetail.houseRulesSummary.length > 0) {
+    console.log(`\nHouse rules:`);
+    for (const h of plan.prepDetail.houseRulesSummary) console.log(`  - ${h}`);
+  }
+  if (plan.prepDetail) {
+    const c = plan.prepDetail.claPath;
+    console.log(`\nSigning: ${c.kind === "none" ? c.method : `${c.method}`}${c.link ? ` ${c.link}` : ""}`);
+    if (c.signaturePhrase) console.log(`  phrase: "${c.signaturePhrase}"`);
+  }
+  if (plan.prepDetail?.changeset) {
+    console.log(`Release-note artifact: ${plan.prepDetail.changeset.example}`);
   }
   console.log(`\nBranch: ${plan.branch}${plan.branchReady ? " (ready)" : " (not created yet)"}`);
   if (plan.branchPatternNote) console.log(`  ${plan.branchPatternNote}; default would be ${plan.branchDefault}`);
