@@ -28,8 +28,9 @@ import {
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
+import { digestRepo } from "./digest.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.10" });
+const server = new McpServer({ name: "greenlight", version: "0.3.11" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -262,6 +263,25 @@ server.tool(
   async ({ pr_url }) => {
     try {
       const result = await guardPr(pr_url, {}, readGuardConfig());
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "repo_digest",
+  "Repo-level maintainer report: what needs attention across the whole repo? Reports PR races (two or more open PRs fixing the same issue, with first-claim arbitration), claimed-by-other conflicts (an open PR whose linked issue was claimed by someone else first), stale claims (issues claimed 14+ days ago with no open PR), and assignment-gate conflicts (repos that require assignment before a PR). Pass a --limit to bound the API budget on large repos; sections that cannot be computed say so instead of showing empty. Call this when triaging a repo, not just one PR.",
+  {
+    repo: z.string().describe("owner/repo, e.g. ComposioHQ/composio"),
+    limit: z.number().default(50).describe("Max open PRs and open issues to inspect. The summary always states the cap and the true totals."),
+  },
+  async ({ repo, limit }) => {
+    try {
+      const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      const result = await digestRepo(m[1], m[2], Math.max(1, Math.min(100, limit)));
       return text(result);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
