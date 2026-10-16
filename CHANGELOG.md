@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.3.10 (2026-10-16)
+
+Closes the three honest gaps from the v0.3.9 report:
+
+- **Claim detection hears the most common phrasing.** The old patterns needed a tail like "on" or "up", so a bare "I'll take this" was invisible. A new `bare-take` pattern covers "I'll take this", "I'll take it", "I take this", "taking this", "I'll take this one", and "let me take this". It reads as a *soft* claim (intent, not a commitment of work), in the same family as "I can take this" and "take a look at this one", so it never caps a verdict alone; the guard still reports soft foreign claims. The critical guard: continuations that are not claims never match — "take this into account", "take this offline", "take this opportunity to ...", "take this with a grain of salt". This is user-visible: `check_issue` and `greenlight guard` now spot these claims on real issues.
+- **The guard follows cross-repo issue links.** A PR opened in one repo that says "Fixes acme/widgets#123" (or "Fixes https://github.com/acme/widgets/issues/123") now has that issue's comments run through claim detection and its timeline walked for competing PRs, in the referenced repo. Findings name the full `owner/repo#N` in their evidence. Closing intent still required: plain mentions like "see acme/widgets#123" do not count.
+- **Guard flag paths are live-proven.** The competing-fix path flagged a real race (ComposioHQ/composio#4700 vs open PR #4669 on issue #4668) and the foreign-claim path flagged two real pre-existing claims (firecrawl/firecrawl#4397 vs claims on #839 from 374 and 309 days before the PR), both through the built CLI against the live API.
+- **Field-report fixes.** Claim detection now hears the pick-up family ("I can pick it up", "I can pick this up", "I'll pick this up", "let me pick it up") and availability asks with work intent ("Can I still work on this") as soft claims; physical pickups ("pick it up from the store") and "pick up the pace" are tested non-matches. The guard's expected changeset filename is built from a title slug again, so it renders `.changeset/4668-fix-time-format.md` instead of the doubled-number `.changeset/4668-pr-4668.md`. And a foreign claim older than 90 days at the PR's creation keeps its flag but gains an evidence line noting the age and that it may have been abandoned, so maintainers weigh it correctly.
+
+
 ## 0.3.9 (2026-10-16)
 
 The maintainer guard: `greenlight guard <pr-url>` (and the `guard_pr` MCP tool) flips the engine around and answers a maintainer's question about an *incoming* pull request: is this worth my review time?
