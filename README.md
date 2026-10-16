@@ -96,6 +96,13 @@ npx @reneturcios/greenlight ci https://github.com/reticlehq/reticle/pull/1620
 
 # JSON output for scripting
 npx @reneturcios/greenlight ci <pr-url> --json
+
+# Review triage for a PR with review feedback: which comments need you?
+npx @reneturcios/greenlight review https://github.com/n8n-io/n8n/pull/41235
+
+# [likely-real] interpolation drops `__proto__` (packages/bruno-cli/src/runner/interpolate-vars.js:42)
+#   why: anchor matches: the comment's quoted token Object.assign({}, params) is present in the anchored hunk
+#   draft reply: Good catch. Fixed in <next commit>: ...
 ```
 
 Real examples from our vetting:
@@ -156,12 +163,17 @@ Tools:
 * `prep_issue` - fork and branch check plus a local PREP.md checklist with the repo's learned conventions (dry run unless `execute: true`)
 * `open_pr` - DCO-aware PR opening from a fork branch (dry run unless `execute: true`)
 * `ci_triage` - classify each failing check on a PR as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker, by comparing against the base branch's recent check history
+* `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
 
 ### v0.3.5: CI triage (solve-first)
 
 The first solve-side command. On a red PR, `ci` fetches the PR's base and head, collects the failing check runs (with the first failure lines from annotations when it can), and builds the same checks' history from the five most recent base-branch commits. Each failing check gets one line with its class and the evidence: `pre-existing` (same check failing on base, with counts and the last failure time), `likely-yours` (failing on head, passing on base, and the PR touches files that relate to the check), `indeterminate` (no base signal to compare), or `external-blocker` (Vercel/Netlify/deploy-preview auth failures, infrastructure not the PR). Indeterminate checks always state their lean: not touching the check's area leans pre-existing, touching it leans yours, with the reason spelled out. A verdict line closes it out: ALL PRE-EXISTING, HAS LIKELY-YOURS, INDETERMINATE, or NO FAILURES.
+
+### v0.3.6: review triage (solve-first)
+
+The second solve-side command. On a PR with review feedback, `review` gathers every review thread (bot and human), classifies each finding, and drafts the reply for you. Findings group into three buckets: **likely-real** (the comment's quoted anchor token is in the diff hunk; fix these), **needs-decision** (bot questions and every substantive human comment, which is never called noise; your call), and **likely-noise** (findings on generated files, style nits contradicted by the surrounding code, anchor mismatches, security claims the hunk disproves; probably push back). Each finding prints with its author, file and line, the one-line summary, the deterministic reason for its class, and the draft reply. Summaries, walkthroughs, praise, and findings on dismissed reviews count as noise or resolved, never as findings. Like everything in Greenlight, the drafts are output only: nothing is posted.
 
 ## Automation
 

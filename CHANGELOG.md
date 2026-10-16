@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.3.6 (2026-10-15)
+
+Solve-first, part 2: `greenlight review <pr-url>` (and the `review_triage` MCP tool) triages the review feedback on your own PR, so you know which comments actually need you.
+
+- **Every review thread, one pass.** The command fetches the PR's reviews, inline review comments, and review-bot issue comments, and tells CodeRabbit, cubic, Greptile, and Copilot apart from human reviewers. Summaries, walkthroughs, praise, and findings on dismissed reviews are counted as noise or resolved, not findings.
+- **Each finding gets a class with its reason.** `likely-real` when the comment's quoted anchor token is present in the anchored diff hunk (the bruno/CodeRabbit `__proto__` shape); `likely-noise` for findings on generated files, lockfiles, and snapshots, for style nits the surrounding code already contradicts, for anchor mismatches (the comment presents a token as present code but the hunk does not contain it), and for security claims whose premise the hunk contradicts (the n8n/cubic "calls fetch directly" shape, where the hunk shows `createAiProxyFetch`); `needs-decision` for bot questions and for every substantive human comment, which is never called noise. Mixed or unproven findings default to needs-decision too.
+- **A reply draft for every finding.** likely-real gets a "Fixed in <next commit>" placeholder plus the one-line fix; likely-noise gets a polite evidence-carrying pushback with the file, line, and reason filled in; needs-decision gets a question back naming the tradeoff. Drafts only; Greenlight never posts anything.
+- **Honest limits.** GitHub's REST API does not expose per-thread resolved state (GraphQL-only), so findings whose parent review was DISMISSED count as resolved; a thread resolved without dismissing its review still reads as open. The classifier is a pure function on injected data with 36 new tests and five frozen fixtures from real campaign rounds.
+
+
 ## 0.3.5 (2026-10-15)
 
 Solve-first, part 1: `greenlight ci <pr-url>` (and the `ci_triage` MCP tool) answers the question every contributor asks on a red PR: is this failure mine or pre-existing?
