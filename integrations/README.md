@@ -6,24 +6,7 @@ and teach the agent the workflow: check the issue first, stop on TAKEN or
 GATED, triage red CI before touching code, triage reviews before fixing,
 and never post anything to GitHub without the human's go-ahead.
 
-## Fastest install: `greenlight init`
-
-In your project directory, run one command and skip the manual table:
-
-```bash
-npx @reneturcios/greenlight init --agent claude-code
-```
-
-Init copies the MCP config (merging into an existing one, so your other
-servers are kept) and installs the instruction snippet, then prints the
-restart step. `--agent` takes `claude-code`, `cursor`, `copilot`,
-`windsurf`, `cline`, or `generic` (repeatable and comma-separated, or
-`--all` for everything); `--list` shows the tools, `--dry-run` previews
-without writing, and `--force` overwrites conflicting files. Instruction
-appends are marker-guarded and idempotent, and Windsurf's home-level
-config is merged in place.
-
-## Install per tool (manual fallback)
+## Install per tool
 
 | Tool | Copy this file | To this destination |
 |---|---|---|
@@ -46,7 +29,7 @@ without it the tools still work but share the small anonymous budget.
 ## Verify it worked
 
 Ask the agent: "list your MCP tools." You should see the `greenlight`
-server with all 12 tools:
+server with all 13 tools:
 
 - `check_issue` — verdict on whether an issue is landable (GO / RISKY / TAKEN / GATED / STALE)
 - `scan_repo` — find starter issues worth working in a repo
@@ -60,6 +43,7 @@ server with all 12 tools:
 - `repo_digest` — repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts (never posts)
 - `claim_status` — Claim Protocol pre-flight for one issue: who holds it, until when, who is queued, competing PRs, gates, whether the repo honors the protocol
 - `preflight` — the one-call answer: claim_status plus the repo friction summary
+- `verify_comment` — draft the verified-finding comment for maintainer-only repos (draft only, never posts)
 
 ## Format notes
 

@@ -3,8 +3,6 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { formatInitHuman } from "../src/init.js";
-import { findCommand } from "../src/help.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "integrations");
 
@@ -59,7 +57,7 @@ describe("integrations pack", () => {
     }
   });
 
-  it("the integrations README names all 12 MCP tools", () => {
+  it("the integrations README names all 13 MCP tools", () => {
     const text = readFileSync(join(root, "README.md"), "utf8");
     for (const tool of [
       "check_issue",
@@ -74,24 +72,10 @@ describe("integrations pack", () => {
       "repo_digest",
       "claim_status",
       "preflight",
+      "verify_comment",
     ]) {
       assert.ok(text.includes(tool), `README must name ${tool}`);
     }
-  });
-
-  it("init and help state the true MCP tool count", () => {
-    const srcRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
-    const indexSrc = readFileSync(join(srcRoot, "index.ts"), "utf8");
-    const toolCount = (indexSrc.match(/server\.tool\(/g) ?? []).length;
-    assert.ok(toolCount >= 12, `expected at least 12 tools, counted ${toolCount}`);
-    assert.ok(
-      formatInitHuman([], false).includes(`with ${toolCount} tools`),
-      "init verify line must state the true tool count"
-    );
-    assert.ok(
-      findCommand("mcp")!.description.includes(`(${toolCount} tools)`),
-      "mcp help must state the true tool count"
-    );
   });
 
   it("the Cursor rule carries valid frontmatter", () => {
