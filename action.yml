@@ -23,6 +23,9 @@ outputs:
   findings:
     description: Number of flagged findings (severity flag) in the report.
     value: ${{ steps.guard.outputs.findings }}
+  autopilot:
+    description: JSON array of label names the guard's autopilot decided to apply (empty unless the repo enabled autopilot in .greenlight-guard.json).
+    value: ${{ steps.guard.outputs.autopilot }}
 runs:
   using: composite
   steps:
@@ -46,6 +49,37 @@ runs:
         fi
         COUNT=$(node -e "const r = require('./greenlight-guard.json'); console.log(r.findings.filter(f => f.severity === 'flag').length)")
         echo "findings=$COUNT" >> "$GITHUB_OUTPUT"
+        # Autopilot label decisions, computed by the guard from the repo's
+        # .greenlight-guard.json. Empty unless the maintainer enabled
+        # autopilot, so the label step below only runs when configured.
+        AUTOPILOT=$(node -e "const r = require('./greenlight-guard.json'); console.log(JSON.stringify(r.autopilotLabels || []))")
+        echo "autopilot=$AUTOPILOT" >> "$GITHUB_OUTPUT"
+    - name: Apply autopilot labels
+      # Gated: runs only when the guard decided labels, which happens only
+      # when the repo's .greenlight-guard.json enabled autopilot. Labels
+      # that do not exist are created; any failure degrades to a warning
+      # and never fails the run.
+      if: steps.guard.outputs.autopilot != '[]'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const labels = JSON.parse(`${{ steps.guard.outputs.autopilot }}`);
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request.number;
+          for (const name of labels) {
+            try {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [name] });
+              core.info(`Applied autopilot label "${name}"`);
+            } catch (addErr) {
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name, color: "ededed", description: "Applied by the Greenlight guard autopilot" });
+                await github.rest.issues.addLabels({ owner, repo, issue_number, labels: [name] });
+                core.info(`Created and applied autopilot label "${name}"`);
+              } catch (createErr) {
+                core.warning(`Autopilot could not apply label "${name}": ${createErr.message}`);
+              }
+            }
+          }
     - name: Post or update the guard comment
       uses: actions/github-script@v7
       with:
