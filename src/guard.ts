@@ -5,11 +5,14 @@
  * Four checks, all evidence-carrying, all degradable:
  *
  *   1. competing-fix — the PR claims an issue (via "fixes/closes #N" in
- *      the body or an issue number in the branch name); the issue's
- *      timeline cross-reference walk then names OTHER open PRs already
- *      fixing it. Reuses fetchLinkedPRs / classifyLinkStrength, the same
- *      machinery that catches the race cases (e2b-dev/E2B#1986 with its
- *      PR #1987, ComposioHQ/composio#4904 with #4907 and #4922).
+ *      the body, an issue number in the branch name, or a cross-repo
+ *      "Fixes owner/repo#N" / "Fixes https://github.com/owner/repo/issues/N");
+ *      the issue's timeline cross-reference walk then names OTHER open PRs
+ *      already fixing it, fetching the issue from its own repo when the
+ *      reference is cross-repo. Reuses fetchLinkedPRs /
+ *      classifyLinkStrength, the same machinery that catches the race
+ *      cases (e2b-dev/E2B#1986 with its PR #1987, ComposioHQ/composio#4904
+ *      with #4907 and #4922).
  *   2. other-claim — claim detection (claims.ts) on the linked issue's
  *      comments: a strong or soft claim from someone other than the PR
  *      author that predates the PR is reported with the claimant and
@@ -40,10 +43,11 @@ import { apiGet, parsePullUrl, fetchLinkedPRs, fetchComments } from "./github.js
 import { detectClaims, isBotAuthor } from "./claims.js";
 import { classifyLinkStrength, isClosingPR } from "./linkstrength.js";
 import { detectClaPath, detectChangesetConvention } from "./prep-detail.js";
+import { titleSlug } from "./automate.js";
 import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 
-export const GUARD_VERSION = "0.3.9";
+export const GUARD_VERSION = "0.3.10";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
@@ -88,6 +92,8 @@ export interface GuardCompetingPR {
   state: string;
   linkStrength: "closing" | "mention";
   via?: string;
+  /** "owner/repo#N" when the issue lives in another repo; undefined for same-repo. */
+  issueRef?: string;
 }
 
 export interface GuardClaim {
@@ -98,6 +104,8 @@ export interface GuardClaim {
   strength: "strong" | "soft";
   phrase: string;
   claimedByAuthor: boolean;
+  /** "owner/repo#N" when the issue lives in another repo; undefined for same-repo. */
+  issueRef?: string;
 }
 
 export interface GuardFinding {
@@ -183,6 +191,66 @@ export function extractLinkedIssueNumbers(title: string, body: string, branch: s
   return [...candidates].filter((n) => classifyLinkStrength({ title, body, branch, issueNumber: n }) === "closing");
 }
 
+/**
+ * A cross-repo issue reference this PR claims to fix, e.g. "acme/widgets#123".
+ * The PR's own repo is tracked separately (same-repo #N machinery); the
+ * issue lives in another repo, so the guard must fetch THAT repo's issue
+ * (comments for claims, timeline for competing PRs).
+ */
+export interface GuardIssueRef {
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+/**
+ * Cross-repo issue references this PR claims to fix:
+ *   - "Fixes acme/widgets#123" (closing keyword + owner/repo#N)
+ *   - "Closes https://github.com/acme/widgets/issues/123" (closing keyword + issue URL)
+ *   - an issue URL in the PR title (author intent, mirroring the
+ *     "#N in the title is closing" rule for same-repo links)
+ *
+ * Only closing intent counts: "see acme/widgets#123" or "related to
+ * acme/widgets#123" never count, exactly as for same-repo mentions.
+ * References pointing back at the PR's own repo are skipped; the
+ * same-repo machinery already handles those.
+ */
+export function extractCrossRepoIssues(
+  title: string,
+  body: string,
+  prOwner: string,
+  prRepo: string
+): GuardIssueRef[] {
+  const found = new Map<string, GuardIssueRef>();
+  const add = (owner: string, repo: string, n: number) => {
+    if (n <= 0) return;
+    if (owner.toLowerCase() === prOwner.toLowerCase() && repo.toLowerCase() === prRepo.toLowerCase()) return;
+    const key = `${owner.toLowerCase()}/${repo.toLowerCase()}#${n}`;
+    if (!found.has(key)) found.set(key, { owner, repo, number: n });
+  };
+  const closingSrc = "(?:close[sd]?|closing|fix(?:e[sd])?|fixes|resolve[sd]?|resolves)";
+  // "Fixes acme/widgets#123". The optional URL prefix also catches
+  // "Fixes https://github.com/acme/widgets#123" (not a real GitHub form,
+  // harmless to catch). It can never match ".../issues/123" because that
+  // path has no "#" after the repo name.
+  const refRe = new RegExp(
+    `${closingSrc}\\s*:?\\s*(?:https?:\\/\\/github\\.com\\/)?([\\w.-]+)\\/([\\w.-]+)#(\\d{1,6})\\b`,
+    "gi"
+  );
+  // "Fixes https://github.com/acme/widgets/issues/123"
+  const urlRe = new RegExp(
+    `${closingSrc}\\s*:?\\s*https?:\\/\\/github\\.com\\/([\\w.-]+)\\/([\\w.-]+)\\/issues\\/(\\d{1,6})\\b`,
+    "gi"
+  );
+  for (const text of [title, body]) {
+    for (const m of text.matchAll(refRe)) add(m[1], m[2], Number(m[3]));
+    for (const m of text.matchAll(urlRe)) add(m[1], m[2], Number(m[3]));
+  }
+  const titleUrlRe = /https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/issues\/(\d{1,6})\b/g;
+  for (const m of title.matchAll(titleUrlRe)) add(m[1], m[2], Number(m[3]));
+  return [...found.values()];
+}
+
 /** Other OPEN PRs already fixing the same issue, excluding this PR. Only "closing"-strength links count. */
 export function findCompetingPRs(
   issueNumber: number,
@@ -248,6 +316,11 @@ export function splitIssueClaims(
   }
   foreign.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return { foreign, authorClaimed };
+}
+
+/** Days between two timestamps, rounded, never negative. */
+function daysBetween(a: Date, b: Date): number {
+  return Math.max(0, Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
 /** True when any line of the commit message is a DCO Signed-off-by trailer. */
@@ -505,7 +578,19 @@ async function defaultFetchConventions(owner: string, repo: string, issueNumber:
     } catch {
       policyText = "";
     }
-    const slug = `pr-${issueNumber}`;
+    // The example filename should read like ".changeset/4668-fix-time-format.md",
+    // never ".changeset/4668-pr-4668.md": slugify the linked issue's title
+    // the same way prep does (detectChangesetConvention expects a real title
+    // slug, which prep builds via titleSlug(snapshot.title)). When the title
+    // is unavailable, titleSlug("") degrades to a plain "work" instead of
+    // doubling the issue number.
+    let slug = "work";
+    try {
+      const issue = (await apiGet(`/repos/${owner}/${repo}/issues/${issueNumber}`)) as IssueApiItem;
+      slug = titleSlug(String(issue.title ?? ""));
+    } catch {
+      // keep the plain fallback
+    }
     const convention = detectChangesetConvention({
       rootNames,
       policyText,
@@ -556,6 +641,22 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
 
   const pull = await fetchPull(owner, repo, number);
   const issueNumbers = extractLinkedIssueNumbers(pull.title, pull.body, pull.headRef);
+  // Cross-repo issue links ("Fixes acme/widgets#123"): the issue, its
+  // comments, and its timeline all live in the referenced repo, so every
+  // check below runs against that repo, not the PR's own.
+  const crossRepoIssues = extractCrossRepoIssues(pull.title, pull.body, owner, repo);
+
+  interface LinkedIssueRef {
+    iOwner: string;
+    iRepo: string;
+    number: number;
+    /** "123" for same-repo, "owner/repo#123" for cross-repo. Used in all evidence text. */
+    label: string;
+  }
+  const linkedRefs: LinkedIssueRef[] = [
+    ...issueNumbers.map((n) => ({ iOwner: owner, iRepo: repo, number: n, label: `#${n}` })),
+    ...crossRepoIssues.map((r) => ({ iOwner: r.owner, iRepo: r.repo, number: r.number, label: `${r.owner}/${r.repo}#${r.number}` })),
+  ];
 
   const linkedIssues: GuardLinkedIssue[] = [];
   const competingPRs: GuardCompetingPR[] = [];
@@ -565,10 +666,12 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
   const authorsByNumber = new Map<number, string>();
 
   if (config["competing-fix"] || config["other-claim"]) {
-    for (const issueNumber of issueNumbers) {
+    for (const ref of linkedRefs) {
+      const { iOwner, iRepo, number: issueNumber, label } = ref;
+      const issueRef = label === `#${issueNumber}` ? undefined : label;
       let issue: GuardIssueDetail | null = null;
       try {
-        issue = await fetchIssue(owner, repo, issueNumber);
+        issue = await fetchIssue(iOwner, iRepo, issueNumber);
       } catch {
         issue = null;
       }
@@ -576,37 +679,37 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
         linkedIssues.push({
           number: issueNumber,
           title: issue.title,
-          url: `https://github.com/${owner}/${repo}/issues/${issueNumber}`,
+          url: `https://github.com/${iOwner}/${iRepo}/issues/${issueNumber}`,
           state: issue.state,
         });
       }
       if (config["competing-fix"]) {
         let linked: LinkedPR[] = [];
         try {
-          linked = await fetchIssueLinkedPRs(owner, repo, issueNumber);
+          linked = await fetchIssueLinkedPRs(iOwner, iRepo, issueNumber);
         } catch {
           linked = [];
         }
         for (const pr of linked) {
           if (!authorsByNumber.has(pr.number)) {
             try {
-              authorsByNumber.set(pr.number, await fetchAuthor(owner, repo, pr.number));
+              authorsByNumber.set(pr.number, await fetchAuthor(iOwner, iRepo, pr.number));
             } catch {
               authorsByNumber.set(pr.number, "unknown");
             }
           }
         }
         for (const c of findCompetingPRs(issueNumber, linked, number, authorsByNumber)) {
-          competingPRs.push(c);
+          competingPRs.push({ ...c, issueRef });
           findings.push({
             check: "competing-fix",
             severity: "flag",
-            title: `Competing fix for #${issueNumber}`,
+            title: `Competing fix for ${label}`,
             evidence: [
               `another open PR already claims this issue: #${c.number} by @${c.author} ("${c.title}")`,
               c.via === "timeline"
-                ? `found in the issue's timeline (a fix announcement, even though its body may not say "fixes #${issueNumber}")`
-                : `its body or branch claims #${issueNumber}`,
+                ? `found in the issue's timeline (a fix announcement, even though its body may not say "fixes ${label}")`
+                : `its body or branch claims ${label}`,
               `${c.url}`,
             ],
           });
@@ -621,23 +724,35 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
           issueNumber
         );
         for (const c of foreign) {
-          claims.push(c);
+          claims.push({ ...c, issueRef });
+          const evidence: string[] = [
+            `@${c.author} posted a ${c.strength} claim on ${label} on ${c.createdAt.slice(0, 10)} (${c.ageDays} day${c.ageDays === 1 ? "" : "s"} before this PR's code existed in its current form), pattern: ${c.phrase}`,
+          ];
+          // A claim that was already old when the PR opened still counts as
+          // a flag (it is evidence of interest), but a 90+ day gap usually
+          // means the claimant walked away. The flag stays; the annotation
+          // helps the maintainer weigh it. (firecrawl#839: two claims were
+          // 374 and 309 days old at PR creation.)
+          const ageAtPr = daysBetween(new Date(c.createdAt), new Date(pull.createdAt));
+          if (ageAtPr > 90) {
+            evidence.push(
+              `this claim is ${ageAtPr} days old at this PR's creation and may have been abandoned; weigh it accordingly`
+            );
+          }
           findings.push({
             check: "other-claim",
             severity: "flag",
             title: `Issue claimed by @${c.author} before this PR`,
-            evidence: [
-              `@${c.author} posted a ${c.strength} claim on #${issueNumber} on ${c.createdAt.slice(0, 10)} (${c.ageDays} day${c.ageDays === 1 ? "" : "s"} before this PR's code existed in its current form), pattern: ${c.phrase}`,
-            ],
+            evidence,
           });
         }
         if (authorClaimed) {
-          claims.push(authorClaimed);
+          claims.push({ ...authorClaimed, issueRef });
           findings.push({
             check: "author-claim",
             severity: "note",
             title: `Claimed by the PR author`,
-            evidence: [`@${pull.author} claimed #${issueNumber} in the issue comments before opening this PR — expected, no conflict`],
+            evidence: [`@${pull.author} claimed ${label} in the issue comments before opening this PR — expected, no conflict`],
           });
         }
       }

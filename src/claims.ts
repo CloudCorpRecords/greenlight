@@ -39,6 +39,23 @@ const STRONG_PATTERNS: ClaimPattern[] = [
   // of these from one contributor before anyone linked the actual fix PRs; without this
   // pattern the issue scored clean while every sub-bug already had work in flight.
   { name: "attempt-command", regex: /^\s*\/(attempt|claim)\b/i, strength: "strong" },
+  // Bare short takes: "I'll take this", "let me take this", "taking this".
+  // Soft, not strong: a bare take with no plan and no assignment ask is a
+  // statement of intent, in the same family as "I can take this"
+  // (can-take, soft) and "I'm going to take a look at this one"
+  // (take-a-look, soft). It never caps a verdict alone. The guard does
+  // report soft foreign claims, so these still surface to a maintainer.
+  // Phrase-boundary rule: the take must end the clause or be followed
+  // only by punctuation (or "on"/"up", which the stronger taking-it
+  // pattern already caught earlier in the list). The negative lookahead
+  // rejects the common non-claim continuations: "take this into account",
+  // "take this offline", "take this opportunity to ...", "take this
+  // with a grain of salt".
+  {
+    name: "bare-take",
+    regex: /\b(?:i(?:'ll| will) take|let me take|i take|taking) (?:this|it)(?: one)?\b(?!\s+(?:[a-z][\w-]*\s+){0,2}(?:into|off(?:line)?|opportunity|opportunities|moment|time|with|under|as)\b)/i,
+    strength: "soft",
+  },
 ];
 
 // Soft: interest or an offer, not a claim. Used only to soften confidence, not to mark TAKEN.
@@ -52,6 +69,22 @@ const SOFT_PATTERNS: ClaimPattern[] = [
   // pnlabs-dev posted this two months ago and nothing landed. A soft claim
   // with a date, so its age can be weighed; it never caps the verdict alone.
   { name: "take-a-look", regex: /\b(take a|taking a) look at this/i, strength: "soft" },
+  // "If not, I can pick it up." and "Can i still work on this, is this open."
+  // — firecrawl#839 (2026-10-16): real claim comments every pattern missed.
+  // The pick-up family is soft, like can-take. False-positive care: the
+  // negative lookahead after "up" blocks physical-pickup contexts ("pick it
+  // up from the store"), and "pick up the pace" never matches because the
+  // regex demands "this"/"it" right after "pick". A true claim's clause
+  // ends at "up" or continues with punctuation/intent, never a preposition
+  // of place.
+  {
+    name: "pick-up-offer",
+    regex: /\b(?:i can|i(?:'ll| will)|let me|(?:can|could) i) pick (?:this|it) up\b(?!\s+(?:from|at|in|on|off|out)\b)/i,
+    strength: "soft",
+  },
+  // "Can i still work on this, is this open." — the same firecrawl thread:
+  // an availability ask paired with work intent. Soft, like the offer above.
+  { name: "work-availability", regex: /\bcan i (still |please )?work on this\b/i, strength: "soft" },
 ];
 
 // Scoped claims: the author takes part of the issue, not the whole thing.
