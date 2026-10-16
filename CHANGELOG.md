@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 0.4.0 (2026-10-16)
+
+The Claim Protocol lands (Phase 1, per the spec at `protocol/SPEC.md` in this repo). Claims become expiring leases with a public queue: a comment carrying the `<!-- greenlight-claim v1 -->` marker holds the issue for a 7-day renewable lease (repo policy may set 1-30 days via `.greenlight/claims.json` on the default branch); a heartbeat (any comment, or a rocket reaction on the claim comment) renews; linking a PR freezes the claim; expiry, release, or a merged PR ends it.
+
+- **`greenlight status <issue-url> [--json]`** answers the protocol question directly: verdict, claim holder, expiry, queue, competing PRs, gates, and whether the repo honors the protocol. The `claim_status` MCP tool returns the full SPEC 5.1 payload; `preflight` pairs it with the repo friction summary (the two new tools bring the MCP surface to 12).
+- **check_issue now merges the protocol verdict.** A live protocol claim (active, linked, or completed) wins over the legacy claim *inference*: the legacy claim-derived reasons and flags are dropped and replaced with the protocol reason, flagged `protocol-claim`. It never overrides gates, and never overrides cross-referenced PR evidence — when both the protocol and a cross-referenced PR say TAKEN, the reasons merge. Expired-only history appends a note without changing the verdict. Old-fashioned claims with no marker still run the legacy engine unchanged.
+- **claim_issue drafts protocol claims.** The comment keeps its human-shaped text and gate behavior, then carries the marker line, optional `plan:` / `eta-days:` lines (new `--plan` / `--eta-days` CLI flags, `plan` / `eta_days` MCP params), and the SPEC 3.1 footer. Dry-run default and all gate refusals are unchanged.
+- **guard understands protocol claims.** A new `protocol-claim` check (fifth check, default-on, toggleable in `.greenlight-guard.json`): for each linked issue, an active or linked protocol claim held by someone other than the PR author is a flag naming the claimant, claimed date, and expiry, pointing at the public queue ("join it instead of duplicating"); a claim held by the PR author is a pass note; completed claims are neither.
+- **Over-cap is library-only in this release.** The engine's `applyOverCap` (squatting detection past 5 active claims) needs a global per-account index that Phase 1 does not build; it is exported for programmatic use and ships uncalled. It becomes live in Phase 2 with the Ledger index. `test/protocol.test.ts` covers the engine; `test/protocol-fetch.test.ts` covers the wiring (policy present/absent/invalid, reactions fetched only for marker comments, every merge-precedence branch).
+
+
 ## 0.3.11 (2026-10-16)
 
 The repo digest: `greenlight digest <owner/repo>` (and the `repo_digest` MCP tool, the tenth tool) answers the maintainer's repo-level question: what needs my attention across the whole repo?
