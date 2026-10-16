@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.3.9 (2026-10-16)
+
+The maintainer guard: `greenlight guard <pr-url>` (and the `guard_pr` MCP tool) flips the engine around and answers a maintainer's question about an *incoming* pull request: is this worth my review time?
+
+- **Four checks, all evidence-carrying.** Competing fix: the PR's body and branch are read for the issue it claims, then the issue's timeline is walked for *other open PRs already fixing it* (the e2b-dev/E2B#1986 and ComposioHQ/composio#4904 race shapes), reported by number and author. Claimed by someone else: the linked issue's comments are run through claim detection; a claim from someone other than the PR author that predates the PR is reported with claimant and date (a claim by the author is a pass, noted not flagged). Missing artifacts: repos detected to use `.changes/` or `.changeset/` flag a PR with no such file; DCO repos flag commits missing a `Signed-off-by` trailer; CLA-gated repos flag "CLA status not visible" (absence of evidence, stated as such, never an accusation). First-time contributor: a light note from the author's prior merged-PR count, skipped silently when the lookup fails.
+- **Comment-ready markdown.** Default output is a short report starting with a one-line summary ("Greenlight guard: 2 things to check" or "Greenlight guard: nothing flagged"), carrying the hidden `<!-- greenlight-guard -->` marker. `--json` for machines, `--quiet` prints nothing unless flagged, and exit code 3 when findings exist so a workflow can decide. Greenlight itself never posts.
+- **A GitHub Action wrapper.** New `action.yml` at the repo root (composite: setup-node, run the guard via npx on the published package, post or *update* a single comment through github-script by finding its own marker). New `examples/guard-workflow.yml` a maintainer copies into `.github/workflows/`, and `maintainer/README.md` docs: what each check does, the 2-minute install, and per-repo silencing via `.greenlight-guard.json` (boolean toggles for each check, honored by the CLI too).
+- All detectors are pure functions over injected data with 6 corpus fixtures and a full orchestration test; the action.yml is asserted structurally in the test suite. Live-verified against a real campaign PR before shipping. Honest limits: the timeline walk cannot see private cross-repo PRs and the search fallback has indexing delay; CLA detection only sees what is on the PR; author history is one best-effort search call.
+
+
 ## 0.3.8 (2026-10-16)
 
 The agent drop-in pack: one-line installs that plug Greenlight into the major AI coding tools, so your agent checks before it opens a PR.
