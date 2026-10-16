@@ -21,6 +21,11 @@ import {
   readGuardConfig,
   defaultGuardConfig,
   guardPr,
+  parseAutopilotConfig,
+  decideAutopilotLabels,
+  buildStaleClaimNudges,
+  renderLabelsDryRun,
+  STALE_CLAIM_NUDGE_DAYS,
   GUARD_COMMENT_MARKER,
   type GuardPullDetail,
   type GuardIssueDetail,
@@ -274,6 +279,9 @@ describe("buildGuardSummary and markdown", () => {
       findings: [{ check: "dco-missing", severity: "flag", title: "DCO sign-off missing", evidence: ["e1"] }],
       summary: "Greenlight guard: 1 thing to check",
       hasFindings: true,
+      autopilotLabels: [],
+      autopilotLabelDecisions: [],
+      staleClaimNudges: [],
     });
     assert.ok(md.startsWith(GUARD_COMMENT_MARKER));
     assert.ok(md.includes("**Greenlight guard: 1 thing to check**"));
@@ -573,5 +581,121 @@ describe("extractCrossRepoIssues", () => {
     // "Fixes the widget. acme/widgets#123 is the issue" — the reference
     // is not aimed at a closing keyword, so it must not count.
     assert.deepEqual(own("Fix", "Fixes the widget. acme/widgets#123 is the issue"), []);
+  });
+});
+
+describe("autopilot (maintainer-side action, off by default)", () => {
+  const findings: Array<{ check: string; severity: "flag" | "note"; title: string; evidence: string[] }> = [
+    { check: "competing-fix", severity: "flag", title: "Competing fix for #9", evidence: ["e"] },
+    { check: "protocol-claim", severity: "flag", title: "Active protocol claim held by @rival", evidence: ["e"] },
+    { check: "first-time", severity: "note", title: "First-time contributor", evidence: ["e"] },
+  ];
+
+  it("is off by default: no config means no labels and no nudges", () => {
+    const cfg = defaultGuardConfig();
+    assert.equal(cfg.autopilot, null);
+    assert.deepEqual(decideAutopilotLabels(findings, cfg.autopilot), []);
+  });
+
+  it("parses a partial config: labels map plus the nudge toggle", () => {
+    const ap = parseAutopilotConfig({
+      autopilot: { labels: { "protocol-claim": "claim-conflict", "competing-fix": "duplicate-effort" }, nudge: true },
+    });
+    assert.ok(ap);
+    assert.deepEqual(ap.labels, { "protocol-claim": "claim-conflict", "competing-fix": "duplicate-effort" });
+    assert.equal(ap.nudge, true);
+  });
+
+  it("ignores malformed autopilot config (off)", () => {
+    assert.equal(parseAutopilotConfig({ autopilot: "yes" }), null);
+    assert.equal(parseAutopilotConfig({}), null);
+    assert.equal(parseAutopilotConfig(null), null);
+    const empty = parseAutopilotConfig({ autopilot: {} });
+    assert.ok(empty);
+    assert.deepEqual(empty.labels, {});
+    assert.equal(empty.nudge, false);
+  });
+
+  it("maps flag findings to labels, notes never earn labels", () => {
+    const decisions = decideAutopilotLabels(findings, {
+      labels: { "competing-fix": "duplicate-effort", "protocol-claim": "claim-conflict" },
+      nudge: false,
+    });
+    assert.deepEqual(decisions, [
+      { check: "competing-fix", title: "Competing fix for #9", label: "duplicate-effort" },
+      { check: "protocol-claim", title: "Active protocol claim held by @rival", label: "claim-conflict" },
+    ]);
+  });
+
+  it("an unmapped check id earns no label", () => {
+    const decisions = decideAutopilotLabels(findings, { labels: { "competing-fix": "duplicate-effort" }, nudge: false });
+    assert.deepEqual(decisions, [{ check: "competing-fix", title: "Competing fix for #9", label: "duplicate-effort" }]);
+  });
+
+  it("builds a nudge line for a 14+ day stale foreign claim with no other open PR", () => {
+    const claims = [
+      { issueNumber: 9, author: "rival", createdAt: "2026-01-01T00:00:00Z", ageDays: 200, strength: "strong" as const, phrase: "i'll take this", claimedByAuthor: false },
+      { issueNumber: 9, author: "newbie", createdAt: "2026-10-15T00:00:00Z", ageDays: 1, strength: "soft" as const, phrase: "interested", claimedByAuthor: false },
+      { issueNumber: 9, author: "me", createdAt: "2025-01-01T00:00:00Z", ageDays: 500, strength: "strong" as const, phrase: "taking it", claimedByAuthor: true },
+    ];
+    const nudges = buildStaleClaimNudges(claims, [], 51);
+    assert.equal(nudges.length, 1);
+    assert.ok(nudges[0].includes("@rival"));
+    assert.ok(nudges[0].includes("#9"));
+    assert.ok(nudges[0].includes("200 days"));
+    assert.ok(nudges[0].includes("#51"));
+    assert.ok(!nudges[0].includes("@newbie"), "the fresh claim is not stale");
+    assert.ok(!nudges[0].includes("@me"), "the author's own claim is not nudged");
+  });
+
+  it("no nudge when another open PR is on the issue (the claim is not stale)", () => {
+    const claims = [
+      { issueNumber: 9, author: "rival", createdAt: "2026-01-01T00:00:00Z", ageDays: 200, strength: "strong" as const, phrase: "i'll take this", claimedByAuthor: false },
+    ];
+    const competing = [
+      { issueNumber: 9, number: 77, title: "fix", url: "u", author: "other", state: "open", linkStrength: "closing" as const },
+    ];
+    assert.deepEqual(buildStaleClaimNudges(claims, competing, 51), []);
+  });
+
+  it("the dry run renders decisions and nudges without touching anything", () => {
+    const result = {
+      pr: "https://github.com/acme/widgets/pull/51",
+      number: 51,
+      repo: "acme/widgets",
+      title: "Fix",
+      author: "me",
+      linkedIssues: [],
+      competingPRs: [],
+      claims: [],
+      findings: [
+        { check: "competing-fix", severity: "flag" as const, title: "Competing fix for #9", evidence: ["e"] },
+      ],
+      summary: "Greenlight guard: 1 thing to check",
+      hasFindings: true,
+      autopilotLabels: ["duplicate-effort"],
+      autopilotLabelDecisions: [{ check: "competing-fix", title: "Competing fix for #9", label: "duplicate-effort" }],
+      staleClaimNudges: ["@rival claimed #9 200 days ago and never opened a PR. This PR (#51) now addresses it — if you're still working on it, reply to keep your claim; otherwise the claim lapses."],
+      markdown: "",
+    };
+    const out = renderLabelsDryRun(result);
+    assert.ok(out.includes("duplicate-effort"));
+    assert.ok(out.includes('"competing-fix"'));
+    assert.ok(out.includes("@rival claimed #9 200 days ago"));
+  });
+});
+
+describe("action.yml autopilot label step", () => {
+  const doc = readFileSync(join(__dirname, "..", "action.yml"), "utf8");
+  it("applies autopilot labels from the guard JSON, gated on the maintainer's config", () => {
+    assert.ok(doc.includes("autopilotLabels"), "must read the autopilot label decisions from the guard JSON");
+    assert.ok(doc.includes("addLabels"), "must apply labels via the API");
+    // Gated: the step only runs when the guard decided labels (which only
+    // happens when the repo's .greenlight-guard.json enabled autopilot).
+    assert.ok(/if:.*autopilot/.test(doc), "the label step must be gated on autopilot decisions");
+  });
+  it("creates missing labels instead of failing, and never fails the run", () => {
+    assert.ok(doc.includes("createLabel"), "must create a label that does not exist yet");
+    assert.ok(doc.includes("core.warning") || doc.includes("::warning::"), "label failures degrade to warnings, never a failed run");
   });
 });
