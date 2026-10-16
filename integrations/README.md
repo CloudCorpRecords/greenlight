@@ -29,7 +29,7 @@ without it the tools still work but share the small anonymous budget.
 ## Verify it worked
 
 Ask the agent: "list your MCP tools." You should see the `greenlight`
-server with all 8 tools:
+server with all 9 tools:
 
 - `check_issue` — verdict on whether an issue is landable (GO / RISKY / TAKEN / GATED / STALE)
 - `scan_repo` — find starter issues worth working in a repo
@@ -39,6 +39,7 @@ server with all 8 tools:
 - `open_pr` — compose the PR with the verdict and gates recorded (dry run by default)
 - `ci_triage` — is each red check pre-existing, yours, or an external blocker
 - `review_triage` — classify review findings and draft replies (never posts)
+- `guard_pr` — maintainer-side: competing fix, prior claims, missing artifacts, first-time contributor (never posts)
 
 ## Format notes
 

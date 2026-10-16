@@ -57,7 +57,7 @@ describe("integrations pack", () => {
     }
   });
 
-  it("the integrations README names all 8 MCP tools", () => {
+  it("the integrations README names all 9 MCP tools", () => {
     const text = readFileSync(join(root, "README.md"), "utf8");
     for (const tool of [
       "check_issue",
@@ -68,6 +68,7 @@ describe("integrations pack", () => {
       "open_pr",
       "ci_triage",
       "review_triage",
+      "guard_pr",
     ]) {
       assert.ok(text.includes(tool), `README must name ${tool}`);
     }
