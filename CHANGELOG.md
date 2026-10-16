@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.3.3 (2026-10-15)
+
+Three detection gaps closed from the same evening's field work, all verified live after the fix.
+
+- **Paused-PR policies and auto-close workflows are GATED now.** Two finished PRs to activepieces/activepieces were auto-closed within about a minute by a workflow literally named "Close external PRs"; the policy sat in CONTRIBUTING.md ("We've temporarily paused unsolicited pull requests from outside the core team"), blamed on AI-generated PR volume. Both PRs had clean claims and builds, so nothing earlier could have caught them. Greenlight now scans CONTRIBUTING (and linked house-rules files) for paused/unsolicited-PR language as a new hard gate `unsolicited_prs_paused`, and lists `.github/workflows` to flag auto-close automation as `external_prs_closed`. Either gate verdicts GATED with the evidence quoted; friction weights are -40 and -50 respectively.
+- **Duplicate-of detection.** n8n-io/n8n#41215 was a duplicate of #40803 (already closed as completed), and a full build was nearly wasted on it. Comments are now scanned for "duplicate of #N" phrasings (including GitHub's "marked as a duplicate of #N" and marked_as_duplicate timeline signals), and each target issue is fetched for its live state. A target closed as completed makes the verdict RISKY ("marked duplicate of #N, which is closed as completed"); a still-open target adds a `duplicate-of-open` warning with its URL instead of changing the verdict.
+- **Comment-linked PR race detection.** tscircuit/tscircuit#5563 looked clean on list views, but a contributor had posted /attempt comments linking fix PRs for every sub-bug (in sibling repos the timeline never surfaces). Fix-announcement comments ("/attempt #N" commands, or "Submitted fix for bug #1 ... in <PR url>" narratives, from anyone but the issue author) now count as race signals: a linked open PR downgrades an otherwise-GO verdict to RISKY with the PR URL quoted (`attempt-linked-pr` flag), even when the PR never names the issue. `/attempt` (and `/claim`) comments also register as strong claims.
+- 198 tests passing (28 new). Field validation corpus grows to 13 cases.
+
+
 ## 0.3.2 (2026-10-15)
 
 The toolkit release: Greenlight now ships on npm as @reneturcios/greenlight, is listed in the official MCP Registry, and consumes gatefile output directly.
