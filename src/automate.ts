@@ -279,28 +279,46 @@ export function suggestBranchName(title: string, number: number, refs: string[])
  * Claim comment text shaped by the repo's gates. Assignment-gated repos get
  * an assignment request and a promise not to start work early; every comment
  * notes the comment-first convention; DCO repos get a sign-off commitment.
+ *
+ * Every comment also carries the Claim Protocol marker (protocol/SPEC.md
+ * section 3.1): the marker line, optional structured plan and eta lines,
+ * then the protocol footer. The marker turns the comment into a
+ * machine-readable lease that the Ledger can index and the guard can
+ * arbitrate; the human text above it is unchanged.
  */
-export function buildClaimComment(snapshot: IssueSnapshot, gates: Gate[], viewer?: string): string {
+export function buildClaimComment(
+  snapshot: IssueSnapshot,
+  gates: Gate[],
+  viewer?: string,
+  extras?: { plan?: string; etaDays?: number }
+): string {
   const who = viewer ? `Hi, I'm ${viewer}. ` : "Hi. ";
   const assignment = gateDetected(gates, "assignment_required");
   const dco = gateDetected(gates, "dco_required");
-  if (assignment) {
-    return (
-      `${who}I'd like to work on this: ${snapshot.title}.\n\n` +
+  const human = assignment
+    ? `${who}I'd like to work on this: ${snapshot.title}.\n\n` +
       `I see this repo asks contributors to be assigned before submitting a PR. ` +
       `Could you assign this issue to me? I won't start work until it's assigned.\n\n` +
       `I'm commenting first per the repo's contribution guidelines, and I'll follow ` +
       `the rest of the process before opening a PR.`
-    );
-  }
-  const dcoLine = dco
-    ? " I'll sign off every commit with `git commit -s` (DCO) and open a PR against the issue."
-    : " I'll open a PR against the issue once the work is ready.";
-  return (
-    `${who}I'd like to take this on: ${snapshot.title}.\n\n` +
-    `I'm commenting first per the repo's contribution guidelines, and I'll follow ` +
-    `the contribution process.${dcoLine}`
+    : (() => {
+        const dcoLine = dco
+          ? " I'll sign off every commit with `git commit -s` (DCO) and open a PR against the issue."
+          : " I'll open a PR against the issue once the work is ready.";
+        return (
+          `${who}I'd like to take this on: ${snapshot.title}.\n\n` +
+          `I'm commenting first per the repo's contribution guidelines, and I'll follow ` +
+          `the contribution process.${dcoLine}`
+        );
+      })();
+  const lines = [human, "", "<!-- greenlight-claim v1 -->"];
+  if (extras?.plan) lines.push(`plan: ${extras.plan}`);
+  if (extras?.etaDays != null) lines.push(`eta-days: ${extras.etaDays}`);
+  lines.push(
+    "Claimed under the Greenlight Claim Protocol: this claim renews or expires"
   );
+  lines.push("automatically, and releases the moment a PR is linked or I say so.");
+  return lines.join("\n");
 }
 
 /** Required actions checklist rendered from detected gates. */
@@ -338,6 +356,10 @@ export function gateActions(gates: Gate[]): string[] {
 export interface ClaimOptions {
   yes: boolean;
   force: boolean;
+  /** Optional plan recorded in the protocol claim comment (plan: line). */
+  plan?: string;
+  /** Optional ETA in days recorded in the protocol claim comment (eta-days: line). */
+  etaDays?: number;
 }
 
 export interface ClaimResult {
@@ -377,7 +399,10 @@ export async function claimIssue(
   } catch {
     /* tokenless dry run: no name available */
   }
-  const commentBody = buildClaimComment(snapshot, gates, viewer);
+  const commentBody = buildClaimComment(snapshot, gates, viewer, {
+    plan: opts.plan,
+    etaDays: opts.etaDays,
+  });
   if (!opts.yes) {
     return { verdict: result, commentBody, commentUrl: null, executed: false, viewer };
   }
