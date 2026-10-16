@@ -6,7 +6,7 @@ Greenlight checks a GitHub issue before you spend hours on it, and tells you in 
 
 ## Use Greenlight inside your AI coding tool
 
-Greenlight ships an agent drop-in pack in [`integrations/`](integrations/README.md): ready-to-copy MCP configs for Claude Code, Cursor, VS Code / Copilot, Windsurf, and Cline, plus instruction snippets that teach your agent the one behavior rule: **check Greenlight before it opens a PR.** Verify with a "list your MCP tools" prompt; the greenlight server carries 8 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage).
+Greenlight ships an agent drop-in pack in [`integrations/`](integrations/README.md): ready-to-copy MCP configs for Claude Code, Cursor, VS Code / Copilot, Windsurf, and Cline, plus instruction snippets that teach your agent the one behavior rule: **check Greenlight before it opens a PR.** Verify with a "list your MCP tools" prompt; the greenlight server carries 12 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight).
 
 ## The problem
 
@@ -195,6 +195,23 @@ The third solve-side upgrade, to `greenlight prep`. The checklist now starts wit
 ### v0.3.9: the maintainer guard
 
 Guard flips the engine around: `greenlight guard <pr-url>` (or the `guard_pr` MCP tool) analyzes an *incoming* pull request and renders one short markdown report a maintainer can post as a comment. It checks for a competing fix (other open PRs already fixing the same issue, found via the issue's timeline), prior claims by someone other than the PR author, missing required artifacts (a `.changes/` or `.changeset/` file the repo assembles its changelog from, DCO sign-off trailers, CLA status), and whether the author is a first-time contributor. Output starts with a one-line summary ("Greenlight guard: nothing flagged" or "N things to check"), `--quiet` stays silent unless flagged, and exit code 3 tells a workflow when findings exist. The repo ships a composite GitHub Action (`action.yml`) that posts or updates a single comment on each PR, an `examples/guard-workflow.yml` a maintainer copies into `.github/workflows/`, and per-repo check toggles through `.greenlight-guard.json`.
+
+### v0.4.0: the Claim Protocol
+
+GitHub has no claim system, only comments — so Greenlight now ships one. A claim is a comment carrying the `<!-- greenlight-claim v1 -->` marker (full spec: [`protocol/SPEC.md`](protocol/SPEC.md)): an expiring lease (7-day default, renewable by heartbeat — any comment, or a rocket reaction on the claim comment) with a public queue, frozen the moment a PR links and ended by expiry, release, or a merged PR. Repos can opt in with `.greenlight/claims.json` on their default branch; repos that haven't are read claim-by-claim with no policy assumed.
+
+```bash
+# Who holds this issue, until when, who is queued, which PRs compete
+greenlight status https://github.com/ComposioHQ/composio/issues/4668
+
+# The claim comment greenlight claim drafts now carries the marker,
+# optional plan/eta lines, and the protocol footer (--plan, --eta-days)
+greenlight claim <issue-url> --plan "reproduce then fix" --eta-days 5
+```
+
+Precedence, so the two engines never fight: a live protocol claim (active, linked, completed) wins over the legacy *claim inference* in `check` — its reason replaces the old claim-derived lines and the flag becomes `protocol-claim`. It never overrides gates, and never overrides cross-referenced PR evidence (when both say TAKEN, the reasons merge). Old-fashioned claims with no marker still run the legacy engine unchanged, and the guard raises a `protocol-claim` flag when a PR's linked issue is held by someone other than the PR author.
+
+Two new MCP tools make 12: `claim_status` (the full SPEC 5.1 status payload) and `preflight` (claim status plus the repo friction summary, the one-call "can I work on this" answer). Over-cap squatting detection ships library-only in this release: the engine's `applyOverCap` needs a global per-account index that Phase 1 does not build, so it is exported but uncalled, going live with the Phase 2 Ledger.
 
 ### v0.3.11: the repo digest (maintainer-side)
 
