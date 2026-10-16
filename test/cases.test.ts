@@ -16,6 +16,13 @@
  *   11 tscircuit #5563   fix PRs linked in comments       -> RISKY (attempt-linked-pr)
  *   12 n8n #41215        duplicate of completed issue    -> RISKY (duplicate-of-closed)
  *   13 activepieces       paused unsolicited PRs + workflow -> GATED
+ *   14 e2b #1986          open timeline cross-ref PR      -> TAKEN (cross-referenced-pr)
+ *   15 composio #4904     two open timeline cross-refs   -> TAKEN (cross-referenced-pr)
+ *   16 convex #197        open timeline cross-ref PR     -> TAKEN (cross-referenced-pr)
+ *   17 ghostfolio #4605   open + merged timeline xrefs   -> TAKEN (cross-referenced-pr[-merged])
+ *   18 actualbudget #6643 2-month-old soft claim          -> GO (weak-claim, no cap)
+ *   19 onyx #2281-style   dead bounty platform (Algora)  -> GO (bounty-platform-dead)
+ *   20 xref-merged-only   merged timeline cross-ref only -> RISKY (cross-referenced-pr-merged)
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";

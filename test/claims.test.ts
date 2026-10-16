@@ -160,4 +160,27 @@ describe("attempt-command claims (field case 2026-10-15)", () => {
     const claims = detectClaims("reporter", [comment("dev", "run /attempt to try it")], NOW);
     assert.equal(claims.length, 0);
   });
+
+  it("detects 'take a look at this one' as a soft claim with a date (actualbudget #6643)", () => {
+    // pnlabs-dev, 2026-08-20: a soft claim two months old with nothing
+    // landing. Soft, so it never caps a verdict alone; the age travels
+    // with the signal so the verdict can show it.
+    const claims = detectClaims("reporter", [
+      comment("pnlabs-dev", "I'm going to take a look at this one.", "2026-08-20T12:00:00Z"),
+    ], new Date("2026-10-15T12:00:00Z"));
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "soft");
+    assert.equal(claims[0].phrase, "take-a-look");
+    assert.equal(claims[0].ageDays, 56);
+  });
+
+  it("does not read 'take a look' prose about unrelated things as a claim", () => {
+    const claims = detectClaims("reporter", [
+      comment("dev", "Please take a look at the README when you get a chance."),
+    ], NOW);
+    // "take a look at the" matches the pattern but refers to a doc, not the
+    // issue; the regex is intentionally narrow ("at this") to avoid this,
+    // so this must stay empty.
+    assert.equal(claims.length, 0);
+  });
 });
