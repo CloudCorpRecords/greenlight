@@ -1,0 +1,80 @@
+{
+  "prUrl": "https://github.com/o/r/pull/51",
+  "expectFlags": [
+    "competing-fix"
+  ],
+  "pull": {
+    "title": "Fix #123",
+    "body": "Fixes #123",
+    "author": "me",
+    "headRef": "fix/issue-123",
+    "createdAt": "2026-10-15T12:00:00Z",
+    "labels": [],
+    "changedFiles": [
+      "src/widget.ts"
+    ],
+    "commits": [
+      {
+        "sha": "aaa1111111",
+        "message": "fix: widget\n\nSigned-off-by: Me <me@example.com>"
+      }
+    ],
+    "comments": []
+  },
+  "issues": {
+    "123": {
+      "number": 123,
+      "title": "Issue 123",
+      "author": "reporter",
+      "state": "open",
+      "comments": []
+    }
+  },
+  "linkedPRs": {
+    "123": [
+      {
+        "number": 47,
+        "state": "open",
+        "title": "Fix the widget for real",
+        "url": "https://github.com/o/r/pull/47",
+        "linkStrength": "closing",
+        "via": "timeline"
+      },
+      {
+        "number": 51,
+        "state": "open",
+        "title": "Fix #123",
+        "url": "https://github.com/o/r/pull/51",
+        "linkStrength": "closing",
+        "via": "search"
+      },
+      {
+        "number": 30,
+        "state": "merged",
+        "title": "Old attempt",
+        "url": "https://github.com/o/r/pull/30",
+        "linkStrength": "closing",
+        "via": "search"
+      },
+      {
+        "number": 44,
+        "state": "open",
+        "title": "Unrelated",
+        "url": "https://github.com/o/r/pull/44",
+        "linkStrength": "mention",
+        "via": "comment"
+      }
+    ]
+  },
+  "authors": {
+    "47": "rival",
+    "51": "me",
+    "30": "oldtimer",
+    "44": "bystander"
+  },
+  "conventions": {
+    "dcoRequired": false,
+    "claRequired": false
+  },
+  "priorMerged": 3
+}

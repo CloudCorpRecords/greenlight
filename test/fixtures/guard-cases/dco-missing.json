@@ -1,0 +1,45 @@
+{
+  "prUrl": "https://github.com/o/r/pull/63",
+  "expectFlags": [
+    "dco-missing"
+  ],
+  "pull": {
+    "title": "Fix #124",
+    "body": "Fixes #124",
+    "author": "me",
+    "headRef": "fix/issue-124",
+    "createdAt": "2026-10-15T12:00:00Z",
+    "labels": [],
+    "changedFiles": [
+      "src/widget.ts"
+    ],
+    "commits": [
+      {
+        "sha": "bbb2222222",
+        "message": "fix: widget layout"
+      },
+      {
+        "sha": "ccc3333333",
+        "message": "test: widget"
+      }
+    ],
+    "comments": []
+  },
+  "issues": {
+    "124": {
+      "number": 124,
+      "title": "Issue 124",
+      "author": "reporter",
+      "state": "open",
+      "comments": []
+    }
+  },
+  "linkedPRs": {
+    "124": []
+  },
+  "conventions": {
+    "dcoRequired": true,
+    "claRequired": false
+  },
+  "priorMerged": 1
+}

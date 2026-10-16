@@ -1,0 +1,45 @@
+{
+  "prUrl": "https://github.com/o/r/pull/61",
+  "expectFlags": [],
+  "pull": {
+    "title": "Fix #201",
+    "body": "Fixes #201",
+    "author": "me",
+    "headRef": "fix/201-x",
+    "createdAt": "2026-10-15T12:00:00Z",
+    "labels": [],
+    "changedFiles": [
+      "src/widget.ts"
+    ],
+    "commits": [
+      {
+        "sha": "aaa1111111",
+        "message": "fix: widget\n\nSigned-off-by: Me <me@example.com>"
+      }
+    ],
+    "comments": []
+  },
+  "issues": {
+    "201": {
+      "number": 201,
+      "title": "Issue 201",
+      "author": "reporter",
+      "state": "open",
+      "comments": [
+        {
+          "author": "me",
+          "body": "I will take this on, starting today",
+          "createdAt": "2026-10-13T10:00:00Z"
+        }
+      ]
+    }
+  },
+  "linkedPRs": {
+    "201": []
+  },
+  "conventions": {
+    "dcoRequired": false,
+    "claRequired": false
+  },
+  "priorMerged": 5
+}

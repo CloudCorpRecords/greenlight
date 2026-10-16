@@ -1,0 +1,52 @@
+{
+  "prUrl": "https://github.com/o/r/pull/60",
+  "expectFlags": [
+    "other-claim"
+  ],
+  "pull": {
+    "title": "Fix #200",
+    "body": "Fixes #200",
+    "author": "newbie",
+    "headRef": "fix/widget-200",
+    "createdAt": "2026-10-15T12:00:00Z",
+    "labels": [],
+    "changedFiles": [
+      "src/widget.ts"
+    ],
+    "commits": [
+      {
+        "sha": "aaa1111111",
+        "message": "fix: widget\n\nSigned-off-by: Me <me@example.com>"
+      }
+    ],
+    "comments": []
+  },
+  "issues": {
+    "200": {
+      "number": 200,
+      "title": "Issue 200",
+      "author": "reporter",
+      "state": "open",
+      "comments": [
+        {
+          "author": "rival",
+          "body": "I would like to take this on. Plan: rewrite the widget.",
+          "createdAt": "2026-10-12T10:00:00Z"
+        },
+        {
+          "author": "newbie",
+          "body": "Nice, go for it",
+          "createdAt": "2026-10-13T09:00:00Z"
+        }
+      ]
+    }
+  },
+  "linkedPRs": {
+    "200": []
+  },
+  "conventions": {
+    "dcoRequired": false,
+    "claRequired": false
+  },
+  "priorMerged": 0
+}

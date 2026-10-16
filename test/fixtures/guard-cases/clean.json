@@ -1,0 +1,32 @@
+{
+  "prUrl": "https://github.com/o/r/pull/64",
+  "expectFlags": [],
+  "pull": {
+    "title": "Add widget",
+    "body": "Small widget addition, no issue link",
+    "author": "me",
+    "headRef": "fix/issue-125",
+    "createdAt": "2026-10-15T12:00:00Z",
+    "labels": [],
+    "changedFiles": [
+      "src/widget.ts",
+      ".changes/125-widget.md"
+    ],
+    "commits": [
+      {
+        "sha": "ddd4444444",
+        "message": "feat: widget\n\nSigned-off-by: Me <me@example.com>"
+      }
+    ],
+    "comments": []
+  },
+  "issues": {},
+  "linkedPRs": {},
+  "conventions": {
+    "dcoRequired": true,
+    "claRequired": false,
+    "changesetDir": ".changes",
+    "changesetExample": ".changes/125-widget.md"
+  },
+  "priorMerged": 2
+}

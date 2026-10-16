@@ -1,0 +1,43 @@
+{
+  "prUrl": "https://github.com/o/r/pull/62",
+  "expectFlags": [
+    "changeset-missing"
+  ],
+  "pull": {
+    "title": "Fix #123",
+    "body": "Fixes #123",
+    "author": "me",
+    "headRef": "fix/issue-123",
+    "createdAt": "2026-10-15T12:00:00Z",
+    "labels": [],
+    "changedFiles": [
+      "src/widget.ts"
+    ],
+    "commits": [
+      {
+        "sha": "aaa1111111",
+        "message": "fix: widget\n\nSigned-off-by: Me <me@example.com>"
+      }
+    ],
+    "comments": []
+  },
+  "issues": {
+    "123": {
+      "number": 123,
+      "title": "Issue 123",
+      "author": "reporter",
+      "state": "open",
+      "comments": []
+    }
+  },
+  "linkedPRs": {
+    "123": []
+  },
+  "conventions": {
+    "dcoRequired": false,
+    "claRequired": false,
+    "changesetDir": ".changes",
+    "changesetExample": ".changes/123-widget.md"
+  },
+  "priorMerged": 2
+}
