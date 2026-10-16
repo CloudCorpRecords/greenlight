@@ -48,6 +48,10 @@ const SOFT_PATTERNS: ClaimPattern[] = [
   { name: "interested", regex: /\binterested in (working on|taking|this)\b/i, strength: "soft" },
   { name: "looking-into", regex: /\blooking into this\b/i, strength: "soft" },
   { name: "have-fork", regex: /\b(my fork|on my fork|branch on my fork)\b/i, strength: "soft" },
+  // "I'm going to take a look at this one" — actualbudget/actual#6643 (2026-10-15):
+  // pnlabs-dev posted this two months ago and nothing landed. A soft claim
+  // with a date, so its age can be weighed; it never caps the verdict alone.
+  { name: "take-a-look", regex: /\b(take a|taking a) look at this/i, strength: "soft" },
 ];
 
 // Scoped claims: the author takes part of the issue, not the whole thing.
