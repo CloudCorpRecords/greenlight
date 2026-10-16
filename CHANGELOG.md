@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 0.3.5 (2026-10-15)
+
+Solve-first, part 1: `greenlight ci <pr-url>` (and the `ci_triage` MCP tool) answers the question every contributor asks on a red PR: is this failure mine or pre-existing?
+
+- **Base-vs-head failure comparison.** The command fetches the PR's base ref and head SHA, collects the failing check runs on the head (with the first failure lines from annotations when available), and builds the same checks' history from the five most recent base-branch commits. Each failing check is classified: `pre-existing` (same check failing on base, with counts and the last failure time), `likely-yours` (failing on head, passing on base, and the PR touches files that relate to the check), `indeterminate` (no base signal to compare against), or `external-blocker` (Vercel/Netlify/deploy-preview authorization failures, which are infrastructure, not the PR).
+- **Indeterminate checks state their lean.** When base history is thin, a check the PR does not touch leans pre-existing and says so ("none of the PR's files relate to it, so an unrelated flake is more likely"); one the PR does touch leans yours. The output never leaves the call ambiguous about its reasoning.
+- **Summary verdict line.** One of NO FAILURES / ALL PRE-EXISTING / HAS LIKELY-YOURS / INDETERMINATE, in text and in the `--json` output (which mirrors `check --json` conventions).
+- **Classifier is a pure function.** All rules run on injected data with no network, pinned to the campaign's real cases: reticle #1620's windows install-gate flake (pre-existing), a touched package's unit tests (likely-yours), reticle #1633's fixture test failing in an untouched package (pre-existing, or pre-existing-leaning indeterminate when base data is thin), and pdfcn/firecrawl's Vercel authorization check (external-blocker). The live layer degrades gracefully: unreadable base history or annotations produce indeterminate checks, never errors.
+- 265 tests passing (36 new). New frozen fixtures in test/fixtures/ci-cases/.
+
+
 ## 0.3.4 (2026-10-15)
 
 The "never race blind" pack: five of twelve claims in one evening were dead on arrival because the races lived in the issue timeline, not the comments, and two more efforts nearly burned on bounty and backend traps.

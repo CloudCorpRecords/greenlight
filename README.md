@@ -85,8 +85,17 @@ npx @reneturcios/greenlight scan PrefectHQ/fastmcp
 # Friction score for a repo
 npx @reneturcios/greenlight friction triggerdotdev/trigger.dev
 
+# CI triage for a red PR: is each failing check yours or pre-existing?
+npx @reneturcios/greenlight ci https://github.com/reticlehq/reticle/pull/1620
+
+# [pre-existing] install-gate (windows-latest)
+#   same check failing on base: 2 of 3 recent base runs, last at 2026-10-14T10:00:00Z
+
+# [external-blocker] Vercel - Authorization required
+#   check name matches the Vercel deploy/auth pattern; this failure is infrastructure, not the PR
+
 # JSON output for scripting
-npx @reneturcios/greenlight check <issue-url> --json
+npx @reneturcios/greenlight ci <pr-url> --json
 ```
 
 Real examples from our vetting:
@@ -146,8 +155,13 @@ Tools:
 * `claim_issue` - verdict-gated claim comment (dry run unless `execute: true`)
 * `prep_issue` - fork and branch check plus a local PREP.md checklist with the repo's learned conventions (dry run unless `execute: true`)
 * `open_pr` - DCO-aware PR opening from a fork branch (dry run unless `execute: true`)
+* `ci_triage` - classify each failing check on a PR as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker, by comparing against the base branch's recent check history
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
+
+### v0.3.5: CI triage (solve-first)
+
+The first solve-side command. On a red PR, `ci` fetches the PR's base and head, collects the failing check runs (with the first failure lines from annotations when it can), and builds the same checks' history from the five most recent base-branch commits. Each failing check gets one line with its class and the evidence: `pre-existing` (same check failing on base, with counts and the last failure time), `likely-yours` (failing on head, passing on base, and the PR touches files that relate to the check), `indeterminate` (no base signal to compare), or `external-blocker` (Vercel/Netlify/deploy-preview auth failures, infrastructure not the PR). Indeterminate checks always state their lean: not touching the check's area leans pre-existing, touching it leans yours, with the reason spelled out. A verdict line closes it out: ALL PRE-EXISTING, HAS LIKELY-YOURS, INDETERMINATE, or NO FAILURES.
 
 ## Automation
 
@@ -208,6 +222,8 @@ npm run build
 
 ## Roadmap (Later)
 
+* Review-response triage: gather every bot and human review thread on a PR, classify each finding (real, noise, needs a decision) with the code context, draft the reply or fix list (solve-first, next after CI triage)
+* Claim-to-PR prep scaffolding: emit the per-repo work order (house rules, CLA method and link, changeset conventions, fork/branch names) from one `prep` pass
 * Browser extension that scores issues inline on github.com
 * Hosted dashboard of the friction index, refreshed on a schedule
 * Maintainer GitHub Action that auto-labels claim comments
