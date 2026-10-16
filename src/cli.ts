@@ -46,6 +46,7 @@ import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { digestRepo, DEFAULT_DIGEST_LIMIT } from "./digest.js";
+import { checkIssueWithProtocol, computeIssueStatus } from "./protocol-fetch.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -105,10 +106,85 @@ function loadExternalGates(args: string[]): Gate[] | undefined {
 
 async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Promise<void> {
   const { owner, repo, number } = parseIssueUrl(issueUrl);
-  const snapshot = await buildIssueSnapshot(owner, repo, number);
-  snapshot.externalGates = loadExternalGates(args);
-  const result = scoreIssue(snapshot);
-  printVerdict(snapshot, result, asJson);
+  // The check pipeline merges the legacy verdict with the Claim Protocol
+  // state: a protocol claim verdict overrides legacy claim inference, but
+  // never gates or cross-referenced PR evidence (see mergeProtocolVerdict).
+  const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {
+    externalGates: loadExternalGates(args),
+  });
+  const result: VerdictResult = {
+    verdict: merged.verdict,
+    reasons: merged.reasons,
+    flags: merged.flags,
+    claims: merged.claims,
+    gates: merged.gates,
+  };
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        {
+          issue: snapshot.sourceUrl,
+          title: snapshot.title,
+          verdict: merged.verdict,
+          reasons: merged.reasons,
+          flags: merged.flags,
+          claims: merged.claims,
+          gates: merged.gates,
+          duplicateOf: snapshot.duplicateOf ?? [],
+          protocol: merged.protocol,
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+  printVerdict(snapshot, result, false);
+  for (const line of merged.protocolLines) console.log(`  ${line}`);
+}
+
+/**
+ * `greenlight status`: the Claim Protocol pre-flight answer for one issue:
+ * who holds it, until when, who is queued, which PRs compete, which gates
+ * bite, and whether the repo honors the protocol at all.
+ */
+async function cmdStatus(issueUrl: string, asJson: boolean): Promise<void> {
+  const { owner, repo, number } = parseIssueUrl(issueUrl);
+  const { status } = await computeIssueStatus(owner, repo, number);
+  if (asJson) {
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
+  const sym = status.verdict ? SYMBOL[status.verdict] : "[?]";
+  console.log(`${sym} ${owner}/${repo}#${number} (Claim Protocol status)`);
+  if (status.verdict && status.reason) {
+    console.log(`  ${status.reason}`);
+  }
+  if (status.claim) {
+    const c = status.claim;
+    console.log(
+      `  claim: @${c.claimant}, ${c.state}, claimed ${c.claimed_at.slice(0, 10)}, expires ${c.expires_at.slice(0, 10)}`
+    );
+    if (c.queue.length > 0) {
+      console.log(`  queue: ${c.queue.map((q) => `@${q.claimant} (#${q.position})`).join(", ")}`);
+    }
+    if (c.over_cap) console.log(`  note: claimant is over the active-claim cap (squatting flag)`);
+  } else {
+    console.log(`  no protocol claims on this issue`);
+  }
+  if (status.competing_prs.length > 0) {
+    console.log(
+      `  competing PRs: ${status.competing_prs.map((p) => `#${p.number} (${p.state}) by @${p.author}`).join("; ")}`
+    );
+  }
+  const detected = status.gates.filter((g) => g.detected);
+  console.log(`  gates: ${detected.length > 0 ? detected.map((g) => g.kind).join(", ") : "none detected"}`);
+  console.log(
+    `  protocol ${status.repo_protocol ? `honored by repo (lease ${status.repo_protocol.lease_days}d)` : "not adopted by this repo; claims read as signals only"}`
+  );
+  console.log(
+    `  checked at ${status.checked_at} (fresh for ${Math.round(status.stale_after_seconds / 3600)}h)`
+  );
 }
 
 async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promise<void> {
@@ -200,9 +276,12 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
   const { owner, repo, number } = parseIssueUrl(issueUrl);
   const snapshot = await buildIssueSnapshot(owner, repo, number);
   printVerdict(snapshot, scoreIssue(snapshot), false);
+  const etaRaw = flagValue(args, "--eta-days");
   const plan: ClaimResult = await claimIssue(createRestClient(), snapshot, {
     yes: args.includes("--yes"),
     force: args.includes("--force"),
+    plan: flagValue(args, "--plan"),
+    etaDays: etaRaw !== undefined ? Number(etaRaw) : undefined,
   });
   if (args.includes("--json")) {
     console.log(
@@ -434,6 +513,7 @@ function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
   console.log("  greenlight check <issue-url> [--json] [--gates-file path]");
+  console.log("  greenlight status <issue-url> [--json]   (Claim Protocol: who holds this issue, queue, expiry)");
   console.log("  greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]");
   console.log("  greenlight mcp   (run the MCP server on stdio)");
   console.log("  greenlight friction <owner/repo> [--json]");
@@ -441,7 +521,7 @@ function usage(): void {
   console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
   console.log("  greenlight guard <pr-url> [--json] [--quiet]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged)");
   console.log("  greenlight digest <owner/repo> [--json] [--limit N] [--fail-on-race]   (repo-level: PR races, claimed-by-other, stale claims, assignment conflicts)");
-  console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
+  console.log("  greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
   console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
   console.log("");
@@ -458,7 +538,7 @@ async function main(): Promise<void> {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days") {
       i++; // skip the value with its flag
       continue;
     }
@@ -474,6 +554,7 @@ async function main(): Promise<void> {
       return;
     }
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
+    if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
