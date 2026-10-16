@@ -39,6 +39,7 @@ import {
   type PrResult,
 } from "./automate.js";
 import type { VerdictResult } from "./types.js";
+import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -61,6 +62,10 @@ function printVerdict(snapshot: { sourceUrl: string; title: string; owner: strin
   const strongClaims = result.claims.filter((c) => c.strength === "strong");
   if (strongClaims.length > 0) {
     console.log(`  claimants: ${strongClaims.map((c) => `${c.author} (${c.ageDays}d, ${c.phrase})`).join("; ")}`);
+  }
+  const softClaims = result.claims.filter((c) => c.strength === "soft");
+  if (softClaims.length > 0) {
+    console.log(`  soft claims: ${softClaims.map((c) => `${c.author} (${c.ageDays}d, ${c.phrase})`).join("; ")}`);
   }
   const detected = result.gates.filter((g) => g.detected);
   if (detected.length > 0) {
@@ -161,6 +166,14 @@ async function cmdFriction(repoRef: string, asJson: boolean): Promise<void> {
     note: "live",
   });
 
+  // Merge velocity is a signal, never a score input. Best-effort: one
+  // /pulls call, silent when it fails.
+  try {
+    report.mergeVelocity = await fetchMergeVelocity(owner, repo);
+  } catch {
+    report.mergeVelocity = null;
+  }
+
   if (asJson) {
     console.log(JSON.stringify(report, null, 2));
     return;
@@ -169,6 +182,7 @@ async function cmdFriction(repoRef: string, asJson: boolean): Promise<void> {
   for (const reason of report.reasons) console.log(`  - ${reason}`);
   if (report.reasons.length === 0) console.log("  - no gates or penalties detected");
   if (starterCount !== null) console.log(`  open starter issues: ${starterCount}`);
+  if (report.mergeVelocity) console.log(`  merge velocity: ${describeMergeVelocity(report.mergeVelocity)}`);
 }
 
 function flagValue(args: string[], name: string): string | undefined {

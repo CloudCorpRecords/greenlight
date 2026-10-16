@@ -20,6 +20,14 @@ export interface LinkedPR {
   url: string;
   /** How strongly the PR is tied to the issue. Only "closing" PRs take an issue. */
   linkStrength: "closing" | "mention";
+  /**
+   * Where the link was found: "timeline" for GitHub's own
+   * cross-referenced timeline events (the strongest race signal; a PR in
+   * flight against the issue even when its body never says "closes #N"),
+   * "search" for issue-number search hits, "comment" for PRs cited in
+   * comments. Absent on older fixtures.
+   */
+  via?: "timeline" | "search" | "comment";
 }
 
 /** A pull request referenced in an issue comment, fetched and checked for issue overlap. */
@@ -79,6 +87,13 @@ export interface IssueSnapshot {
    * already closed as completed: a full build was nearly wasted on it.
    */
   duplicateOf?: DuplicateTarget[];
+  /**
+   * Server-side-only signal (best-effort): set when a quoted error string
+   * from the issue body has zero hits in the repo, meaning the check may
+   * be enforced by a backend service outside this repo. Absent when there
+   * is no evidence.
+   */
+  serverSide?: { flag: string; evidence: string };
 }
 
 /** One detected claim signal from a comment. */
@@ -183,4 +198,10 @@ export interface FrictionReport {
   gates: Gate[];
   reasons: string[];
   signals: RepoSignals;
+  /**
+   * Merge velocity, when computed (signal only, never a score input):
+   * share of recent merged PRs authored by non-collaborators and the
+   * median days to merge. Absent when it could not be computed.
+   */
+  mergeVelocity?: import("./merge-velocity.js").MergeVelocityStats | null;
 }
