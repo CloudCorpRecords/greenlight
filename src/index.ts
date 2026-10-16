@@ -26,8 +26,9 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 import { triagePr } from "./ci-triage.js";
+import { triageReview } from "./review-triage.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.5" });
+const server = new McpServer({ name: "greenlight", version: "0.3.6" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -224,6 +225,22 @@ server.tool(
   async ({ pr_url }) => {
     try {
       const result = await triagePr(pr_url);
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "review_triage",
+  "Triage the review feedback on your PR: which comments actually need you? Gathers bot (CodeRabbit, cubic, Greptile, Copilot) and human review comments, classifies each finding as likely-real, likely-noise, or needs-decision with the reason stated, and drafts a reply for each. Human reviewer comments are never called noise. Drafts only; nothing is posted. Call this after pushing and getting review feedback.",
+  {
+    pr_url: z.string().describe("Full GitHub PR URL, e.g. https://github.com/owner/repo/pull/123"),
+  },
+  async ({ pr_url }) => {
+    try {
+      const result = await triageReview(pr_url);
       return text(result);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });

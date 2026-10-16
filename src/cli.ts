@@ -7,6 +7,7 @@
  *   greenlight mcp
  *   greenlight friction <owner/repo> [--json]
  *   greenlight ci <pr-url> [--json]
+ *   greenlight review <pr-url> [--json]
  *   greenlight claim <issue-url> [--yes] [--force] [--json]
  *   greenlight prep <issue-url> [--dir path] [--yes] [--json]
  *   greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]
@@ -42,6 +43,7 @@ import {
 import type { VerdictResult } from "./types.js";
 import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
 import { triagePr } from "./ci-triage.js";
+import { triageReview } from "./review-triage.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -342,6 +344,41 @@ async function cmdCi(prUrl: string, asJson: boolean): Promise<void> {
   console.log(`Verdict: ${result.verdict}`);
 }
 
+async function cmdReview(prUrl: string, asJson: boolean): Promise<void> {
+  const result = await triageReview(prUrl);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(`Review triage for ${result.pr}`);
+  console.log(`  ${result.title}`);
+  if (result.findings.length === 0) {
+    const c = result.counts;
+    console.log(`  No actionable findings (noise: ${c.noise}, resolved: ${c.resolved}).`);
+    console.log(`Verdict: ${result.verdict}`);
+    return;
+  }
+  const groups: Array<[string, string]> = [
+    ["likely-real", "LIKELY REAL - fix these"],
+    ["needs-decision", "NEEDS DECISION - your call"],
+    ["likely-noise", "LIKELY NOISE - probably push back"],
+  ];
+  for (const [cls, heading] of groups) {
+    const items = result.findings.filter((f) => f.class === cls);
+    if (items.length === 0) continue;
+    console.log(`\n${heading}`);
+    for (const f of items) {
+      const anchor = f.path ? ` (${f.path}${f.line ? `:${f.line}` : ""})` : "";
+      console.log(`  [${f.author}] ${f.summary}${anchor}`);
+      console.log(`    why: ${f.reason}`);
+      console.log(`    draft reply: ${f.draft}`);
+    }
+  }
+  const c = result.counts;
+  console.log(`\nSummary: ${c.likelyReal} likely-real, ${c.needsDecision} needs-decision, ${c.likelyNoise} likely-noise (noise: ${c.noise}, resolved: ${c.resolved})`);
+  console.log(`Verdict: ${result.verdict}`);
+}
+
 function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
@@ -350,6 +387,7 @@ function usage(): void {
   console.log("  greenlight mcp   (run the MCP server on stdio)");
   console.log("  greenlight friction <owner/repo> [--json]");
   console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
+  console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
   console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
@@ -386,6 +424,7 @@ async function main(): Promise<void> {
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
+    if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);
