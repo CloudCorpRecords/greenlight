@@ -18,6 +18,10 @@ import { join } from "node:path";
 import { scoreIssue } from "./verdict.js";
 import { parseGates, gateLabel } from "./gates.js";
 import { githubToken, apiGet, apiPost, ApiNotFoundError } from "./github.js";
+import {
+  gatherPrepDetail,
+  type PrepDetail,
+} from "./prep-detail.js";
 import type { IssueSnapshot, VerdictResult, Gate, RepoConventions } from "./types.js";
 
 /** Thrown when an automation command refuses to proceed. CLI exits 1 on this. */
@@ -397,8 +401,9 @@ export function renderPrepDoc(args: {
   viewer: string;
   issueUrl: string;
   conventions?: RepoConventions;
+  prepDetail?: PrepDetail;
 }): string {
-  const { snapshot, verdict, gates, branch, branchDefault, branchNote, viewer, issueUrl, conventions } = args;
+  const { snapshot, verdict, gates, branch, branchDefault, branchNote, viewer, issueUrl, conventions, prepDetail } = args;
   const actions = gateActions(gates);
   const lines: string[] = [
     `# Greenlight prep: ${snapshot.owner}/${snapshot.repo}#${snapshot.number}`,
@@ -408,9 +413,36 @@ export function renderPrepDoc(args: {
     verdictLine(verdict),
     ...verdict.reasons.slice(1).map((r) => `- ${r}`),
     ``,
-    `## Gates`,
-    ``,
   ];
+
+  // Prominent, before everything else: the fix may not be buildable here.
+  if (prepDetail && prepDetail.fixLivesHereWarnings.length > 0) {
+    lines.push(`## Fix-lives-here warnings`, ``);
+    for (const w of prepDetail.fixLivesHereWarnings) lines.push(`- ${w.line}`);
+    lines.push(``);
+  }
+
+  if (prepDetail && prepDetail.houseRulesSummary.length > 0) {
+    lines.push(`## House rules`, ``);
+    for (const h of prepDetail.houseRulesSummary) lines.push(`- ${h}`);
+    lines.push(``);
+  }
+
+  if (prepDetail) {
+    const c = prepDetail.claPath;
+    lines.push(`## Signing`, ``);
+    const label = c.kind === "cla-assistant" ? "CLA (CLA Assistant)"
+      : c.kind === "custom-cla-bot" ? "CLA (repo-specific bot)"
+      : c.kind === "dco" ? "DCO sign-off" : "No signing requirement";
+    lines.push(`- ${label}: ${c.method}`);
+    if (c.link) lines.push(`- Signing page: ${c.link}`);
+    if (c.signaturePhrase) lines.push(`- Signature phrase: "${c.signaturePhrase}"`);
+    for (const n of c.notes) lines.push(`- Note: ${n}`);
+    if (c.sources.length > 0) lines.push(`- Source: ${c.sources.join(", ")}`);
+    lines.push(``);
+  }
+
+  lines.push(`## Gates`, ``);
   if (actions.length === 0) {
     lines.push("No blocking gates detected.");
   } else {
@@ -443,6 +475,13 @@ export function renderPrepDoc(args: {
     }
   } else {
     lines.push("No repo conventions detected (no house-rules files, package.json, or commit history found).");
+  }
+  if (prepDetail?.changeset) {
+    const c = prepDetail.changeset;
+    lines.push(
+      ``,
+      `- Release-note artifact: add \`${c.example}\` (${c.pattern}); ${c.note} (source: ${c.source})`
+    );
   }
   lines.push(``, `## Issue`, ``, snapshot.title, ``);
   if (snapshot.body) lines.push(snapshot.body.trim().slice(0, 2000), ``);
@@ -486,6 +525,8 @@ export interface PrepResult {
   nextCommands: string[];
   /** Repo rituals learned during prep (best-effort; undefined when nothing was detectable). */
   conventions?: RepoConventions;
+  /** v0.3.7 prep hardening: CLA path, changeset ritual, fix-lives-here warnings, house rules. */
+  prepDetail?: PrepDetail;
 }
 
 /** Script names worth surfacing when found in the root package.json. */
@@ -665,6 +706,27 @@ export async function prepIssue(
     conventions = await gatherRepoConventions(client, snapshot);
   } catch { /* conventions are advisory; skip */ }
 
+  // v0.3.7 prep hardening: CLA path, changeset ritual, fix-lives-here
+  // warnings, house-rules summary (best-effort; never fatal).
+  let prepDetail: PrepDetail | undefined;
+  try {
+    const policyTexts = (snapshot.houseRules ?? []).map((h) => ({ file: h.file, text: h.text }));
+    prepDetail = await gatherPrepDetail({
+      owner,
+      repo,
+      issueNumber: number,
+      slug: titleSlug(snapshot.title),
+      policyTexts,
+      contributing: snapshot.contributing,
+      issueBody: snapshot.body,
+      conventions,
+      deps: {
+        rootNames: () => client.repoRootNames(owner, repo),
+        pyprojectText: () => client.fetchRootFile(owner, repo, "pyproject.toml"),
+      },
+    });
+  } catch { /* prep detail is advisory; skip */ }
+
   mkdirSync(prepDir, { recursive: true });
   writeFileSync(
     prepFile,
@@ -678,6 +740,7 @@ export async function prepIssue(
       viewer: viewer ?? "<you>",
       issueUrl: snapshot.sourceUrl,
       conventions,
+      prepDetail,
     }),
     "utf8"
   );
@@ -694,6 +757,7 @@ export async function prepIssue(
     prepFile,
     nextCommands,
     conventions,
+    prepDetail,
   };
 }
 
