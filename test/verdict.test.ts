@@ -490,3 +490,111 @@ describe("partially-addressed via maintainer-cited merged PRs", () => {
     assert.ok(r.reasons.some((x) => x.includes("PR #905, merged")));
   });
 });
+
+describe("duplicate-of and attempt-linked races (field cases 2026-10-15)", () => {
+  const clean = () => load("squidbrake-74.json");
+
+  it("duplicate of a completed issue is RISKY (n8n #41215 pattern)", () => {
+    const snapshot: IssueSnapshot = {
+      ...clean(),
+      duplicateOf: [
+        {
+          number: 40803,
+          url: "https://github.com/n8n-io/n8n/issues/40803",
+          state: "closed",
+          stateReason: "completed",
+        },
+      ],
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("duplicate-of-closed"));
+    assert.ok(result.reasons.some((r) => r.includes("marked duplicate of #40803")));
+    assert.ok(result.reasons.some((r) => r.includes("closed as completed")));
+  });
+
+  it("duplicate of an open issue keeps the verdict but warns with the URL", () => {
+    const snapshot: IssueSnapshot = {
+      ...clean(),
+      duplicateOf: [
+        {
+          number: 555,
+          url: "https://github.com/acme/widget/issues/555",
+          state: "open",
+        },
+      ],
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "GO");
+    assert.ok(result.flags.includes("duplicate-of-open"));
+    assert.ok(
+      result.reasons.some(
+        (r) => r.includes("#555") && r.includes("still open") && r.includes("https://github.com/acme/widget/issues/555")
+      )
+    );
+  });
+
+  it("an attempt-linked open PR is RISKY with the URL quoted (tscircuit #5563 pattern)", () => {
+    const snapshot: IssueSnapshot = {
+      ...clean(),
+      commentMentionedPRs: [
+        {
+          number: 4575,
+          url: "https://github.com/tscircuit/core/pull/4575",
+          state: "open",
+          mentionsIssue: false,
+          attemptLinked: true,
+        },
+      ],
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("attempt-linked-pr"));
+    assert.ok(result.reasons.some((r) => r.includes("https://github.com/tscircuit/core/pull/4575")));
+  });
+
+  it("a /attempt comment is a strong claim (same #5563 case)", () => {
+    const snapshot: IssueSnapshot = {
+      ...clean(),
+      comments: [{ author: "TassioSales", body: "/attempt #5563", createdAt: "2026-10-12T15:13:46Z" }],
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("claimed"));
+    assert.equal(result.claims[0].phrase, "attempt-command");
+  });
+
+  it("workflow-detected external_prs_closed gates a clean issue", () => {
+    const snapshot: IssueSnapshot = {
+      ...clean(),
+      workflowGates: [
+        {
+          kind: "external_prs_closed",
+          detected: true,
+          evidence: "workflow file: close-external-prs.yml",
+          source: ".github/workflows/close-external-prs.yml",
+        },
+      ],
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "GATED");
+    assert.ok(result.reasons.some((r) => r.includes("external PRs closed by automation")));
+    assert.ok(result.reasons.some((r) => r.includes("close-external-prs.yml")));
+  });
+
+  it("paused unsolicited PRs in house rules gate a clean issue", () => {
+    const snapshot: IssueSnapshot = {
+      ...clean(),
+      houseRules: [
+        {
+          file: "CONTRIBUTING.md",
+          text: "We've temporarily paused unsolicited pull requests from outside the core team.",
+        },
+      ],
+    };
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "GATED");
+    assert.ok(result.reasons.some((r) => r.includes("unsolicited PRs paused")));
+    assert.ok(result.reasons.some((r) => r.includes("paused")));
+  });
+});
