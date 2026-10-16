@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 0.6.0 (2026-10-16)
+
+The three tools that turn Greenlight from a check you run into infrastructure you live in.
+
+- **PR Babysitter.** `greenlight babysit [--prs url1,url2 | --mine --repos o/r,...]` watches your open PRs and returns one prioritized action list: *needs you now* (new likely-real review findings, CI newly failing on your code, merge conflicts, new guard flags, checks stuck over 2 hours), *waiting on them* (checks still running, CI green with no review feedback yet), and *quiet* (merged/closed PRs retire from the watch). Stored watermarks (`~/.greenlight/babysit.json`, or `--state`) make reruns report what changed since the last check — the first run says so and shows the full picture. Cron-friendly: exit 0 always unless usage is wrong; `--fail-on-action` gives exit 3 when the needs-you-now list is non-empty. The `babysit_prs` MCP tool (14th tool) does the same for agents.
+- **Maintainer Autopilot for the guard Action.** Off by default; the maintainer opts in with an `autopilot` section in `.greenlight-guard.json`: `{ "autopilot": { "labels": { "protocol-claim": "claim-conflict", "competing-fix": "duplicate-effort", "changeset-missing": "needs-changeset" }, "nudge": true } }`. The guard computes label decisions from the label map over severity-flag findings (notes never earn labels) and ready-to-copy stale-claim nudge lines for 14+ day claims with no other open PR — but never applies anything itself. The Action's new label step applies the decided labels with the Actions token (creating labels that do not exist, degrading label failures to warnings, never failing the run), and the nudge lines ride inside the one guard comment for the maintainer to post on the issue. What autopilot never does, by design: close PRs, merge anything, or comment beyond the single guard comment. `greenlight guard <pr-url> --labels-dry-run` prints what it would do.
+- **Verified PR evidence pack and contributor passport.** `greenlight evidence <pr-url> [--out file.md] [--verify-json path]` assembles the guard verdict, CI triage, review triage, and the Claim Protocol status of the linked issues into one markdown pack where every claim cites its source (the check run, the review anchor, the claim comment URL). The test-suite delta comes only from a provided `greenlight verify --json` report — the pack never runs suites itself, and says so when the report is missing. The `evidence_pack` MCP tool (15th tool) returns the markdown. `greenlight passport <github-login>` renders the contributor passport: protocol claims from the public Claim Ledger (active, queued, completed vs expired honor record, over-cap flag) plus merged PRs from the GitHub search API; a missing Ledger file is stated plainly instead of invented.
+
+
 ## 0.5.0 (2026-10-16)
 
 The solve side gets two real tools: one for the repo that will not take your PR, one for the honest answer about your own tests.
