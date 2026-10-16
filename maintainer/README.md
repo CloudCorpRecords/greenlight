@@ -1,3 +1,4 @@
+# Greenlight Guard — the maintainer side
 
 Greenlight started as the contributor's pre-flight check: is this issue
 worth my time? Guard is the other side of the same engine. It looks at an
@@ -7,10 +8,12 @@ worth your review time.
 ## What it checks
 
 1. **Competing fix.** The PR's body and branch are read for the issue it
-   claims (via "fixes #N" or an issue number in the branch name). The
-   issue's timeline is then walked for *other open PRs already fixing it*,
-   reported by number and author. This is the check that would have caught
-   E2B #1986's same-day PR #1987 and composio #4904's two competing PRs.
+   claims (via "fixes #N", an issue number in the branch name, or a
+   cross-repo "Fixes owner/repo#N" / issue URL, which is checked in the
+   referenced repo). The issue's timeline is then walked for *other open
+   PRs already fixing it*, reported by number and author. This is the check
+   that would have caught E2B #1986's same-day PR #1987 and composio
+   #4904's two competing PRs.
 2. **Claimed by someone else.** The linked issue's comments are scanned
    with Greenlight's claim detection. A claim from someone *other than the
    PR author* that predates the PR is reported with the claimant and the
@@ -75,8 +78,7 @@ returning the same data including the markdown.
   delay.
 - CLA detection only sees the PR itself (labels and comments). Authors
   who signed through a flow invisible on the PR will be flagged as "not
-  visible", which is why the wording says exactly that
-- The author-history signal is one search call; when it fails, the che
+  visible", which is why the wording says exactly that.
+- The author-history signal is one search call; when it fails, the check
   is skipped silently rather than guessed.
-
-This repo dogfoods the guard on its own pull requests (installed 2026-10-16).
+  This repo dogfoods the guard on its own pull requests (installed 2026-10-16).
