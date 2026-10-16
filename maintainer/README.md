@@ -55,9 +55,18 @@ checks are on by default; unknown keys are ignored):
   "competing-fix": true,
   "other-claim": true,
   "missing-artifact": true,
-  "first-time": true
+  "first-time": true,
+  "protocol-claim": true
 }
 ```
+
+The guard also understands Claim Protocol claims. For each issue the PR
+links, it reads the protocol state: an active or linked protocol claim held
+by someone *other* than the PR author is a flag that names the claimant, the
+claimed date, and the expiry, and points at the public queue ("join it
+instead of duplicating"); a claim held by the PR author is a pass note, and
+completed claims are neither. Toggleable per repo with the
+`"protocol-claim"` key above.
 
 The CLI honors the same file when you run it locally:
 

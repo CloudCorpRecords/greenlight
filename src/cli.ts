@@ -50,7 +50,9 @@ import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { initTools, detectTools, parseAgentList, formatInitHuman, INIT_TOOLS } from "./init.js";
 import { runDoctor, formatDoctorHuman } from "./doctor.js";
-import { overviewText, commandHelpText, findCommand, suggestCommand, versionText } from "./help.js";
+import { overviewText, commandHelpText, findCommand, suggestCommand, versionText, NEEDS_TARGET } from "./help.js";
+import { digestRepo, DEFAULT_DIGEST_LIMIT } from "./digest.js";
+import { checkIssueWithProtocol, computeIssueStatus } from "./protocol-fetch.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -110,10 +112,85 @@ function loadExternalGates(args: string[]): Gate[] | undefined {
 
 async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Promise<void> {
   const { owner, repo, number } = parseIssueUrl(issueUrl);
-  const snapshot = await buildIssueSnapshot(owner, repo, number);
-  snapshot.externalGates = loadExternalGates(args);
-  const result = scoreIssue(snapshot);
-  printVerdict(snapshot, result, asJson);
+  // The check pipeline merges the legacy verdict with the Claim Protocol
+  // state: a protocol claim verdict overrides legacy claim inference, but
+  // never gates or cross-referenced PR evidence (see mergeProtocolVerdict).
+  const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {
+    externalGates: loadExternalGates(args),
+  });
+  const result: VerdictResult = {
+    verdict: merged.verdict,
+    reasons: merged.reasons,
+    flags: merged.flags,
+    claims: merged.claims,
+    gates: merged.gates,
+  };
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        {
+          issue: snapshot.sourceUrl,
+          title: snapshot.title,
+          verdict: merged.verdict,
+          reasons: merged.reasons,
+          flags: merged.flags,
+          claims: merged.claims,
+          gates: merged.gates,
+          duplicateOf: snapshot.duplicateOf ?? [],
+          protocol: merged.protocol,
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+  printVerdict(snapshot, result, false);
+  for (const line of merged.protocolLines) console.log(`  ${line}`);
+}
+
+/**
+ * `greenlight status`: the Claim Protocol pre-flight answer for one issue:
+ * who holds it, until when, who is queued, which PRs compete, which gates
+ * bite, and whether the repo honors the protocol at all.
+ */
+async function cmdStatus(issueUrl: string, asJson: boolean): Promise<void> {
+  const { owner, repo, number } = parseIssueUrl(issueUrl);
+  const { status } = await computeIssueStatus(owner, repo, number);
+  if (asJson) {
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
+  const sym = status.verdict ? SYMBOL[status.verdict] : "[?]";
+  console.log(`${sym} ${owner}/${repo}#${number} (Claim Protocol status)`);
+  if (status.verdict && status.reason) {
+    console.log(`  ${status.reason}`);
+  }
+  if (status.claim) {
+    const c = status.claim;
+    console.log(
+      `  claim: @${c.claimant}, ${c.state}, claimed ${c.claimed_at.slice(0, 10)}, expires ${c.expires_at.slice(0, 10)}`
+    );
+    if (c.queue.length > 0) {
+      console.log(`  queue: ${c.queue.map((q) => `@${q.claimant} (#${q.position})`).join(", ")}`);
+    }
+    if (c.over_cap) console.log(`  note: claimant is over the active-claim cap (squatting flag)`);
+  } else {
+    console.log(`  no protocol claims on this issue`);
+  }
+  if (status.competing_prs.length > 0) {
+    console.log(
+      `  competing PRs: ${status.competing_prs.map((p) => `#${p.number} (${p.state}) by @${p.author}`).join("; ")}`
+    );
+  }
+  const detected = status.gates.filter((g) => g.detected);
+  console.log(`  gates: ${detected.length > 0 ? detected.map((g) => g.kind).join(", ") : "none detected"}`);
+  console.log(
+    `  protocol ${status.repo_protocol ? `honored by repo (lease ${status.repo_protocol.lease_days}d)` : "not adopted by this repo; claims read as signals only"}`
+  );
+  console.log(
+    `  checked at ${status.checked_at} (fresh for ${Math.round(status.stale_after_seconds / 3600)}h)`
+  );
 }
 
 async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promise<void> {
@@ -205,9 +282,12 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
   const { owner, repo, number } = parseIssueUrl(issueUrl);
   const snapshot = await buildIssueSnapshot(owner, repo, number);
   printVerdict(snapshot, scoreIssue(snapshot), false);
+  const etaRaw = flagValue(args, "--eta-days");
   const plan: ClaimResult = await claimIssue(createRestClient(), snapshot, {
     yes: args.includes("--yes"),
     force: args.includes("--force"),
+    plan: flagValue(args, "--plan"),
+    etaDays: etaRaw !== undefined ? Number(etaRaw) : undefined,
   });
   if (args.includes("--json")) {
     console.log(
@@ -419,22 +499,25 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
   if (result.hasFindings) process.exitCode = 3;
 }
 
+async function cmdDigest(repoRef: string, args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const limitRaw = flagValue(args, "--limit");
+  const limit = limitRaw ? Math.max(1, Math.min(100, Number(limitRaw) || DEFAULT_DIGEST_LIMIT)) : DEFAULT_DIGEST_LIMIT;
+  const { owner, repo } = parseRepoRef(repoRef);
+  const result = await digestRepo(owner, repo, limit);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(result.markdown);
+  }
+  // Exit code 3 when races exist mirrors the guard: a CI job can run the
+  // digest nightly and alert only when work is being duplicated.
+  if (args.includes("--fail-on-race") && result.hasRaces) process.exitCode = 3;
+}
+
 function usage(): void {
   console.log(overviewText());
 }
-
-/** What each target-taking command needs, for the missing-argument error. */
-const NEEDS_TARGET: Record<string, string> = {
-  check: 'an issue URL, e.g. greenlight check https://github.com/owner/repo/issues/123',
-  scan: "a repo, e.g. greenlight scan facebook/react",
-  friction: "a repo, e.g. greenlight friction vercel/next.js",
-  ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
-  review: "a PR URL, e.g. greenlight review https://github.com/owner/repo/pull/456",
-  guard: "a PR URL, e.g. greenlight guard https://github.com/owner/repo/pull/456",
-  claim: 'an issue URL, e.g. greenlight claim https://github.com/owner/repo/issues/123',
-  prep: 'an issue URL, e.g. greenlight prep https://github.com/owner/repo/issues/123',
-  pr: 'an issue URL plus --branch, e.g. greenlight pr https://github.com/owner/repo/issues/123 --branch fix/issue-123',
-};
 
 function collectFlagValues(args: string[], name: string): string[] {
   const out: string[] = [];
@@ -512,14 +595,14 @@ async function cmdDoctor(args: string[]): Promise<void> {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const flags = new Set([
-    "--json", "--yes", "--force", "--no-fallback", "--quiet",
+    "--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race",
     "--all", "--list", "--no-instructions", "--dry-run", "--help", "-h",
   ]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--agent") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--agent" || a === "--limit" || a === "--plan" || a === "--eta-days") {
       i++; // skip the value with its flag
       continue;
     }
@@ -578,11 +661,13 @@ async function main(): Promise<void> {
       return;
     }
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
+    if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
     if (command === "guard" && target) return await cmdGuard(target, args);
+    if (command === "digest" && target) return await cmdDigest(target, args);
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);

@@ -10,14 +10,10 @@ import {
   parseIssueUrl,
   buildIssueSnapshot,
   scanCandidates,
-  fetchContributing,
-  countStarterIssues,
-  detectRepoPolicy,
 } from "./github.js";
 import { scoreIssue } from "./verdict.js";
-import { parseGates } from "./gates.js";
-import { scoreFriction } from "./friction.js";
-import { fetchMergeVelocity } from "./merge-velocity.js";
+import { fetchFrictionSummary } from "./friction.js";
+import { computeIssueStatus, checkIssueWithProtocol } from "./protocol-fetch.js";
 import {
   createRestClient,
   claimIssue,
@@ -28,6 +24,7 @@ import {
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
+import { digestRepo } from "./digest.js";
 
 const server = new McpServer({ name: "greenlight", version: "0.4.1" });
 
@@ -44,9 +41,10 @@ server.tool(
   async ({ issue_url }) => {
     try {
       const { owner, repo, number } = parseIssueUrl(issue_url);
-      const snapshot = await buildIssueSnapshot(owner, repo, number);
-      const result = scoreIssue(snapshot);
-      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: result.verdict, reasons: result.reasons, flags: result.flags, claims: result.claims, gates: result.gates, duplicateOf: snapshot.duplicateOf ?? [] });
+      // Merged verdict: the protocol claim state overrides legacy claim
+      // inference, but never gates or cross-referenced PR evidence.
+      const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number);
+      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -93,28 +91,7 @@ server.tool(
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
       if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
-      const [contributing, policy, starterCount] = await Promise.all([
-        fetchContributing(m[1], m[2]),
-        detectRepoPolicy(m[1], m[2]),
-        countStarterIssues(m[1], m[2]),
-      ]);
-      const gates = parseGates(contributing, { collaboratorsOnlyPolicy: policy.collaboratorsOnly });
-      const report = scoreFriction({
-        owner: m[1],
-        repo: m[2],
-        gates,
-        externalPRMergeRate: null,
-        medianFirstReviewHours: null,
-        maintainerIssueResponseHours: null,
-        openGoodFirstIssueCount: starterCount,
-        note: "live",
-      });
-      // Merge velocity: signal only, best-effort.
-      try {
-        report.mergeVelocity = await fetchMergeVelocity(m[1], m[2]);
-      } catch {
-        report.mergeVelocity = null;
-      }
+      const report = await fetchFrictionSummary(m[1], m[2]);
       return text(report);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
@@ -129,12 +106,14 @@ server.tool(
     issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
     execute: z.boolean().default(false).describe("Post the comment for real. Defaults to false: dry run returns the plan only."),
     force: z.boolean().default(false).describe("Claim even on a TAKEN or STALE verdict."),
+    plan: z.string().optional().describe("Plan recorded in the protocol claim comment (plan: line)."),
+    eta_days: z.number().optional().describe("ETA in days recorded in the protocol claim comment (eta-days: line)."),
   },
-  async ({ issue_url, execute, force }) => {
+  async ({ issue_url, execute, force, plan: claimPlan, eta_days }) => {
     try {
       const { owner, repo, number } = parseIssueUrl(issue_url);
       const snapshot = await buildIssueSnapshot(owner, repo, number);
-      const plan = await claimIssue(createRestClient(), snapshot, { yes: execute, force });
+      const plan = await claimIssue(createRestClient(), snapshot, { yes: execute, force, plan: claimPlan, etaDays: eta_days });
       return text({
         issue: snapshot.sourceUrl,
         verdict: plan.verdict.verdict,
@@ -263,6 +242,62 @@ server.tool(
     try {
       const result = await guardPr(pr_url, {}, readGuardConfig());
       return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "repo_digest",
+  "Repo-level maintainer report: what needs attention across the whole repo? Reports PR races (two or more open PRs fixing the same issue, with first-claim arbitration), claimed-by-other conflicts (an open PR whose linked issue was claimed by someone else first), stale claims (issues claimed 14+ days ago with no open PR), and assignment-gate conflicts (repos that require assignment before a PR). Pass a --limit to bound the API budget on large repos; sections that cannot be computed say so instead of showing empty. Call this when triaging a repo, not just one PR.",
+  {
+    repo: z.string().describe("owner/repo, e.g. ComposioHQ/composio"),
+    limit: z.number().default(50).describe("Max open PRs and open issues to inspect. The summary always states the cap and the true totals."),
+  },
+  async ({ repo, limit }) => {
+    try {
+      const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
+      if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
+      const result = await digestRepo(m[1], m[2], Math.max(1, Math.min(100, limit)));
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "claim_status",
+  "The Claim Protocol pre-flight answer for one issue: who holds it, until when, who is queued, which PRs compete, which gates bite, and whether the repo honors the protocol at all. Returns the SPEC 5.1 status payload with competing PRs and gates merged from the check machinery. The verdict vocabulary matches check_issue (GO / RISKY / TAKEN / GATED / STALE); a null verdict means no protocol claims and the check_issue verdict stands.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+  },
+  async ({ issue_url }) => {
+    try {
+      const { owner, repo, number } = parseIssueUrl(issue_url);
+      const { status } = await computeIssueStatus(owner, repo, number);
+      return text(status);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "preflight",
+  "The one-call answer to 'can I work on this issue right now': the Claim Protocol issue status (claim holder, expiry, queue, competing PRs, gates) plus the repo friction summary (how hard this repo is to land a PR in, 0-100). Call this before committing to any issue; it combines claim_status and repo_friction.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+  },
+  async ({ issue_url }) => {
+    try {
+      const { owner, repo, number } = parseIssueUrl(issue_url);
+      const [{ status }, friction] = await Promise.all([
+        computeIssueStatus(owner, repo, number),
+        fetchFrictionSummary(owner, repo),
+      ]);
+      return text({ status, friction });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

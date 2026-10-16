@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   COMMANDS,
+  NEEDS_TARGET,
   findCommand,
   overviewText,
   commandHelpText,
@@ -59,6 +60,14 @@ describe("greenlight help", () => {
     assert.ok(text.includes("--agent <tool>"));
     assert.ok(text.includes("--dry-run"));
     assert.ok(text.includes("greenlight init --agent claude-code"));
+  });
+
+  it("every missing-argument command has per-command help", () => {
+    for (const name of Object.keys(NEEDS_TARGET)) {
+      const cmd = findCommand(name);
+      assert.ok(cmd, `NEEDS_TARGET key resolves in help: ${name}`);
+      assert.ok(commandHelpText(cmd!).includes(`greenlight ${name}`));
+    }
   });
 
   it("versionText matches package.json", () => {

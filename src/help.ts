@@ -24,6 +24,13 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight check https://github.com/owner/repo/issues/123"],
   },
   {
+    name: "status",
+    usage: "greenlight status <issue-url> [--json]",
+    description: "Claim Protocol status of one issue: holder, expiry, queue, competing PRs, gates.",
+    flags: ["--json (machine-readable output)"],
+    examples: ["greenlight status https://github.com/owner/repo/issues/123"],
+  },
+  {
     name: "scan",
     usage: "greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]",
     description: "Rank a repo's open starter issues by verdict, GO first.",
@@ -58,15 +65,32 @@ export const COMMANDS: CommandHelp[] = [
   {
     name: "guard",
     usage: "greenlight guard <pr-url> [--json] [--quiet]",
-    description: "Maintainer-side: competing fix, prior claims, missing artifacts. Exit 3 when flagged.",
+    description: "Maintainer-side: competing fix, prior and protocol claims, missing artifacts. Exit 3 when flagged.",
     flags: ["--json (machine-readable output)", "--quiet (print only when flagged)"],
     examples: ["greenlight guard https://github.com/owner/repo/pull/456"],
   },
   {
+    name: "digest",
+    usage: "greenlight digest <owner/repo> [--json] [--limit N] [--fail-on-race]",
+    description: "Repo-level attention list: PR races, claimed-by-other, stale claims, assignment conflicts.",
+    flags: [
+      "--json (machine-readable output)",
+      "--limit <N> (cap listed PRs, default 50, max 100)",
+      "--fail-on-race (exit 3 when a PR race exists)",
+    ],
+    examples: ["greenlight digest facebook/react"],
+  },
+  {
     name: "claim",
-    usage: "greenlight claim <issue-url> [--yes] [--force] [--json]",
+    usage: "greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json]",
     description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN).",
-    flags: ["--yes (actually post the comment)", "--force (post even on a bad verdict)", "--json (machine-readable output)"],
+    flags: [
+      "--yes (actually post the comment)",
+      "--force (post even on a bad verdict)",
+      "--plan <text> (record a plan: line in the protocol claim)",
+      "--eta-days <N> (record an eta-days: line in the protocol claim)",
+      "--json (machine-readable output)",
+    ],
     examples: ["greenlight claim https://github.com/owner/repo/issues/123"],
   },
   {
@@ -113,7 +137,7 @@ export const COMMANDS: CommandHelp[] = [
   {
     name: "mcp",
     usage: "greenlight mcp",
-    description: "Run the MCP server on stdio (9 tools). Your agent client launches this; see 'init'.",
+    description: "Run the MCP server on stdio (12 tools). Your agent client launches this; see 'init'.",
     flags: [],
     examples: ["greenlight mcp"],
   },
@@ -122,6 +146,26 @@ export const COMMANDS: CommandHelp[] = [
 export function findCommand(name: string): CommandHelp | undefined {
   return COMMANDS.find((c) => c.name === name.toLowerCase());
 }
+
+/**
+ * What each target-taking command needs, for the missing-argument error.
+ * Every key must resolve via findCommand: the CLI prints that command's
+ * help alongside the error. Lives here (not cli.ts) so the suite can
+ * assert the keys stay covered without importing the CLI entry point.
+ */
+export const NEEDS_TARGET: Record<string, string> = {
+  check: "an issue URL, e.g. greenlight check https://github.com/owner/repo/issues/123",
+  status: "an issue URL, e.g. greenlight status https://github.com/owner/repo/issues/123",
+  scan: "a repo, e.g. greenlight scan facebook/react",
+  friction: "a repo, e.g. greenlight friction vercel/next.js",
+  ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
+  review: "a PR URL, e.g. greenlight review https://github.com/owner/repo/pull/456",
+  guard: "a PR URL, e.g. greenlight guard https://github.com/owner/repo/pull/456",
+  digest: "a repo, e.g. greenlight digest facebook/react",
+  claim: "an issue URL, e.g. greenlight claim https://github.com/owner/repo/issues/123",
+  prep: "an issue URL, e.g. greenlight prep https://github.com/owner/repo/issues/123",
+  pr: "an issue URL plus --branch, e.g. greenlight pr https://github.com/owner/repo/issues/123 --branch fix/issue-123",
+};
 
 /** First-run overview: quickstart first, then the command list. */
 export function overviewText(): string {

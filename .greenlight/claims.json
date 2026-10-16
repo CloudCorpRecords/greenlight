@@ -1,0 +1,8 @@
+{
+  "protocol": 1,
+  "lease_days": 7,
+  "tenure_cap_days": 28,
+  "queue": true,
+  "who_can_claim": "anyone",
+  "maintainers": ["CloudCorpRecords"]
+}

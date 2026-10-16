@@ -7,8 +7,9 @@ your project's CLAUDE.md (or keep the file and reference it from CLAUDE.md).
 ## Greenlight: check before you open a PR
 
 You have the Greenlight MCP server connected (server name: greenlight,
-8 tools: check_issue, scan_repo, repo_friction, claim_issue, prep_issue,
-open_pr, ci_triage, review_triage). It answers one question at every step:
+12 tools: check_issue, scan_repo, repo_friction, claim_issue, prep_issue,
+open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status,
+preflight). It answers one question at every step:
 is this contribution worth doing, and is the problem mine?
 
 Rules:

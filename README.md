@@ -12,7 +12,7 @@ One command sets it up. In your project directory, run:
 npx @reneturcios/greenlight init --agent claude-code
 ```
 
-That installs the MCP server config plus the instruction snippet teaching your agent the one behavior rule: **check Greenlight before it opens a PR.** Supported tools: `claude-code`, `cursor`, `copilot` (VS Code), `windsurf`, `cline`, and `generic` (`init --list` shows them all; `--all` sets up everything; `--dry-run` previews without writing). Restart your tool, verify with a "list your MCP tools" prompt, and the greenlight server should appear with 9 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr). The underlying pack lives in [`integrations/`](integrations/README.md) if you prefer to install by hand.
+That installs the MCP server config plus the instruction snippet teaching your agent the one behavior rule: **check Greenlight before it opens a PR.** Supported tools: `claude-code`, `cursor`, `copilot` (VS Code), `windsurf`, `cline`, and `generic` (`init --list` shows them all; `--all` sets up everything; `--dry-run` previews without writing). Restart your tool, verify with a "list your MCP tools" prompt, and the greenlight server should appear with 12 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight). The underlying pack lives in [`integrations/`](integrations/README.md) if you prefer to install by hand.
 
 ## The problem
 
@@ -218,12 +218,13 @@ Tools:
 * `ci_triage` - classify each failing check on a PR as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker, by comparing against the base branch's recent check history
 * `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
 * `guard_pr` - maintainer-side analysis of an incoming PR: competing fix, prior claims by someone other than the author, missing artifacts (changeset / DCO / CLA), first-time contributor. Returns comment-ready markdown (never posts).
+* `repo_digest` - repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts (never posts).
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
 
 ### v0.3.5: CI triage (solve-first)
 
-The first solve-side command. On a red PR, `ci` fetches the PR's base and head, collects the failing check runs (with the first failure lines from annotations when it can), and builds the same checks' history from the five most recent base-branch commits. Each failing check gets one line with its class and the evidence: `pre-existing` (same check failing on base, with counts and the last failure time), `likely-yours` (failing on head, passing on base, and the PR touches files that relate to the check), `indeterminate` (no base signal to compare), or `external-blocker` (Vercel/Netlify/deploy-preview auth failures, infrastructure not the PR). Indeterminate checks always state their lean: not touching the check's area leans pre-existing, touching it leans yours, with the reason spelled out. A verdict line closes it out: ALL PRE-EXISTING, HAS LIKELY-YOURS, INDETERMINATE, or NO FAILURES.
+The first solve-side command. On a red PR, `ci` fetches the PR's base and head, collects the failing check runs (with the first failure lines from annotations when it can), and builds the same checks' history from the twelve most recent base-branch commits. Each failing check gets one line with its class and the evidence: `pre-existing` (same check failing on base, with counts and the last failure time), `likely-yours` (failing on head, passing on base, and the PR touches files that relate to the check), `indeterminate` (no base signal to compare), or `external-blocker` (Vercel/Netlify/deploy-preview auth failures, infrastructure not the PR). Indeterminate checks always state their lean: not touching the check's area leans pre-existing, touching it leans yours, with the reason spelled out. A verdict line closes it out: ALL PRE-EXISTING, HAS LIKELY-YOURS, INDETERMINATE, or NO FAILURES.
 
 ### v0.3.7: prep hardening (solve-first)
 
@@ -232,6 +233,29 @@ The third solve-side upgrade, to `greenlight prep`. The checklist now starts wit
 ### v0.3.9: the maintainer guard
 
 Guard flips the engine around: `greenlight guard <pr-url>` (or the `guard_pr` MCP tool) analyzes an *incoming* pull request and renders one short markdown report a maintainer can post as a comment. It checks for a competing fix (other open PRs already fixing the same issue, found via the issue's timeline), prior claims by someone other than the PR author, missing required artifacts (a `.changes/` or `.changeset/` file the repo assembles its changelog from, DCO sign-off trailers, CLA status), and whether the author is a first-time contributor. Output starts with a one-line summary ("Greenlight guard: nothing flagged" or "N things to check"), `--quiet` stays silent unless flagged, and exit code 3 tells a workflow when findings exist. The repo ships a composite GitHub Action (`action.yml`) that posts or updates a single comment on each PR, an `examples/guard-workflow.yml` a maintainer copies into `.github/workflows/`, and per-repo check toggles through `.greenlight-guard.json`.
+
+### v0.4.0: the Claim Protocol
+
+GitHub has no claim system, only comments — so Greenlight now ships one. A claim is a comment carrying the `<!-- greenlight-claim v1 -->` marker (full spec: [`protocol/SPEC.md`](protocol/SPEC.md)): an expiring lease (7-day default, renewable by heartbeat — any comment, or a rocket reaction on the claim comment) with a public queue, frozen the moment a PR links and ended by expiry, release, or a merged PR. Repos can opt in with `.greenlight/claims.json` on their default branch; repos that haven't are read claim-by-claim with no policy assumed.
+
+```bash
+# Who holds this issue, until when, who is queued, which PRs compete
+greenlight status https://github.com/ComposioHQ/composio/issues/4668
+
+# The claim comment greenlight claim drafts now carries the marker,
+# optional plan/eta lines, and the protocol footer (--plan, --eta-days)
+greenlight claim <issue-url> --plan "reproduce then fix" --eta-days 5
+```
+
+Precedence, so the two engines never fight: a live protocol claim (active, linked, completed) wins over the legacy *claim inference* in `check` — its reason replaces the old claim-derived lines and the flag becomes `protocol-claim`. It never overrides gates, and never overrides cross-referenced PR evidence (when both say TAKEN, the reasons merge). Old-fashioned claims with no marker still run the legacy engine unchanged, and the guard raises a `protocol-claim` flag when a PR's linked issue is held by someone other than the PR author.
+
+Two new MCP tools make 12: `claim_status` (the full SPEC 5.1 status payload) and `preflight` (claim status plus the repo friction summary, the one-call "can I work on this" answer). Over-cap squatting detection ships library-only in this release: the engine's `applyOverCap` needs a global per-account index that Phase 1 does not build, so it is exported but uncalled, going live with the Phase 2 Ledger.
+
+### v0.3.11: the repo digest (maintainer-side)
+
+Guard answers "what is wrong with this PR"; digest answers "what needs my attention across my whole repo". `greenlight digest <owner/repo>` (or the `repo_digest` MCP tool) prints one markdown report in four sections: **PR races** (two or more open PRs fixing the same issue, same-repo and cross-repo links included, with first-claim arbitration: who claimed first, who opened first, who duplicates effort), **claimed-by-other conflicts** (an open PR whose linked issue was claimed by someone else before the PR), **stale claims** (issues claimed 14+ days ago with no open PR, with "nudge" under 30 days and "release the claim" after), and **assignment-gate conflicts** (repos that require assignment before a PR: open PRs whose author is not among the issue's assignees). The summary header always states the list cap and the true open-PR total (`--limit N` bounds the API budget; comment reads are skipped for comment-less issues, timeline walks happen only for stale-claim candidates). `--json` for machines; `--fail-on-race` exits 3 when a race exists so a nightly job can alert. A section that cannot be computed says so and why, never silently empty.
+
+The digest is Greenlight's first step from pre-flight into the maintainer's weekly triage: guard catches a bad PR at the door, digest tells you which issues and PRs across the repo are quietly rotting.
 
 ### v0.3.6: review triage (solve-first)
 

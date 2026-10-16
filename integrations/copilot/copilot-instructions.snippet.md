@@ -9,7 +9,8 @@ it does not exist).
 
 You have the Greenlight MCP server connected (server `greenlight`, tools:
 check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr,
-ci_triage, review_triage). Apply these instructions whenever working on a
+ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight).
+Apply these instructions whenever working on a
 pull request to an open source project:
 
 1. Before writing any code for a GitHub issue, call `check_issue` with the

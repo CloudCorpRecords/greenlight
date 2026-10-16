@@ -28,6 +28,13 @@
  */
 import type { FrictionReport, RepoSignals } from "./types.js";
 import { gateLabel } from "./gates.js";
+import {
+  fetchContributing,
+  detectRepoPolicy,
+  countStarterIssues,
+} from "./github.js";
+import { parseGates } from "./gates.js";
+import { fetchMergeVelocity } from "./merge-velocity.js";
 
 const GATE_WEIGHTS: Record<string, number> = {
   assignment_required: -25,
@@ -88,4 +95,40 @@ export function scoreFriction(signals: RepoSignals): FrictionReport {
     reasons,
     signals,
   };
+}
+
+/**
+ * The repo_friction pipeline as one callable: gates from CONTRIBUTING and
+ * house rules, starter-issue count, and merge velocity as a best-effort
+ * signal. Shared by the CLI, the MCP repo_friction tool, and the
+ * protocol preflight (which pairs it with the issue status).
+ */
+export async function fetchFrictionSummary(
+  owner: string,
+  repo: string
+): Promise<FrictionReport> {
+  const [contributing, policy, starterCount] = await Promise.all([
+    fetchContributing(owner, repo),
+    detectRepoPolicy(owner, repo),
+    countStarterIssues(owner, repo),
+  ]);
+  const gates = parseGates(contributing, { collaboratorsOnlyPolicy: policy.collaboratorsOnly });
+  const report = scoreFriction({
+    owner,
+    repo,
+    gates,
+    externalPRMergeRate: null,
+    medianFirstReviewHours: null,
+    maintainerIssueResponseHours: null,
+    openGoodFirstIssueCount: starterCount,
+    note: "live",
+  });
+  // Merge velocity is a signal, never a score input. Best-effort: silent
+  // when it fails.
+  try {
+    report.mergeVelocity = await fetchMergeVelocity(owner, repo);
+  } catch {
+    report.mergeVelocity = null;
+  }
+  return report;
 }
