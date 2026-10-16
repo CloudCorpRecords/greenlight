@@ -25,7 +25,7 @@
     "test": "tsx --test test/*.test.ts"
   },
   "type": "module",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "mcpName": "io.github.CloudCorpRecords/greenlight",
   "publishConfig": {
     "access": "public"

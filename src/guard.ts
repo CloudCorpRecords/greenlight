@@ -1,0 +1,694 @@
+/**
+ * Maintainer-side guard. Answers the question a maintainer asks about an
+ * INCOMING pull request: "is this PR worth my time?"
+ *
+ * Four checks, all evidence-carrying, all degradable:
+ *
+ *   1. competing-fix — the PR claims an issue (via "fixes/closes #N" in
+ *      the body or an issue number in the branch name); the issue's
+ *      timeline cross-reference walk then names OTHER open PRs already
+ *      fixing it. Reuses fetchLinkedPRs / classifyLinkStrength, the same
+ *      machinery that catches the race cases (e2b-dev/E2B#1986 with its
+ *      PR #1987, ComposioHQ/composio#4904 with #4907 and #4922).
+ *   2. other-claim — claim detection (claims.ts) on the linked issue's
+ *      comments: a strong or soft claim from someone other than the PR
+ *      author that predates the PR is reported with the claimant and
+ *      date. A claim by the PR author is a pass, noted not flagged.
+ *   3. missing-artifact — from the PR's changed files: repos detected to
+ *      use .changes/ or .changeset/ flag a PR that adds no such file
+ *      (with the expected pattern); DCO repos flag commits without a
+ *      Signed-off-by trailer; CLA-gated repos flag "CLA status not
+ *      visible" when no cla-signed label and no signature comment from
+ *      the author exist. Absence of evidence is stated as such, never
+ *      as proof the author did not sign.
+ *   4. first-time — the author's prior merged-PR count in the repo (one
+ *      search call, capped); zero means first-time contributor. Best
+ *      effort: null on failure, no finding then.
+ *
+ * The classifier is pure over injected data; the fetch layer follows the
+ * ci-triage / review-triage test-seam pattern (GuardDeps). The command
+ * never posts anything: it renders markdown that a maintainer (or the
+ * bundled GitHub Action) posts as one PR comment.
+ *
+ * Per-repo silencing: `.greenlight-guard.json` in the working directory,
+ * a JSON object with boolean keys per check ("competing-fix",
+ * "other-claim", "missing-artifact", "first-time"); unknown keys are
+ * ignored, a missing or unreadable file means every check is on.
+ */
+import { readFileSync } from "node:fs";
+import { apiGet, parsePullUrl, fetchLinkedPRs, fetchComments } from "./github.js";
+import { detectClaims, isBotAuthor } from "./claims.js";
+import { classifyLinkStrength, isClosingPR } from "./linkstrength.js";
+import { detectClaPath, detectChangesetConvention } from "./prep-detail.js";
+import { parseGates } from "./gates.js";
+import type { CommentSignal, LinkedPR } from "./types.js";
+
+export const GUARD_VERSION = "0.3.9";
+
+/** The hidden marker the GitHub Action uses to find its own comment and update it. */
+export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
+
+/** Check ids, also the keys of .greenlight-guard.json. */
+export const GUARD_CHECKS = ["competing-fix", "other-claim", "missing-artifact", "first-time"] as const;
+export type GuardCheckId = (typeof GUARD_CHECKS)[number];
+
+export type GuardConfig = Record<GuardCheckId, boolean>;
+
+export function defaultGuardConfig(): GuardConfig {
+  return { "competing-fix": true, "other-claim": true, "missing-artifact": true, "first-time": true };
+}
+
+/** Read .greenlight-guard.json from a directory (default cwd). Best-effort: anything unreadable means all checks on. */
+export function readGuardConfig(dir = process.cwd()): GuardConfig {
+  const config = defaultGuardConfig();
+  try {
+    const raw = JSON.parse(readFileSync(`${dir}/.greenlight-guard.json`, "utf8")) as Record<string, unknown>;
+    for (const id of GUARD_CHECKS) {
+      if (typeof raw[id] === "boolean") config[id] = raw[id];
+    }
+  } catch {
+    // Missing or broken config: all checks stay on.
+  }
+  return config;
+}
+
+export interface GuardLinkedIssue {
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+}
+
+export interface GuardCompetingPR {
+  issueNumber: number;
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  state: string;
+  linkStrength: "closing" | "mention";
+  via?: string;
+}
+
+export interface GuardClaim {
+  issueNumber: number;
+  author: string;
+  createdAt: string;
+  ageDays: number;
+  strength: "strong" | "soft";
+  phrase: string;
+  claimedByAuthor: boolean;
+}
+
+export interface GuardFinding {
+  /** Machine key, e.g. "competing-fix" / "changeset-missing" / "dco-missing" / "cla-status" / "first-time". */
+  check: string;
+  /** "flag" counts toward the summary and the exit code; "note" is information. */
+  severity: "flag" | "note";
+  title: string;
+  evidence: string[];
+}
+
+export interface GuardResult {
+  pr: string;
+  number: number;
+  repo: string;
+  title: string;
+  author: string;
+  linkedIssues: GuardLinkedIssue[];
+  competingPRs: GuardCompetingPR[];
+  claims: GuardClaim[];
+  findings: GuardFinding[];
+  /** "Greenlight guard: N things to check" or "Greenlight guard: nothing flagged". */
+  summary: string;
+  /** True when at least one finding has severity "flag". */
+  hasFindings: boolean;
+  /** The comment-ready markdown. */
+  markdown: string;
+}
+
+export interface GuardPullDetail {
+  title: string;
+  body: string;
+  author: string;
+  headRef: string;
+  createdAt: string;
+  labels: string[];
+  changedFiles: string[];
+  commits: Array<{ sha: string; message: string }>;
+  comments: CommentSignal[];
+}
+
+export interface GuardIssueDetail {
+  number: number;
+  title: string;
+  author: string;
+  state: string;
+  comments: CommentSignal[];
+}
+
+export interface GuardRepoConventions {
+  changesetDir?: ".changes" | ".changeset";
+  changesetExample?: string;
+  dcoRequired: boolean;
+  claRequired: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Pure detectors                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Issue numbers this PR claims to fix: closing keywords in body or title
+ * ("fixes #N"), "#N" in the title, or the number as a standalone token in
+ * the branch name. Reuses classifyLinkStrength so the branch-token rule
+ * matches the race-detection behavior exactly.
+ */
+export function extractLinkedIssueNumbers(title: string, body: string, branch: string): number[] {
+  const candidates = new Set<number>();
+  for (const text of [title, body]) {
+    for (const m of text.matchAll(/#(\d{1,6})\b/g)) {
+      const n = Number(m[1]);
+      if (n > 0) candidates.add(n);
+    }
+  }
+  // The branch name may carry the issue number as its only signal
+  // ("fix/61-widget"). classifyLinkStrength's token test rejects near
+  // misses like "feat/610-x" for issue 61, so collecting branch numbers
+  // is safe: non-closing ones are filtered below.
+  for (const m of branch.matchAll(/\d{1,6}/g)) {
+    const n = Number(m[0]);
+    if (n > 0) candidates.add(n);
+  }
+  return [...candidates].filter((n) => classifyLinkStrength({ title, body, branch, issueNumber: n }) === "closing");
+}
+
+/** Other OPEN PRs already fixing the same issue, excluding this PR. Only "closing"-strength links count. */
+export function findCompetingPRs(
+  issueNumber: number,
+  linkedPRs: LinkedPR[],
+  prNumber: number,
+  authorsByNumber?: Map<number, string>
+): GuardCompetingPR[] {
+  const out: GuardCompetingPR[] = [];
+  for (const pr of linkedPRs) {
+    if (pr.number === prNumber) continue;
+    if (pr.state !== "open") continue;
+    if (!isClosingPR(pr)) continue;
+    out.push({
+      issueNumber,
+      number: pr.number,
+      title: pr.title,
+      url: pr.url,
+      author: authorsByNumber?.get(pr.number) ?? "unknown",
+      state: pr.state,
+      linkStrength: pr.linkStrength,
+      via: pr.via,
+    });
+  }
+  return out;
+}
+
+/**
+ * Claims on the linked issue, split by authorship. Only claims that
+ * predate the PR count (a claim posted after the PR cannot have been a
+ * race). Bot authors are excluded by detectClaims itself. Returns foreign
+ * claims plus whether the author claimed it themselves (a pass, not a
+ * flag).
+ */
+export function splitIssueClaims(
+  issueAuthor: string,
+  issueComments: CommentSignal[],
+  prAuthor: string,
+  prCreatedAt: string,
+  issueNumber: number,
+  now: Date = new Date()
+): { foreign: GuardClaim[]; authorClaimed: GuardClaim | null } {
+  const foreign: GuardClaim[] = [];
+  let authorClaimed: GuardClaim | null = null;
+  const prTime = new Date(prCreatedAt).getTime();
+  for (const c of detectClaims(issueAuthor, issueComments, now)) {
+    if (isBotAuthor(c.author)) continue;
+    const claimTime = new Date(c.createdAt).getTime();
+    if (Number.isNaN(claimTime) || claimTime >= prTime) continue;
+    const claim: GuardClaim = {
+      issueNumber,
+      author: c.author,
+      createdAt: c.createdAt,
+      ageDays: c.ageDays,
+      strength: c.strength,
+      phrase: c.phrase,
+      claimedByAuthor: c.author.toLowerCase() === prAuthor.toLowerCase(),
+    };
+    if (claim.claimedByAuthor) {
+      authorClaimed = authorClaimed ?? claim;
+    } else {
+      foreign.push(claim);
+    }
+  }
+  foreign.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return { foreign, authorClaimed };
+}
+
+/** True when any line of the commit message is a DCO Signed-off-by trailer. */
+export function commitHasSignoff(message: string): boolean {
+  return message.split("\n").some((line) => /^Signed-off-by:\s*\S/i.test(line.trim()));
+}
+
+/**
+ * The artifact findings: changeset file missing, DCO trailers missing,
+ * CLA status not visible. Pure over injected repo conventions and PR data.
+ * A "cla" artifact check fires only when the repo was detected to demand
+ * a CLA path; wording is absence-of-evidence, never an accusation.
+ */
+export function checkMissingArtifacts(args: {
+  conventions: GuardRepoConventions;
+  changedFiles: string[];
+  commits: Array<{ sha: string; message: string }>;
+  prLabels: string[];
+  prAuthor: string;
+  prComments: CommentSignal[];
+}): GuardFinding[] {
+  const findings: GuardFinding[] = [];
+  const { conventions, changedFiles, commits, prLabels, prAuthor, prComments } = args;
+
+  if (conventions.changesetDir) {
+    const dir = conventions.changesetDir;
+    const hasFile = changedFiles.some((f) => f === `${dir}/` || f.startsWith(`${dir}/`));
+    if (!hasFile) {
+      findings.push({
+        check: "changeset-missing",
+        severity: "flag",
+        title: `Missing release-note file (repo uses ${dir}/)`,
+        evidence: [
+          `this PR changes ${changedFiles.length} file${changedFiles.length === 1 ? "" : "s"} but adds no file under ${dir}/`,
+          conventions.changesetExample
+            ? `the repo assembles its changelog from ${dir}/; expected something like \`${conventions.changesetExample}\``
+            : `the repo assembles its changelog from ${dir}/; add one file per change there`,
+        ],
+      });
+    }
+  }
+
+  if (conventions.dcoRequired) {
+    const unsigned = commits.filter((c) => !commitHasSignoff(c.message));
+    if (unsigned.length > 0) {
+      findings.push({
+        check: "dco-missing",
+        severity: "flag",
+        title: `DCO sign-off missing on ${unsigned.length} of ${commits.length} commit${commits.length === 1 ? "" : "s"}`,
+        evidence: [
+          `commits without a Signed-off-by trailer: ${unsigned
+            .slice(0, 5)
+            .map((c) => c.sha.slice(0, 7))
+            .join(", ")}${unsigned.length > 5 ? ` (+${unsigned.length - 5} more)` : ""}`,
+          `the repo requires \`git commit -s\` on every commit (Developer Certificate of Origin)`,
+        ],
+      });
+    }
+  }
+
+  if (conventions.claRequired) {
+    const labelSigned = prLabels.some((l) => l.toLowerCase() === "cla-signed");
+    const commentSigned = prComments.some(
+      (c) =>
+        c.author.toLowerCase() === prAuthor.toLowerCase() &&
+        /i have read the cla document and i hereby sign the cla/i.test(c.body)
+    );
+    if (!labelSigned && !commentSigned) {
+      findings.push({
+        check: "cla-status",
+        severity: "flag",
+        title: "CLA status not visible",
+        evidence: [
+          `no \`cla-signed\` label and no signature comment from @${prAuthor} found on this PR`,
+          `stated as absence of evidence only: the author may have signed through a flow this check cannot see`,
+        ],
+      });
+    }
+  }
+
+  return findings;
+}
+
+/** Light author-history signal. Null means the lookup failed: no finding. */
+export function checkFirstTime(author: string, priorMerged: number | null): GuardFinding | null {
+  if (priorMerged === null) return null;
+  if (priorMerged > 0) return null;
+  return {
+    check: "first-time",
+    severity: "note",
+    title: `First-time contributor`,
+    evidence: [`@${author} has no previously merged PRs in this repo`],
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendering                                                           */
+/* ------------------------------------------------------------------ */
+
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
+}
+
+export function renderGuardMarkdown(result: Omit<GuardResult, "markdown">): string {
+  const lines: string[] = [GUARD_COMMENT_MARKER];
+  lines.push(`**${result.summary}** — on [${result.repo}#${result.number}](${result.pr}) "${result.title}" by @${result.author}`);
+  lines.push("");
+
+  const flags = result.findings.filter((f) => f.severity === "flag");
+  const notes = result.findings.filter((f) => f.severity === "note");
+
+  if (flags.length === 0) {
+    lines.push("_Nothing flagged._ The checks below found no competing fix, no prior claim by someone else, and no missing artifacts.");
+    lines.push("");
+  } else {
+    let i = 0;
+    for (const f of flags) {
+      i += 1;
+      lines.push(`**${i}. ${f.title}**`);
+      for (const e of f.evidence) lines.push(`- ${e}`);
+      lines.push("");
+    }
+  }
+
+  if (notes.length > 0) {
+    lines.push("Notes:");
+    for (const f of notes) {
+      for (const e of f.evidence) lines.push(`- ${e}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("---");
+  lines.push(
+    `_Checked with [Greenlight guard](https://github.com/CloudCorpRecords/greenlight) v${GUARD_VERSION}; findings are signals, verify before acting._`
+  );
+  return lines.join("\n");
+}
+
+export function buildGuardSummary(findings: GuardFinding[]): { summary: string; hasFindings: boolean } {
+  const flags = findings.filter((f) => f.severity === "flag").length;
+  return {
+    summary: flags === 0 ? "Greenlight guard: nothing flagged" : `Greenlight guard: ${flags} ${plural(flags, "thing", "things")} to check`,
+    hasFindings: flags > 0,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Fetch layer (test-seam, mirrors ci-triage)                          */
+/* ------------------------------------------------------------------ */
+
+interface PullApiItem {
+  title?: unknown;
+  body?: unknown;
+  user?: { login?: unknown };
+  head?: { ref?: unknown };
+  base?: { ref?: unknown };
+  created_at?: unknown;
+  labels?: Array<{ name?: unknown }>;
+}
+
+interface CommitApiItem {
+  sha?: unknown;
+  commit?: { message?: unknown };
+}
+
+interface IssueApiItem {
+  title?: unknown;
+  user?: { login?: unknown };
+  state?: unknown;
+}
+
+interface SearchApiItem {
+  total_count?: unknown;
+}
+
+interface RootApiItem {
+  name?: unknown;
+  type?: unknown;
+}
+
+export interface GuardDeps {
+  fetchPull?: (owner: string, repo: string, number: number) => Promise<GuardPullDetail>;
+  fetchIssue?: (owner: string, repo: string, number: number) => Promise<GuardIssueDetail>;
+  fetchLinkedPRs?: (owner: string, repo: string, issueNumber: number) => Promise<LinkedPR[]>;
+  fetchPRAuthor?: (owner: string, repo: string, number: number) => Promise<string>;
+  fetchConventions?: (owner: string, repo: string, issueNumber: number) => Promise<GuardRepoConventions>;
+  fetchPriorMerged?: (owner: string, repo: string, author: string) => Promise<number | null>;
+}
+
+async function paginateFiles(owner: string, repo: string, number: number): Promise<string[]> {
+  const files: string[] = [];
+  for (let page = 1; page <= 5; page++) {
+    const data = (await apiGet(
+      `/repos/${owner}/${repo}/pulls/${number}/files?per_page=100&page=${page}`
+    )) as Array<{ filename?: unknown }>;
+    for (const f of data ?? []) {
+      if (typeof f.filename === "string") files.push(f.filename);
+    }
+    if ((data ?? []).length < 100) break;
+  }
+  return files;
+}
+
+async function defaultFetchPull(owner: string, repo: string, number: number): Promise<GuardPullDetail> {
+  const p = (await apiGet(`/repos/${owner}/${repo}/pulls/${number}`)) as PullApiItem;
+  const commitsData = (await apiGet(`/repos/${owner}/${repo}/pulls/${number}/commits?per_page=100`)) as CommitApiItem[];
+  const comments = await fetchComments(owner, repo, number);
+  return {
+    title: String(p.title ?? ""),
+    body: String(p.body ?? ""),
+    author: String(p.user?.login ?? ""),
+    headRef: String(p.head?.ref ?? ""),
+    createdAt: String(p.created_at ?? ""),
+    labels: (p.labels ?? []).map((l) => String(l.name ?? "")),
+    changedFiles: await paginateFiles(owner, repo, number),
+    commits: (commitsData ?? []).map((c) => ({
+      sha: String(c.sha ?? ""),
+      message: String(c.commit?.message ?? ""),
+    })),
+    comments,
+  };
+}
+
+async function defaultFetchIssue(owner: string, repo: string, number: number): Promise<GuardIssueDetail> {
+  const issue = (await apiGet(`/repos/${owner}/${repo}/issues/${number}`)) as IssueApiItem;
+  const comments = await fetchComments(owner, repo, number);
+  return {
+    number,
+    title: String(issue.title ?? ""),
+    author: String(issue.user?.login ?? ""),
+    state: String(issue.state ?? ""),
+    comments,
+  };
+}
+
+async function defaultFetchConventions(owner: string, repo: string, issueNumber: number): Promise<GuardRepoConventions> {
+  const conventions: GuardRepoConventions = { dcoRequired: false, claRequired: false };
+  try {
+    let rootNames: string[] = [];
+    try {
+      const root = (await apiGet(`/repos/${owner}/${repo}/contents/`)) as RootApiItem[];
+      rootNames = (root ?? []).map((r) => String(r.name ?? ""));
+    } catch {
+      rootNames = [];
+    }
+    let policyText = "";
+    try {
+      const contributing = (await apiGet(
+        `/repos/${owner}/${repo}/contents/CONTRIBUTING.md`
+      )) as { content?: unknown; encoding?: unknown };
+      if (typeof contributing.content === "string" && contributing.encoding === "base64") {
+        policyText = Buffer.from(contributing.content, "base64").toString("utf8");
+      }
+    } catch {
+      policyText = "";
+    }
+    const slug = `pr-${issueNumber}`;
+    const convention = detectChangesetConvention({
+      rootNames,
+      policyText,
+      policySource: "CONTRIBUTING.md",
+      issueNumber,
+      slug,
+    });
+    if (convention && (convention.style === "changes-dir" || convention.style === "changesets")) {
+      conventions.changesetDir = convention.style === "changes-dir" ? ".changes" : ".changeset";
+      conventions.changesetExample = convention.example;
+    }
+    const gates = parseGates(policyText, { collaboratorsOnlyPolicy: false });
+    conventions.dcoRequired = gates.some((g) => g.kind === "dco_required" && g.detected);
+    const cla = detectClaPath([{ file: "CONTRIBUTING.md", text: policyText }], gates);
+    conventions.claRequired = cla.kind === "cla-assistant" || cla.kind === "custom-cla-bot";
+  } catch {
+    // Conventions are best-effort; empty means no artifact checks fire.
+  }
+  return conventions;
+}
+
+async function defaultFetchPriorMerged(owner: string, repo: string, author: string): Promise<number | null> {
+  try {
+    const q = encodeURIComponent(`repo:${owner}/${repo} author:${author} type:pr is:merged`);
+    const data = (await apiGet(`/search/issues?q=${q}&per_page=1`)) as SearchApiItem;
+    const total = typeof data.total_count === "number" ? data.total_count : null;
+    return total;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Full guard for a PR URL. Best-effort throughout: anything that cannot
+ * be read degrades to "no evidence" and its check is skipped.
+ */
+export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: GuardConfig = defaultGuardConfig()): Promise<GuardResult> {
+  const { owner, repo, number } = parsePullUrl(prUrl);
+  const fetchPull = deps.fetchPull ?? defaultFetchPull;
+  const fetchIssue = deps.fetchIssue ?? defaultFetchIssue;
+  const fetchConventions = deps.fetchConventions ?? defaultFetchConventions;
+  const fetchPriorMerged = deps.fetchPriorMerged ?? defaultFetchPriorMerged;
+  const fetchIssueLinkedPRs = deps.fetchLinkedPRs ?? fetchLinkedPRs;
+  const fetchAuthor = deps.fetchPRAuthor ?? (async (owner: string, repo: string, n: number) => {
+    const detail = (await apiGet(`/repos/${owner}/${repo}/pulls/${n}`)) as PullApiItem;
+    return String(detail.user?.login ?? "unknown");
+  });
+
+  const pull = await fetchPull(owner, repo, number);
+  const issueNumbers = extractLinkedIssueNumbers(pull.title, pull.body, pull.headRef);
+
+  const linkedIssues: GuardLinkedIssue[] = [];
+  const competingPRs: GuardCompetingPR[] = [];
+  const claims: GuardClaim[] = [];
+  const findings: GuardFinding[] = [];
+
+  const authorsByNumber = new Map<number, string>();
+
+  if (config["competing-fix"] || config["other-claim"]) {
+    for (const issueNumber of issueNumbers) {
+      let issue: GuardIssueDetail | null = null;
+      try {
+        issue = await fetchIssue(owner, repo, issueNumber);
+      } catch {
+        issue = null;
+      }
+      if (issue) {
+        linkedIssues.push({
+          number: issueNumber,
+          title: issue.title,
+          url: `https://github.com/${owner}/${repo}/issues/${issueNumber}`,
+          state: issue.state,
+        });
+      }
+      if (config["competing-fix"]) {
+        let linked: LinkedPR[] = [];
+        try {
+          linked = await fetchIssueLinkedPRs(owner, repo, issueNumber);
+        } catch {
+          linked = [];
+        }
+        for (const pr of linked) {
+          if (!authorsByNumber.has(pr.number)) {
+            try {
+              authorsByNumber.set(pr.number, await fetchAuthor(owner, repo, pr.number));
+            } catch {
+              authorsByNumber.set(pr.number, "unknown");
+            }
+          }
+        }
+        for (const c of findCompetingPRs(issueNumber, linked, number, authorsByNumber)) {
+          competingPRs.push(c);
+          findings.push({
+            check: "competing-fix",
+            severity: "flag",
+            title: `Competing fix for #${issueNumber}`,
+            evidence: [
+              `another open PR already claims this issue: #${c.number} by @${c.author} ("${c.title}")`,
+              c.via === "timeline"
+                ? `found in the issue's timeline (a fix announcement, even though its body may not say "fixes #${issueNumber}")`
+                : `its body or branch claims #${issueNumber}`,
+              `${c.url}`,
+            ],
+          });
+        }
+      }
+      if (config["other-claim"] && issue) {
+        const { foreign, authorClaimed } = splitIssueClaims(
+          issue.author,
+          issue.comments,
+          pull.author,
+          pull.createdAt,
+          issueNumber
+        );
+        for (const c of foreign) {
+          claims.push(c);
+          findings.push({
+            check: "other-claim",
+            severity: "flag",
+            title: `Issue claimed by @${c.author} before this PR`,
+            evidence: [
+              `@${c.author} posted a ${c.strength} claim on #${issueNumber} on ${c.createdAt.slice(0, 10)} (${c.ageDays} day${c.ageDays === 1 ? "" : "s"} before this PR's code existed in its current form), pattern: ${c.phrase}`,
+            ],
+          });
+        }
+        if (authorClaimed) {
+          claims.push(authorClaimed);
+          findings.push({
+            check: "author-claim",
+            severity: "note",
+            title: `Claimed by the PR author`,
+            evidence: [`@${pull.author} claimed #${issueNumber} in the issue comments before opening this PR — expected, no conflict`],
+          });
+        }
+      }
+    }
+  }
+
+  if (config["missing-artifact"]) {
+    let conventions: GuardRepoConventions;
+    try {
+      conventions = await fetchConventions(owner, repo, issueNumbers[0] ?? number);
+    } catch {
+      conventions = { dcoRequired: false, claRequired: false };
+    }
+    for (const f of checkMissingArtifacts({
+      conventions,
+      changedFiles: pull.changedFiles,
+      commits: pull.commits,
+      prLabels: pull.labels,
+      prAuthor: pull.author,
+      prComments: pull.comments,
+    })) {
+      findings.push(f);
+    }
+  }
+
+  if (config["first-time"]) {
+    let prior: number | null = null;
+    try {
+      prior = await fetchPriorMerged(owner, repo, pull.author);
+    } catch {
+      prior = null;
+    }
+    const f = checkFirstTime(pull.author, prior);
+    if (f) findings.push(f);
+  }
+
+  const { summary, hasFindings } = buildGuardSummary(findings);
+  const result: GuardResult = {
+    pr: prUrl,
+    number,
+    repo: `${owner}/${repo}`,
+    title: pull.title,
+    author: pull.author,
+    linkedIssues,
+    competingPRs,
+    claims,
+    findings,
+    summary,
+    hasFindings,
+    markdown: "",
+  };
+  result.markdown = renderGuardMarkdown(result);
+  return result;
+}
