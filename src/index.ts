@@ -25,8 +25,23 @@ import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { digestRepo } from "./digest.js";
+import {
+  buildVerifiedComment,
+  suggestsVerifiedComment,
+} from "./verify-comment.js";
+import { createRequire } from "node:module";
 
-const server = new McpServer({ name: "greenlight", version: "0.4.1" });
+// Same version fact the CLI footer prints: read from package.json so the
+// two can never drift apart.
+const GREENLIGHT_VERSION: string = (() => {
+  try {
+    return (createRequire(import.meta.url)("../package.json") as { version: string }).version;
+  } catch {
+    return "unknown";
+  }
+})();
+
+const server = new McpServer({ name: "greenlight", version: "0.5.0" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -44,7 +59,7 @@ server.tool(
       // Merged verdict: the protocol claim state overrides legacy claim
       // inference, but never gates or cross-referenced PR evidence.
       const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number);
-      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol });
+      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol, suggests_verified_comment: suggestsVerifiedComment(merged.gates) });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -60,7 +75,7 @@ server.tool(
   async ({ repo }) => {
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
-      if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
       const { issues, fallbackUsed } = await scanCandidates(m[1], m[2], { limit: 10 });
       const results = [];
       for (const issue of issues) {
@@ -90,7 +105,7 @@ server.tool(
   async ({ repo }) => {
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
-      if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
       const report = await fetchFrictionSummary(m[1], m[2]);
       return text(report);
     } catch (err) {
@@ -258,7 +273,7 @@ server.tool(
   async ({ repo, limit }) => {
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
-      if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
       const result = await digestRepo(m[1], m[2], Math.max(1, Math.min(100, limit)));
       return text(result);
     } catch (err) {
@@ -298,6 +313,48 @@ server.tool(
         fetchFrictionSummary(owner, repo),
       ]);
       return text({ status, friction });
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "verify_comment",
+  "Draft the verified-finding comment for a maintainer-only repo (modelcontextprotocol/inspector, modelcontextprotocol/servers): outside PRs are closed on sight there, so the contribution that lands is a detailed, verified issue comment. Assembles the comment from your notes: claim, environment, reproduction steps, observed vs expected, root cause, fix sketch, and a verification footer. Sections you leave empty render as explicit gaps, never plausible filler. DRAFT ONLY: nothing is posted, ever. Copy the markdown into the issue thread yourself.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/modelcontextprotocol/inspector/issues/2723"),
+    claim: z.string().optional().describe("One-line claim of the problem."),
+    environment: z.string().optional().describe("Environment: repo, ref/commit, date, platform."),
+    reproduction: z.string().optional().describe("Reproduction steps, one per line, exact commands."),
+    observed: z.string().optional().describe("What was observed when the repro ran."),
+    expected: z.string().optional().describe("What should have happened instead."),
+    root_cause: z.string().optional().describe("Root cause with file paths and line refs when known; empty renders 'not yet isolated'."),
+    fix: z.string().optional().describe("Proposed fix sketch, not a code dump."),
+    ran: z.string().optional().describe("What was actually run (commands, counts)."),
+    verified_by: z.string().optional().describe("Who ran the verification."),
+  },
+  async ({ issue_url, claim, environment, reproduction, observed, expected, root_cause, fix, ran, verified_by }) => {
+    try {
+      const { owner, repo, number } = parseIssueUrl(issue_url);
+      const built = buildVerifiedComment(
+        `https://github.com/${owner}/${repo}/issues/${number}`,
+        {
+          claim,
+          environment,
+          reproduction: reproduction
+            ? reproduction.split("\n").map((s) => s.replace(/^\s*(?:\d+[.)]|[-*])\s+/, "").trim()).filter((s) => s.length > 0)
+            : undefined,
+          observed,
+          expected,
+          rootCause: root_cause,
+          fixSketch: fix,
+          ran,
+          verifiedBy: verified_by,
+        },
+        GREENLIGHT_VERSION
+      );
+      return text({ issue: issue_url, markdown: built.markdown, gaps: built.gaps, posted: false });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
