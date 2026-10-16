@@ -79,6 +79,19 @@ describe("extractLinkedIssueNumbers", () => {
     assert.deepEqual(extractLinkedIssueNumbers("Fix", "no links", "feat/610-x"), [610]);
     assert.deepEqual(extractLinkedIssueNumbers("#61 fix", "no links", "feat/610-x"), [61, 610]);
   });
+  it("does not claim version numbers in dependabot branches as issues", () => {
+    // dependabot/npm_and_yarn/vitest-5.0.4 must not read as issues #5 or #4.
+    // Found live: the digest grouped dependabot bump PRs into phantom
+    // races on ancient PRs #1/#4/#5 in ComposioHQ/composio (2026-10-16).
+    assert.deepEqual(
+      extractLinkedIssueNumbers("chore(deps): bump vitest from 4.1.11 to 5.0.4", "", "dependabot/npm_and_yarn/vitest-5.0.4"),
+      []
+    );
+    assert.deepEqual(
+      extractLinkedIssueNumbers("chore(deps): bump qs from 6.15.3 to 6.16.0", "", "dependabot/npm_and_yarn/qs-6.16.0"),
+      []
+    );
+  });
 });
 
 describe("findCompetingPRs", () => {
