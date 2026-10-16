@@ -142,6 +142,21 @@ npx @reneturcios/greenlight verify-comment https://github.com/modelcontextprotoc
 # reason instead of guessing when it cannot run or parse.
 cd your-repo && npx @reneturcios/greenlight verify --base origin/main
 # exit 3 when new failures exist, 1 when unverifiable
+
+# PR babysitter: one prioritized action list across your open PRs —
+# needs you now, waiting on them, quiet. Reruns report what changed.
+npx @reneturcios/greenlight babysit --mine --repos acme/widgets,acme/gadgets
+# or: greenlight babysit --prs <url1>,<url2> --fail-on-action   (exit 3 when action is needed)
+
+# Verified PR evidence pack: guard + CI triage + review triage + protocol
+# status of linked issues, in one markdown document where every claim
+# cites its source. The test delta comes from a verify report you pass in.
+npx @reneturcios/greenlight evidence https://github.com/acme/widgets/pull/42 --out EVIDENCE.md
+# or: greenlight evidence <pr-url> --verify-json verify.json
+
+# Contributor passport: protocol claims from the public Claim Ledger plus
+# merged PRs from GitHub. No Ledger file yet? It says so plainly.
+npx @reneturcios/greenlight passport CloudCorpRecords
 ```
 
 Real examples from our vetting:
@@ -205,8 +220,18 @@ Tools:
 * `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
 * `guard_pr` - maintainer-side analysis of an incoming PR: competing fix, prior claims by someone other than the author, missing artifacts (changeset / DCO / CLA), first-time contributor. Returns comment-ready markdown (never posts).
 * `repo_digest` - repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts (never posts).
+* `babysit_prs` - watch open PRs and get the one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks
+* `evidence_pack` - the Verified PR evidence pack for one PR: guard verdict, CI triage, review triage, protocol status of linked issues, every claim citing its source
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
+
+### v0.6.0: the babysitter, the autopilot, and the trust layer
+
+**PR Babysitter.** `greenlight babysit` (or the `babysit_prs` MCP tool) is the answer to 34 open PRs and no time to watch them. Point it at PR URLs, or let it discover your open PRs across repos (`--mine --repos`), and it runs CI triage, review triage, and the guard on each one, diffs against stored watermarks, and prints one prioritized list: *needs you now* first (new likely-real review findings, CI newly failing on your code, merge conflicts, new guard flags, checks stuck over 2 hours), then *waiting on them* (checks still running, CI green with no feedback yet), then *quiet* (a PR that merged or closed retires from the watch with its resolution noted). The first run has no watermarks, so it says so and shows the full picture. Exit 0 always (cron-friendly); `--fail-on-action` gives exit 3 when the needs-you-now list is non-empty.
+
+**Maintainer Autopilot.** The guard Action can now act, not just report — but only when the maintainer opts in. An `autopilot` section in `.greenlight-guard.json` carries a label map (check id to label name, e.g. `"protocol-claim": "claim-conflict"`) and a nudge toggle. The guard computes label decisions over severity-flag findings and ready-to-copy stale-claim nudge lines for 14+ day claims with no other open PR; it never applies anything itself. The Action applies the decided labels with the Actions token (creating labels that do not exist yet; failures degrade to warnings, never a failed run), and the nudge lines ride inside the single guard comment for the maintainer to post on the issue. Autopilot never closes PRs, never merges, and never posts beyond the one guard comment. `greenlight guard <pr-url> --labels-dry-run` shows exactly what it would do.
+
+**Evidence pack and passport.** `greenlight evidence <pr-url>` (or the `evidence_pack` MCP tool) assembles the Verified PR evidence pack: guard verdict, CI triage, review triage, and Claim Protocol status of the linked issues, in one markdown document where every claim cites its source — the check run, the review anchor, the claim comment URL. The test-suite delta is included only when you hand it a `greenlight verify --json` report; the pack never runs suites itself and says so when the report is missing. And `greenlight passport <github-login>` renders the contributor passport: protocol claims from the public Claim Ledger (active, queued, the completed-vs-expired honor record, the over-cap flag) plus merged PRs from GitHub — the trust layer the Claim Protocol was always heading toward.
 
 ### v0.3.5: CI triage (solve-first)
 
