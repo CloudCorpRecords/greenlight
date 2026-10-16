@@ -82,3 +82,4 @@ returning the same data including the markdown.
 - The author-history signal is one search call; when it fails, the check
   is skipped silently rather than guessed.
   This repo dogfoods the guard on its own pull requests (installed 2026-10-16).
+  Second commit: verifying the guard comment updates in place.
