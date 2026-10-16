@@ -137,3 +137,27 @@ describe("partial claim detection (reticle#691)", () => {
     assert.equal(claims[0].phrase, "taking-it");
   });
 });
+
+describe("attempt-command claims (field case 2026-10-15)", () => {
+  it("treats a /attempt command as a strong claim (tscircuit/tscircuit#5563)", () => {
+    const claims = detectClaims("DurandA", [comment("TassioSales", "/attempt #5563")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].author, "TassioSales");
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].phrase, "attempt-command");
+    assert.equal(claims[0].scope, "full");
+  });
+
+  it("treats /claim as a strong claim too", () => {
+    const claims = detectClaims("reporter", [comment("dev", "/claim #123")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+  });
+
+  it("does not treat a quoted /attempt as a claim", () => {
+    // The pattern is anchored to the start of the comment; a casual
+    // mention mid-sentence must not count.
+    const claims = detectClaims("reporter", [comment("dev", "run /attempt to try it")], NOW);
+    assert.equal(claims.length, 0);
+  });
+});

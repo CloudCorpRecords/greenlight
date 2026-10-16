@@ -175,3 +175,156 @@ describe("fetchHouseRules", () => {
     assert.deepEqual(rules, []);
   });
 });
+
+describe("extractDuplicateTargets", () => {
+  it("finds duplicate targets in comment bodies", async () => {
+    const { extractDuplicateTargets } = await import("../src/github.js");
+    const targets = extractDuplicateTargets([
+      comment("bot", "This issue has been marked as a duplicate of #40803. Please use #40803 for tracking."),
+      comment("human", "Looks like a duplicate of #555, same stack trace."),
+    ]);
+    assert.deepEqual(targets, [40803, 555]);
+  });
+
+  it("returns nothing when no duplicate language is present", async () => {
+    const { extractDuplicateTargets } = await import("../src/github.js");
+    assert.deepEqual(extractDuplicateTargets([comment("dev", "I would like to work on this.")]), []);
+  });
+
+  it("finds full-URL duplicate references (n8n #41215 comment shape)", async () => {
+    const { extractDuplicateTargets } = await import("../src/github.js");
+    const targets = extractDuplicateTargets([
+      comment(
+        "arsalanyavari",
+        "duplicate of https://github.com/n8n-io/n8n/issues/40803 it seems this problem has been resolved in the latest version of code"
+      ),
+    ]);
+    assert.deepEqual(targets, [40803]);
+  });
+});
+
+describe("fetchDuplicateTargets", () => {
+  it("fetches each target's live state", async () => {
+    const { fetchDuplicateTargets } = await import("../src/github.js");
+    const out = await fetchDuplicateTargets(
+      "n8n-io",
+      "n8n",
+      41215,
+      [comment("bot", "marked as a duplicate of #40803")],
+      {
+        timelineEvents: [],
+        fetchIssue: async (_o: string, _r: string, n: number) => {
+          assert.equal(n, 40803);
+          return { state: "closed", stateReason: "completed" };
+        },
+      }
+    );
+    assert.equal(out.length, 1);
+    assert.equal(out[0].number, 40803);
+    assert.equal(out[0].state, "closed");
+    assert.equal(out[0].stateReason, "completed");
+    assert.equal(out[0].url, "https://github.com/n8n-io/n8n/issues/40803");
+  });
+
+  it("reads marked_as_duplicate timeline events", async () => {
+    const { fetchDuplicateTargets } = await import("../src/github.js");
+    const out = await fetchDuplicateTargets(
+      "acme",
+      "widget",
+      100,
+      [],
+      {
+        timelineEvents: [
+          { event: "marked_as_duplicate", source: { issue: { number: 42 } } },
+        ],
+        fetchIssue: async () => ({ state: "open" }),
+      }
+    );
+    assert.equal(out.length, 1);
+    assert.equal(out[0].number, 42);
+    assert.equal(out[0].state, "open");
+  });
+
+  it("ignores the issue's own number and dedupes", async () => {
+    const { fetchDuplicateTargets } = await import("../src/github.js");
+    const out = await fetchDuplicateTargets(
+      "acme",
+      "widget",
+      100,
+      [comment("bot", "duplicate of #100 and duplicate of #7, duplicate of #7")],
+      {
+        timelineEvents: [],
+        fetchIssue: async () => ({ state: "open" }),
+      }
+    );
+    assert.deepEqual(out.map((d) => d.number), [7]);
+  });
+});
+
+describe("extractAttemptLinkedPRs", () => {
+  it("extracts cross-repo PR links from fix-announcement comments (#5563)", async () => {
+    const { extractAttemptLinkedPRs } = await import("../src/github.js");
+    const out = extractAttemptLinkedPRs(
+      [
+        comment("TassioSales", "/attempt #5563"),
+        comment(
+          "TassioSales",
+          "Submitted fix for bug #1 (routingDisabled ignored on re-render) in https://github.com/tscircuit/core/pull/4575 with regression test coverage."
+        ),
+        comment(
+          "TassioSales",
+          "I have implemented the fix for bug #4 in PR https://github.com/tscircuit/checks/pull/414 with regression tests."
+        ),
+      ],
+      "DurandA"
+    );
+    assert.equal(out.length, 2);
+    assert.deepEqual([out[0].owner, out[0].repo, out[0].number], ["tscircuit", "core", 4575]);
+    assert.deepEqual([out[1].owner, out[1].repo, out[1].number], ["tscircuit", "checks", 414]);
+    assert.equal(out[0].author, "TassioSales");
+  });
+
+  it("skips bots, the issue author, and bare links without announcement language", async () => {
+    const { extractAttemptLinkedPRs } = await import("../src/github.js");
+    const out = extractAttemptLinkedPRs(
+      [
+        comment("somebot[bot]", "Submitted fix in https://github.com/acme/widget/pull/1"),
+        comment("reporter", "Submitted fix in https://github.com/acme/widget/pull/2"),
+        comment("dev", "see prior art in https://github.com/acme/widget/pull/3"),
+      ],
+      "reporter"
+    );
+    assert.deepEqual(out, []);
+  });
+});
+
+describe("listWorkflows and scanWorkflowGates", () => {
+  it("flags a close-external-prs workflow from listing plus content", async () => {
+    const { scanWorkflowGates } = await import("../src/github.js");
+    const gates = await scanWorkflowGates("acme", "widget", {
+      listFiles: async () => ["close-external-prs.yml", "ci.yml", "README.md"],
+      fetchRaw: async (name: string) =>
+        name === "close-external-prs.yml" ? "name: Close external PRs\non: pull_request_target\n" : undefined,
+    });
+    assert.equal(gates.length, 1);
+    assert.equal(gates[0].kind, "external_prs_closed");
+    assert.ok(gates[0].evidence.includes("close-external-prs.yml"));
+  });
+
+  it("returns no gates when the workflows dir is absent", async () => {
+    const { scanWorkflowGates } = await import("../src/github.js");
+    const gates = await scanWorkflowGates("acme", "widget", {
+      listFiles: async () => undefined,
+    });
+    assert.deepEqual(gates, []);
+  });
+
+  it("listWorkflows only returns yaml files", async () => {
+    const { listWorkflows } = await import("../src/github.js");
+    const files = await listWorkflows("acme", "widget", {
+      listFiles: async () => ["ci.yml", "helper.js", "deploy.yaml"],
+      fetchRaw: async () => undefined,
+    });
+    assert.deepEqual(files.map((f) => f.name), ["ci.yml", "deploy.yaml"]);
+  });
+});

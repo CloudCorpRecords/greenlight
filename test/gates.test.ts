@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseGates, parseGatesFromSources, parseGatefileJson, hardGates, gateLabel } from "../src/gates.js";
+import { parseGates, parseGatesFromSources, parseGatefileJson, hardGates, gateLabel, detectWorkflowGates } from "../src/gates.js";
 
 describe("parseGates", () => {
   it("detects assignment requirement (FastMCP style)", () => {
@@ -94,9 +94,9 @@ describe("parseGates", () => {
     assert.equal(gates.find((x) => x.kind === "collaborators_only")!.detected, false);
   });
 
-  it("returns all gates with false when nothing matches", () => {
+  it("returns all gates (now nine) with false when nothing matches", () => {
     const gates = parseGates("Thanks for contributing! Just open a PR.");
-    assert.equal(gates.length, 7);
+    assert.equal(gates.length, 9);
     assert.ok(gates.every((g) => !g.detected));
   });
 
@@ -171,9 +171,72 @@ describe("parseGatesFromSources", () => {
     assert.equal(gates.find((x) => x.kind === "vouch_required")!.source, "CLAUDE.md");
   });
 
-  it("returns all seven kinds even when nothing matches", () => {
+  it("returns all nine kinds even when nothing matches", () => {
     const gates = parseGatesFromSources([{ file: "AGENTS.md", text: "Run the linter." }]);
-    assert.equal(gates.length, 7);
+    assert.equal(gates.length, 9);
     assert.ok(gates.every((g) => g.detected === false));
+  });
+});
+
+describe("paused and auto-closed outside PRs (field case 2026-10-15)", () => {
+  const ACTIVEPIECES_TEXT =
+    "We've temporarily paused unsolicited pull requests from outside the core team. " +
+    "We are not accepting external contributions at this time due to the volume of AI-generated PRs.";
+
+  it("detects unsolicited_prs_paused from activepieces-style contributing text", () => {
+    const gates = parseGates(ACTIVEPIECES_TEXT);
+    const g = gates.find((x) => x.kind === "unsolicited_prs_paused")!;
+    assert.equal(g.detected, true);
+    assert.ok(g.evidence.includes("paused"), `evidence: ${g.evidence}`);
+  });
+
+  it("paused unsolicited PRs are a hard gate with a label", () => {
+    const gates = parseGates(ACTIVEPIECES_TEXT);
+    assert.ok(hardGates(gates).some((g) => g.kind === "unsolicited_prs_paused"));
+    assert.equal(gateLabel("unsolicited_prs_paused"), "unsolicited PRs paused");
+  });
+
+  it("detects external_prs_closed from prose about automatic closing", () => {
+    const gates = parseGates(
+      "Our automation automatically closes external pull requests that were not invited by a maintainer."
+    );
+    const g = gates.find((x) => x.kind === "external_prs_closed")!;
+    assert.equal(g.detected, true);
+    assert.equal(gateLabel("external_prs_closed"), "external PRs closed by automation");
+    assert.ok(hardGates(gates).some((x) => x.kind === "external_prs_closed"));
+  });
+
+  it("detectWorkflowGates flags a suspiciously named workflow file", () => {
+    const gates = detectWorkflowGates([
+      { name: "close-external-prs.yml", content: "name: Close external PRs\non: pull_request_target\n" },
+      { name: "ci.yml", content: "name: CI\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n" },
+    ]);
+    assert.equal(gates.length, 1);
+    assert.equal(gates[0].kind, "external_prs_closed");
+    assert.equal(gates[0].detected, true);
+    assert.ok(gates[0].evidence.includes("close-external-prs.yml"));
+    assert.equal(gates[0].source, ".github/workflows/close-external-prs.yml");
+  });
+
+  it("detectWorkflowGates flags by content when the name is innocent", () => {
+    const gates = detectWorkflowGates([
+      {
+        name: "cleanup.yml",
+        content:
+          "name: cleanup\non: pull_request_target\njobs:\n  auto-close:\n    runs-on: ubuntu-latest\n" +
+          "    steps:\n      - run: gh pr close ${{ github.event.number }} # auto-close PRs from outside contributors\n",
+      },
+    ]);
+    assert.equal(gates.length, 1);
+    assert.equal(gates[0].kind, "external_prs_closed");
+    assert.ok(gates[0].evidence.includes("cleanup.yml"));
+  });
+
+  it("detectWorkflowGates stays quiet on ordinary workflows", () => {
+    const gates = detectWorkflowGates([
+      { name: "ci.yml", content: "name: CI\non: [push, pull_request]\njobs:\n  test:\n    runs-on: ubuntu-latest\n" },
+      { name: "publish.yml" },
+    ]);
+    assert.deepEqual(gates, []);
   });
 });

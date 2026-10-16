@@ -1,5 +1,5 @@
 /**
- * Field validation corpus: ten real cases from the contribution campaign,
+ * Field validation corpus: thirteen real cases from the contribution campaign,
  * frozen as offline fixtures. This is the product's validation story:
  * every verdict rule is pinned to a case that actually happened:
  *
@@ -13,6 +13,9 @@
  *   08 trigger.dev-style vouch required                   -> GATED
  *   09 clean small repo  no gates/claims/PRs              -> GO
  *   10 python-sdk #3287  60-day-old claim, no PR          -> RISKY (stale_claim, not TAKEN)
+ *   11 tscircuit #5563   fix PRs linked in comments       -> RISKY (attempt-linked-pr)
+ *   12 n8n #41215        duplicate of completed issue    -> RISKY (duplicate-of-closed)
+ *   13 activepieces       paused unsolicited PRs + workflow -> GATED
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";

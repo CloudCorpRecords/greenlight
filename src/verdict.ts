@@ -10,6 +10,13 @@
  *     timeline cross-reference only) does not take it: it only adds the
  *     "weak-pr-mention" flag (issue #1, seen on shadcn-labs/pdfcn#61 and
  *     #71, where PR #91 closes #70 but lists sibling issues in its body).
+ *  3b. Marked duplicate of an issue closed as completed -> RISKY, flag
+ *     "duplicate-of-closed". The work already shipped: n8n-io/n8n#41215
+ *     was a duplicate of #40803 (closed as completed) and a full build
+ *     was nearly wasted on it.
+ *  3c. Marked duplicate of a still-open (or not-planned) issue -> warning
+ *     only, never a verdict change. The target's URL and live state are
+ *     quoted with the "duplicate-of-open" flag.
  *  4. Two or more strong whole-issue claimants -> TAKEN (claim race). Seen on
  *     langchain-ai/langchain#41185 (3 claimants while still "unassigned").
  *     Scoped (partial) claims do not count toward a race: part of the work
@@ -26,9 +33,13 @@
  *     claimed 2026-08-11, never opened a PR). A closing PR, open or not,
  *     counts as "a PR was opened" here; a mere mention does not. Stale
  *     partial claims get the same treatment, scoped.
- *  7. Any hard gate (assignment / vouch / collaborators_only) with no
- *     assignee -> GATED. The code might be welcome, but the ritual blocks
- *     you: PrefectHQ/fastmcp#5718 (assignment), triggerdotdev/trigger.dev#5016 (vouch).
+ *  7. Any hard gate (assignment / vouch / collaborators_only /
+ *     unsolicited_prs_paused / external_prs_closed) with no assignee ->
+ *     GATED. The code might be welcome, but the ritual blocks you:
+ *     PrefectHQ/fastmcp#5718 (assignment), triggerdotdev/trigger.dev#5016
+ *     (vouch), activepieces/activepieces (paused unsolicited PRs plus a
+ *     "Close external PRs" workflow that auto-closed two finished PRs
+ *     within about a minute).
  *  8. No activity for 180+ days -> STALE. The issue is probably abandoned,
  *     the repro may not even hold on current code.
  *  9. Soft claim-first gate (comment before starting, shadcn-labs/pdfcn
@@ -41,6 +52,12 @@
  *     "comment-mentioned-pr" ("PR #NNN referenced in comments may already
  *     cover part of this issue"). A merged one is only an informational
  *     note; neither can produce TAKEN. Seen on reticlehq/reticle#691.
+ *     Fix-announcement comments ("/attempt #N" commands or "Submitted fix
+ *     for ... in <PR url>" narratives, often in sibling repos) add
+ *     "attempt-linked-pr" evidence with the PR URL quoted before rule 4,
+ *     so claim verdicts carry it, and cap an otherwise-GO verdict at RISKY
+ *     at the end, even when the PR never names the issue. Seen on
+ *     tscircuit/tscircuit#5563.
  *  12. Partially-addressed: merged PRs that reference the issue number
  *     (comment-mentioned or linked), or maintainer comments signaling part
  *     of the work already shipped ("Half addressed", "leaving this open
@@ -85,6 +102,18 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
       }
     }
   }
+  // Workflow gates (auto-close automation) merge the same way: a detected
+  // .github/workflows signal fills a kind the prose pass did not catch.
+  if (snapshot.workflowGates) {
+    for (const wg of snapshot.workflowGates) {
+      const m = gates.find((x) => x.kind === wg.kind);
+      if (m && !m.detected) {
+        m.detected = true;
+        m.evidence = wg.evidence;
+        m.source = wg.source;
+      }
+    }
+  }
   const reasons: string[] = [];
   const flags: string[] = [];
 
@@ -111,6 +140,20 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     return { verdict: "TAKEN", reasons, claims, gates, flags };
   }
 
+  // Rule 3b: duplicate-of a completed issue. If this issue is marked a
+  // duplicate of another issue that is closed as completed, the work
+  // already shipped and building here is wasted. n8n-io/n8n#41215 was a
+  // duplicate of #40803 (closed as completed): a full build was nearly
+  // wasted on it because the comment sat unread below the bot ticket.
+  const dupClosedCompleted = (snapshot.duplicateOf ?? []).find(
+    (d) => d.state === "closed" && d.stateReason === "completed"
+  );
+  if (dupClosedCompleted) {
+    reasons.push(`marked duplicate of #${dupClosedCompleted.number}, which is closed as completed`);
+    flags.push("duplicate-of-closed");
+    return { verdict: "RISKY", reasons, claims, gates, flags };
+  }
+
   // An open PR that only mentions the issue is a weak signal, not a takeover.
   const openMentionPRs = snapshot.linkedPRs.filter(
     (pr) => pr.state === "open" && !isClosingPR(pr)
@@ -122,6 +165,23 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   // of the work open, so only whole-issue claims can form a claim race.
   const fullStrong = strong.filter((c) => c.scope !== "partial");
   const partialStrong = strong.filter((c) => c.scope === "partial");
+
+  // Attempt-linked PRs (fix-announcement comments: "/attempt #N" commands
+  // or "Submitted fix for ... in <PR url>" narratives, often in sibling
+  // repos) are race signals with the URL quoted, even when the PR never
+  // names the issue. The evidence is added here so every later return
+  // (claim race, fresh/stale claim) carries it; the GO downgrade happens
+  // at the end, after rules 11-12, so it only fires when nothing else did.
+  // Seen on tscircuit/tscircuit#5563.
+  const attemptLinkedOpen = (snapshot.commentMentionedPRs ?? []).filter(
+    (p) => p.state === "open" && p.attemptLinked
+  );
+  if (attemptLinkedOpen.length > 0) {
+    flags.push("attempt-linked-pr");
+    const urls = attemptLinkedOpen.slice(0, 3).map((p) => p.url);
+    const more = attemptLinkedOpen.length > 3 ? ` and ${attemptLinkedOpen.length - 3} more` : "";
+    reasons.push(`fix PRs linked from fix-announcement comments may already cover this work: ${urls.join(", ")}${more}`);
+  }
 
   // Rule 4: claim race.
   if (fullStrong.length >= 2) {
@@ -276,6 +336,25 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     if (consumedByRule12.has(p.number)) continue;
     reasons.push(`PR #${p.number} (merged) referenced in comments; issue may be partially addressed`);
   }
+
+  // Rule 3c: duplicate-of warning. A still-open duplicate target (or one
+  // closed as not_planned) is a heads-up to check there before building,
+  // never a verdict change: the target's issue number and live state are
+  // quoted so the contributor can go look.
+  const dupOther = (snapshot.duplicateOf ?? []).find(
+    (d) => !(d.state === "closed" && d.stateReason === "completed")
+  );
+  if (dupOther) {
+    const status =
+      dupOther.state === "closed" ? `closed as ${dupOther.stateReason ?? "unknown"}` : "still open";
+    flags.push("duplicate-of-open");
+    reasons.push(`marked duplicate of #${dupOther.number} (${dupOther.url}), which is ${status}; check there before building`);
+  }
+
+  // Attempt-linked downgrade: the evidence was added before rule 4 so claim
+  // returns carry it; cap an otherwise-GO verdict at RISKY here, after
+  // every other rule has had its say.
+  if (attemptLinkedOpen.length > 0 && verdict === "GO") verdict = "RISKY";
 
   return { verdict, reasons, claims, gates, flags };
 }
