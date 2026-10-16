@@ -8,10 +8,12 @@ worth your review time.
 ## What it checks
 
 1. **Competing fix.** The PR's body and branch are read for the issue it
-   claims (via "fixes #N" or an issue number in the branch name). The
-   issue's timeline is then walked for *other open PRs already fixing it*,
-   reported by number and author. This is the check that would have caught
-   E2B #1986's same-day PR #1987 and composio #4904's two competing PRs.
+   claims (via "fixes #N", an issue number in the branch name, or a
+   cross-repo "Fixes owner/repo#N" / issue URL, which is checked in the
+   referenced repo). The issue's timeline is then walked for *other open
+   PRs already fixing it*, reported by number and author. This is the check
+   that would have caught E2B #1986's same-day PR #1987 and composio
+   #4904's two competing PRs.
 2. **Claimed by someone else.** The linked issue's comments are scanned
    with Greenlight's claim detection. A claim from someone *other than the
    PR author* that predates the PR is reported with the claimant and the
