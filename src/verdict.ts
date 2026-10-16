@@ -17,6 +17,16 @@
  *  3c. Marked duplicate of a still-open (or not-planned) issue -> warning
  *     only, never a verdict change. The target's URL and live state are
  *     quoted with the "duplicate-of-open" flag.
+ *  3d. An OPEN PR GitHub cross-referenced in the issue's timeline ->
+ *     TAKEN, flag "cross-referenced-pr", with the PR URL and title
+ *     quoted. The timeline records PRs already in flight that comments
+ *     never link (e2b-dev/E2B#1986/#1984/#1981, ComposioHQ/composio#4904,
+ *     convex/convex-js#197, ghostfolio/ghostfolio#4605's #4958).
+ *  3e. A MERGED timeline cross-reference not consumed by any other rule
+ *     caps an otherwise-GO verdict at RISKY, flag
+ *     "cross-referenced-pr-merged", with a "verify what shipped" note.
+ *     Merged usually means fixed, but not always (#7522 fixed only the
+ *     unrestricted variant of #4605), so never TAKEN.
  *  4. Two or more strong whole-issue claimants -> TAKEN (claim race). Seen on
  *     langchain-ai/langchain#41185 (3 claimants while still "unassigned").
  *     Scoped (partial) claims do not count toward a race: part of the work
@@ -58,6 +68,12 @@
  *     so claim verdicts carry it, and cap an otherwise-GO verdict at RISKY
  *     at the end, even when the PR never names the issue. Seen on
  *     tscircuit/tscircuit#5563.
+ *  W. Warning-only signals, never a verdict change: weak claims (soft
+ *     claims quoted with their age in days, e.g. a 2-month-old "taking a
+ *     look"), bounty liveness ("bounty-platform-dead" when the named
+ *     platform is dead like Algora, "bounty-unverified" when no platform
+ *     or payer is identifiable), and "possibly-server-side" when a quoted
+ *     error string from the body has zero hits in the repo.
  *  12. Partially-addressed: merged PRs that reference the issue number
  *     (comment-mentioned or linked), or maintainer comments signaling part
  *     of the work already shipped ("Half addressed", "leaving this open
@@ -72,6 +88,7 @@ import type { IssueSnapshot, VerdictResult, Verdict } from "./types.js";
 import { detectClaims, strongClaimants } from "./claims.js";
 import { parseGates, parseGatesFromSources, hardGates, gateLabel } from "./gates.js";
 import { isClosingPR } from "./linkstrength.js";
+import { detectBounty } from "./bounty.js";
 import { extractPRReferences } from "./github.js";
 
 const FRESH_CLAIM_DAYS = 45;
@@ -131,12 +148,54 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     return { verdict: "TAKEN", reasons, claims, gates, flags };
   }
 
+  // Timeline cross-references (computed before rule 3 so a closing PR
+  // verdict can still quote the rest of the in-flight field).
+  const timelineXrefs = snapshot.linkedPRs.filter((pr) => pr.via === "timeline");
+  const openTimelineXrefs = timelineXrefs.filter((pr) => pr.state === "open");
+  const mergedTimelineXrefs = timelineXrefs.filter((pr) => pr.state === "merged");
+  const xrefLabel = (pr: { number: number; title: string; url: string }): string =>
+    `#${pr.number} "${pr.title}" (${pr.url})`;
+
   // Rule 3: open linked PR that closes the issue.
   const openClosingPR = snapshot.linkedPRs.find(
     (pr) => pr.state === "open" && isClosingPR(pr)
   );
   if (openClosingPR) {
     reasons.push(`open PR #${openClosingPR.number} closes this issue`);
+    const others = openTimelineXrefs.filter((pr) => pr.number !== openClosingPR.number);
+    if (others.length > 0) {
+      flags.push("cross-referenced-pr");
+      reasons.push(
+        `also cross-referenced in the issue timeline and in flight: ${others.map(xrefLabel).join("; ")}`
+      );
+    }
+    return { verdict: "TAKEN", reasons, claims, gates, flags };
+  }
+
+  // Rule 3d: timeline cross-reference race. GitHub records a
+  // cross-referenced timeline event when a PR's body or a commit message
+  // references the issue: the PR is in flight against it even when its
+  // body never says "closes #N" and no comment ever links it. Comment-only
+  // race checks missed five of twelve claims in one evening this way
+  // (e2b-dev/E2B#1986/#1984/#1981, ComposioHQ/composio#4904,
+  // convex/convex-js#197, ghostfolio/ghostfolio#4605's #4958). Any OPEN
+  // timeline cross-reference takes the issue; closed-unmerged ones are
+  // (timelineXrefs computed above, before rule 3; open ones are quoted
+  // here even when a closing PR already took the issue, and merged ones
+  // get flag 3e below.)
+  if (mergedTimelineXrefs.length > 0) {
+    flags.push("cross-referenced-pr-merged");
+  }
+  if (openTimelineXrefs.length > 0) {
+    flags.push("cross-referenced-pr");
+    reasons.push(
+      `open PR(s) cross-referenced in the issue timeline: ${openTimelineXrefs.map(xrefLabel).join("; ")}`
+    );
+    if (mergedTimelineXrefs.length > 0) {
+      reasons.push(
+        `also merged in the timeline: ${mergedTimelineXrefs.map(xrefLabel).join("; ")}`
+      );
+    }
     return { verdict: "TAKEN", reasons, claims, gates, flags };
   }
 
@@ -249,6 +308,40 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   const claimFirst = gates.some((g) => g.kind === "claim_first" && g.detected);
   const claimFirstNote = "repo asks contributors to comment before starting (claim first)";
 
+  // Warning-only signals: flags with reasons that never change the
+  // verdict. They ride along on whatever verdict the rules above and
+  // below produce.
+
+  // Soft claims carry their comment date so a months-old soft claim weighs
+  // differently from yesterday's: actualbudget/actual#6643's "I'm going
+  // to take a look at this one" sat two months with nothing landing.
+  const softClaims = claims.filter((c) => c.strength === "soft");
+  if (softClaims.length > 0) {
+    const c = softClaims[0];
+    flags.push("weak-claim");
+    reasons.push(`soft claim by ${c.author} ${c.ageDays} day(s) ago ("${c.phrase}"); no verdict change`);
+  }
+
+  // Bounty liveness: a bounty is context, never landability evidence. A
+  // dead platform (algora.io 404s, API empty since 2025) behind a "$250
+  // bounty" label means there is no money to chase (onyx#2281 style).
+  const bounty = detectBounty({ labels: snapshot.labels, title: snapshot.title, body: snapshot.body ?? "" });
+  if (bounty && bounty.flag) {
+    flags.push(bounty.flag);
+    reasons.push(
+      bounty.flag === "bounty-platform-dead"
+        ? `bounty names a dead platform: ${bounty.evidence}`
+        : `bounty offered but unverified: ${bounty.evidence}`
+    );
+  }
+
+  // Server-side-only: a quoted error string from the body with zero hits
+  // in the repo means the check may live outside it entirely.
+  if (snapshot.serverSide) {
+    flags.push(snapshot.serverSide.flag);
+    reasons.push(snapshot.serverSide.evidence);
+  }
+
   // Rule 10: nothing blocking, unless an open PR merely mentions the issue.
   let verdict: Verdict = "GO";
   if (openMentionPRs.length > 0) {
@@ -335,6 +428,22 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   for (const p of mergedMentioned) {
     if (consumedByRule12.has(p.number)) continue;
     reasons.push(`PR #${p.number} (merged) referenced in comments; issue may be partially addressed`);
+  }
+
+  // Rule 3e: merged timeline cross-references that no other rule consumed.
+  // A merged PR GitHub recorded against this issue usually means the work
+  // already shipped, but not always: ghostfolio/ghostfolio#4605's merged
+  // #7522 fixed only the unrestricted impersonation case while the
+  // restricted-view case stayed open. So this caps an otherwise-GO verdict
+  // at RISKY; it never produces TAKEN.
+  if (mergedTimelineXrefs.length > 0 && verdict === "GO") {
+    const unconsumed = mergedTimelineXrefs.filter((p) => !consumedByRule12.has(p.number));
+    if (unconsumed.length > 0) {
+      reasons.push(
+        `timeline cross-referenced PR(s) already merged: ${unconsumed.map(xrefLabel).join("; ")}; the issue may already be fixed, verify what shipped before building`
+      );
+      verdict = "RISKY";
+    }
   }
 
   // Rule 3c: duplicate-of warning. A still-open duplicate target (or one

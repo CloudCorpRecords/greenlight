@@ -17,6 +17,7 @@ import {
 import { scoreIssue } from "./verdict.js";
 import { parseGates } from "./gates.js";
 import { scoreFriction } from "./friction.js";
+import { fetchMergeVelocity } from "./merge-velocity.js";
 import {
   createRestClient,
   claimIssue,
@@ -25,7 +26,7 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.3" });
+const server = new McpServer({ name: "greenlight", version: "0.3.4" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -105,6 +106,12 @@ server.tool(
         openGoodFirstIssueCount: starterCount,
         note: "live",
       });
+      // Merge velocity: signal only, best-effort.
+      try {
+        report.mergeVelocity = await fetchMergeVelocity(m[1], m[2]);
+      } catch {
+        report.mergeVelocity = null;
+      }
       return text(report);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
