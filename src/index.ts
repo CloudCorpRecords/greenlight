@@ -29,7 +29,7 @@ import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.9" });
+const server = new McpServer({ name: "greenlight", version: "0.3.10" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
