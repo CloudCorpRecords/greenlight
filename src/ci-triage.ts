@@ -381,8 +381,30 @@ async function defaultFetchHeadChecks(owner: string, repo: string, headSha: stri
   return out;
 }
 
-/** How many recent base-branch commits to inspect for each check's history. */
-const BASE_COMMIT_WINDOW = 5;
+/**
+ * How many recent base-branch commits to inspect for each check's history.
+ * Widened from 5 to 12: a short window misread long-running flakes (like
+ * the reticle windows install-gate) as yours instead of pre-existing.
+ */
+export const BASE_COMMIT_WINDOW = 12;
+
+/**
+ * Legacy commit statuses (the combined status endpoint) as fallback
+ * evidence when a commit has no check runs. Older CI (Travis, Jenkins,
+ * AppVeyor) reports here instead of check runs; without this fallback the
+ * triage sees "no base history" and mislabels legacy-backed failures as
+ * indeterminate. States map to the same conclusion vocabulary: success
+ * stays success, failure and error both read as failure, pending reads as
+ * pending (harmless: it is not in the FAILING set).
+ */
+export function mapStatusToRecord(status: { context?: unknown; state?: unknown; updated_at?: unknown }): BaseCheckRecord {
+  const state = String(status.state ?? "");
+  return {
+    name: String(status.context ?? "unnamed status"),
+    conclusion: state === "failure" || state === "error" ? "failure" : state === "success" ? "success" : "pending",
+    completedAt: typeof status.updated_at === "string" ? status.updated_at : "",
+  };
+}
 
 async function defaultFetchBaseRecords(owner: string, repo: string, baseRef: string): Promise<BaseCheckRecord[]> {
   const records: BaseCheckRecord[] = [];
@@ -401,13 +423,30 @@ async function defaultFetchBaseRecords(owner: string, repo: string, baseRef: str
       const data = (await apiGet(`/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=100`)) as {
         check_runs?: CheckRunApiItem[];
       };
-      for (const c of data.check_runs ?? []) {
-        if (c.status !== "completed" || !c.conclusion) continue;
-        records.push({
-          name: String(c.name ?? "unnamed check"),
-          conclusion: String(c.conclusion),
-          completedAt: typeof c.completed_at === "string" ? c.completed_at : "",
-        });
+      const runs = data.check_runs ?? [];
+      if (runs.length > 0) {
+        for (const c of runs) {
+          if (c.status !== "completed" || !c.conclusion) continue;
+          records.push({
+            name: String(c.name ?? "unnamed check"),
+            conclusion: String(c.conclusion),
+            completedAt: typeof c.completed_at === "string" ? c.completed_at : "",
+          });
+        }
+        continue;
+      }
+      // No check runs on this commit: fall back to the legacy combined
+      // status endpoint (Travis/Jenkins/AppVeyor report there). One extra
+      // call per such commit, only when check runs are absent.
+      try {
+        const statusData = (await apiGet(`/repos/${owner}/${repo}/commits/${sha}/status`)) as {
+          statuses?: Array<{ context?: unknown; state?: unknown; updated_at?: unknown }>;
+        };
+        for (const s of statusData.statuses ?? []) {
+          records.push(mapStatusToRecord(s));
+        }
+      } catch {
+        // A commit with neither signal contributes nothing; keep going.
       }
     } catch {
       // One bad commit in the window is not the whole story; keep going.

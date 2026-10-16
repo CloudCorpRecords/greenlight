@@ -45,6 +45,7 @@ import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
+import { digestRepo, DEFAULT_DIGEST_LIMIT } from "./digest.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -413,6 +414,22 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
   if (result.hasFindings) process.exitCode = 3;
 }
 
+async function cmdDigest(repoRef: string, args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const limitRaw = flagValue(args, "--limit");
+  const limit = limitRaw ? Math.max(1, Math.min(100, Number(limitRaw) || DEFAULT_DIGEST_LIMIT)) : DEFAULT_DIGEST_LIMIT;
+  const { owner, repo } = parseRepoRef(repoRef);
+  const result = await digestRepo(owner, repo, limit);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(result.markdown);
+  }
+  // Exit code 3 when races exist mirrors the guard: a CI job can run the
+  // digest nightly and alert only when work is being duplicated.
+  if (args.includes("--fail-on-race") && result.hasRaces) process.exitCode = 3;
+}
+
 function usage(): void {
   console.log("greenlight: pre-flight checks for open-source contributions");
   console.log("");
@@ -423,6 +440,7 @@ function usage(): void {
   console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
   console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
   console.log("  greenlight guard <pr-url> [--json] [--quiet]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged)");
+  console.log("  greenlight digest <owner/repo> [--json] [--limit N] [--fail-on-race]   (repo-level: PR races, claimed-by-other, stale claims, assignment conflicts)");
   console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
   console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
   console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
@@ -435,12 +453,12 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit") {
       i++; // skip the value with its flag
       continue;
     }
@@ -461,6 +479,7 @@ async function main(): Promise<void> {
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
     if (command === "guard" && target) return await cmdGuard(target, args);
+    if (command === "digest" && target) return await cmdDigest(target, args);
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);

@@ -47,7 +47,7 @@ import { titleSlug } from "./automate.js";
 import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 
-export const GUARD_VERSION = "0.3.10";
+export const GUARD_VERSION = "0.3.11";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
@@ -184,7 +184,11 @@ export function extractLinkedIssueNumbers(title: string, body: string, branch: s
   // ("fix/61-widget"). classifyLinkStrength's token test rejects near
   // misses like "feat/610-x" for issue 61, so collecting branch numbers
   // is safe: non-closing ones are filtered below.
-  for (const m of branch.matchAll(/\d{1,6}/g)) {
+  // One exception: version numbers in dependabot-style branches
+  // ("dependabot/npm_and_yarn/vitest-5.0.4") must not claim issue #5.
+  // Dotted version sequences are stripped before token collection.
+  const branchNoVersions = branch.replace(/\d+\.\d+(\.\d+)*([-+][\w.]+)?/g, "");
+  for (const m of branchNoVersions.matchAll(/\d{1,6}/g)) {
     const n = Number(m[0]);
     if (n > 0) candidates.add(n);
   }
