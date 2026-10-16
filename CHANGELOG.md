@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 0.3.4 (2026-10-15)
+
+The "never race blind" pack: five of twelve claims in one evening were dead on arrival because the races lived in the issue timeline, not the comments, and two more efforts nearly burned on bounty and backend traps.
+
+- **Timeline cross-reference rule (top rule).** `check` now reads the issue timeline for cross-referenced PRs. An OPEN cross-referenced PR caps the verdict at TAKEN with the `cross-referenced-pr` flag and the PR URL + title quoted, even when the PR body never says "closes #N". A merged one adds `cross-referenced-pr-merged` and caps an otherwise-GO verdict at RISKY with a "verify what shipped" note (never TAKEN; a merged PR can fix only part of an issue). Closed-unmerged cross-refs stay evidence only. This would have stopped all five superseded Wave 3 claims. (Live-verifying this caught and fixed a latent bug: the timeline reader looked at `event.source.html_url`, which the API never fills; the real shape nests it at `event.source.issue.html_url`, so the walk had been silently finding nothing.)
+- **Emoji-proof fix announcements.** The attempt-linked matcher strips leading emoji and non-word characters per line before matching, and now also matches "Opened #NNNN" announcements. The "🤖 Opened #8474 with a focused fix" comment that v0.3.3 missed now registers.
+- **Weak claims carry their age.** Soft claims ("I'm going to take a look at this one") are now a claim signal with the comment date; the verdict shows the claim and its age in days (flag `weak-claim`), warning only, never a verdict change.
+- **Merge velocity signal.** `friction` now reports one more line when computable: the share of recent merged PRs authored by non-collaborators plus the median days to merge (e.g. "external merge share 40%, median merge 2.1d"), computed from a single API call via `author_association`. Signal only, never a verdict input.
+- **Bounty liveness.** When an issue advertises a bounty, Greenlight classifies it: a dead platform (Algora: site 404s, API empty since 2025) gets a `bounty-platform-dead` warning; a bounty with no identifiable platform or payer gets `bounty-unverified`. A bounty never raises a verdict.
+- **Possibly-server-side warning.** When a quoted error string from the issue body has zero hits in the repo, `check` adds the `possibly-server-side` warning. Any API failure degrades to no evidence rather than a guess (this would have flagged ComposioHQ/composio#4852's closed-backend 422 before a build burned on it).
+- 227 tests passing (28 new). Field validation corpus grows to 20 cases.
+
+
 ## 0.3.3 (2026-10-15)
 
 Three detection gaps closed from the same evening's field work, all verified live after the fix.
