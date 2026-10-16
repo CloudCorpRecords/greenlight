@@ -1,6 +1,6 @@
 /**
  * Tests for the maintainer guard: pure detectors over injected data,
- * eight corpus fixtures in campaign style, and the orchestration seam
+ * nine corpus fixtures in campaign style, and the orchestration seam
  * (network injected, never live).
  */
 import { describe, it } from "node:test";
@@ -28,6 +28,8 @@ import {
 } from "../src/guard.js";
 import { detectChangesetConvention } from "../src/prep-detail.js";
 import { titleSlug } from "../src/automate.js";
+import { assembleProtocolState } from "../src/protocol-fetch.js";
+import { defaultClaimsPolicy, CLAIM_MARKER } from "../src/protocol.js";
 
 /** Minimal structural YAML check: indentation-based key paths. */
 function yamlGet(doc: string, path: string[]): unknown {
@@ -289,8 +291,8 @@ describe("readGuardConfig", () => {
 describe("guard corpus fixtures", () => {
   const dir = join(__dirname, "fixtures", "guard-cases");
   const names = readdirSync(dir).filter((f) => f.endsWith(".json"));
-  it("loads the eight guard fixtures", () => {
-    assert.equal(names.length, 8);
+  it("loads the nine guard fixtures", () => {
+    assert.equal(names.length, 9);
   });
   for (const name of names) {
     it(`fixture ${name} has the expected shape`, () => {
@@ -325,6 +327,27 @@ async function runFixture(name: string) {
     fetchPRAuthor: async (_o, _r, n) => authors[String(n)] ?? "unknown",
     fetchConventions: async () => conventions,
     fetchPriorMerged: async () => (typeof fx.priorMerged === "number" ? fx.priorMerged : null),
+    fetchProtocol: async (o, r, n) => {
+      const input = fx.protocolInput;
+      if (!input) return null;
+      // The fixture's protocol input drives the real engine; the network
+      // is never touched, but the claim math is the production code path.
+      return assembleProtocolState(
+        o,
+        r,
+        n,
+        input.comments ?? [],
+        input.reactions ?? [],
+        [],
+        null,
+        {
+          honored: true,
+          policy: input.policy ?? defaultClaimsPolicy(),
+          invalid: false,
+        },
+        "2026-10-15T12:00:00Z"
+      );
+    },
   });
   return { fx, result };
 }
@@ -419,7 +442,68 @@ describe("guard fixture scenarios", () => {
     assert.equal(result.summary, "Greenlight guard: nothing flagged");
     assert.ok(result.markdown.includes("nothing flagged"));
   });
+  it("protocol-foreign-claim flags an active protocol claim held by someone else", async () => {
+    const { result } = await runFixture("protocol-foreign-claim.json");
+    const flag = result.findings.find((f) => f.check === "protocol-claim");
+    assert.ok(flag, JSON.stringify(result.findings.map((f) => f.check)));
+    assert.equal(flag.severity, "flag");
+    assert.ok(flag.title.includes("@rival"), flag.title);
+    const evidence = flag.evidence.join(" ");
+    assert.ok(evidence.includes("2026-10-13"), evidence); // claimed date
+    assert.ok(evidence.includes("2026-10-20"), evidence); // expiry: 7-day lease
+    assert.ok(evidence.includes("join it instead of duplicating"), evidence);
+  });
 
+  it("protocol claim branches: author-held is a note, completed is neither", async () => {
+    const pull: GuardPullDetail = {
+      title: "Fix #300",
+      body: "Fixes #300",
+      author: "me",
+      headRef: "fix/300-x",
+      createdAt: "2026-10-15T12:00:00Z",
+      labels: [],
+      changedFiles: ["src/widget.ts"],
+      commits: [{ sha: "aaa1111111", message: "fix: widget\n\nSigned-off-by: Me <me@example.com>" }],
+      comments: [],
+    };
+    const runWithProtocol = (comments: Array<{ id: number; author: string; body: string; createdAt: string }>, linkedPrInputs: Array<{ number: number; state: "open" | "closed" | "merged"; createdAt: string }> = []) =>
+      guardPr("https://github.com/o/r/pull/70", {
+        fetchPull: async () => pull,
+        fetchIssue: async () => ({ number: 300, title: "Issue 300", author: "reporter", state: "open", comments: [] }),
+        fetchLinkedPRs: async () => [],
+        fetchPRAuthor: async () => "unknown",
+        fetchConventions: async () => ({ dcoRequired: false, claRequired: false }),
+        fetchPriorMerged: async () => 1,
+        fetchProtocol: async (o, r, n) =>
+          assembleProtocolState(
+            o,
+            r,
+            n,
+            comments.map((c) => ({ ...c, url: `https://github.com/o/r/issues/300#issuecomment-${c.id}` })),
+            [],
+            linkedPrInputs,
+            null,
+            { honored: true, policy: defaultClaimsPolicy(), invalid: false },
+            "2026-10-15T12:00:00Z"
+          ),
+      });
+
+    const authorHeld = await runWithProtocol([
+      { id: 1, author: "me", body: `I'll take this.\n\n${CLAIM_MARKER}\n`, createdAt: "2026-10-13T10:00:00Z" },
+    ]);
+    const note = authorHeld.findings.find((f) => f.check === "protocol-claim");
+    assert.ok(note, "author-held claim must produce a protocol-claim finding");
+    assert.equal(note.severity, "note");
+
+    const completed = await runWithProtocol(
+      [{ id: 1, author: "rival", body: `I'll take this.\n\n${CLAIM_MARKER}\n`, createdAt: "2026-10-10T10:00:00Z" }],
+      [{ number: 55, state: "merged", createdAt: "2026-10-11T10:00:00Z" }]
+    );
+    assert.ok(
+      !completed.findings.some((f) => f.check === "protocol-claim"),
+      "completed claims are neither flag nor note"
+    );
+  });
   it("cross-repo fixture flags the competing fix and the foreign claim with cross-repo evidence", async () => {
     // PR opened in otherorg/repo-b with body "Fixes acme/widgets#123";
     // the widgets issue has a foreign strong claim predating the PR and

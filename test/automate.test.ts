@@ -167,6 +167,28 @@ describe("buildClaimComment", () => {
     assert.ok(!body.includes("assign this issue to me"), body);
     assert.ok(!body.includes("won't start work until it's assigned"), body);
   });
+  it("protocol format: marker line and footer after the human text", () => {
+    const snap = makeSnapshot();
+    const body = buildClaimComment(snap, parseGates(snap.contributing), "tester");
+    assert.ok(body.includes("<!-- greenlight-claim v1 -->"), body);
+    assert.ok(body.includes("Claimed under the Greenlight Claim Protocol:"), body);
+    assert.ok(body.includes("releases the moment a PR is linked or I say so."), body);
+    assert.ok(!body.includes("plan:"), body);
+    assert.ok(!body.includes("eta-days:"), body);
+  });
+  it("protocol format: plan and eta lines appear when provided", () => {
+    const snap = makeSnapshot();
+    const body = buildClaimComment(snap, parseGates(snap.contributing), "tester", {
+      plan: "reproduce then fix",
+      etaDays: 5,
+    });
+    const marker = body.indexOf("<!-- greenlight-claim v1 -->");
+    const planIdx = body.indexOf("plan: reproduce then fix");
+    const etaIdx = body.indexOf("eta-days: 5");
+    const footerIdx = body.indexOf("Claimed under the Greenlight Claim Protocol");
+    assert.ok(marker !== -1 && planIdx > marker && etaIdx > marker, body);
+    assert.ok(footerIdx > etaIdx, body);
+  });
 });
 
 describe("gateActions", () => {
