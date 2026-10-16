@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 0.3.7 (2026-10-15)
+
+Solve-first, part 3: `greenlight prep` now answers how to actually sign what the repo demands, what release-note artifact it owes, whether the fix is even in this repo, and what the house rules are at a glance.
+
+- **The exact signing path.** Prep names the method with the real link or phrase: `cla-assistant` (with the CLA Assistant signature phrase), a repo-specific CLA bot (the signing-page URL extracted from the policy text, e.g. the n8n webhook/cla pattern), or `dco` (the `git commit -s` instruction) when no CLA exists. Both shown when a repo demands both.
+- **The release-note artifact.** Detects `.changeset/` (changesets), `.changes/` (one file per change, e.g. `.changes/1147-slug.md`), towncrier fragments (`newsfragments/<issue>.<type>.md`, checked against the `[tool.towncrier]` config), and hand-written CHANGELOG instructions, and names the expected file in the checklist.
+- **Fix-lives-here warnings.** Before the checklist, prep reuses the v0.3.4 server-side signal (quoted error text with zero code-search hits in the repo) and a satellite-repo hint that fires only on tight evidence: a companion repo URL immediately preceded by a code-location phrase like "source lives at" or "enforced by our backend" (the actualbudget label-bot case). Both warn prominently that the fix may not be buildable here.
+- **House-rules summary block.** Claim style (assignment / comment-first / none) with its source file, PR title convention, draft-first norm, and the repo's test command, all with the file they came from. Live-verified on a real CLA repo (marimo-team/marimo#6250: names the repo's CLA page, no false satellite warnings) and a real DCO repo (reticlehq/reticle#1147: DCO, the exact `.changes/1147-*.md` artifact, Conventional Commits titles).
+- All detectors are pure functions on injected text/data with 23 new tests; live probes degrade to "not detected" instead of guessing. CLI `prep --json` and the `prep_issue` MCP tool carry the new fields (additive; the dry-run default and CLI contract are unchanged).
+
+
 ## 0.3.6 (2026-10-15)
 
 Solve-first, part 2: `greenlight review <pr-url>` (and the `review_triage` MCP tool) triages the review feedback on your own PR, so you know which comments actually need you.
