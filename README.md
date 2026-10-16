@@ -6,7 +6,13 @@ Greenlight checks a GitHub issue before you spend hours on it, and tells you in 
 
 ## Use Greenlight inside your AI coding tool
 
-Greenlight ships an agent drop-in pack in [`integrations/`](integrations/README.md): ready-to-copy MCP configs for Claude Code, Cursor, VS Code / Copilot, Windsurf, and Cline, plus instruction snippets that teach your agent the one behavior rule: **check Greenlight before it opens a PR.** Verify with a "list your MCP tools" prompt; the greenlight server carries 8 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage).
+One command sets it up. In your project directory, run:
+
+```bash
+npx @reneturcios/greenlight init --agent claude-code
+```
+
+That installs the MCP server config plus the instruction snippet teaching your agent the one behavior rule: **check Greenlight before it opens a PR.** Supported tools: `claude-code`, `cursor`, `copilot` (VS Code), `windsurf`, `cline`, and `generic` (`init --list` shows them all; `--all` sets up everything; `--dry-run` previews without writing). Restart your tool, verify with a "list your MCP tools" prompt, and the greenlight server should appear with 9 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr). The underlying pack lives in [`integrations/`](integrations/README.md) if you prefer to install by hand.
 
 ## The problem
 
@@ -46,11 +52,35 @@ One engine, four surfaces:
 
 A validation corpus of thirteen real cases from the campaign (`test/fixtures/cases/`, run by `test/cases.test.ts`) pins every verdict rule to something that actually happened: a taken issue, a weak PR mention, claim-first gates, assignment and vouch gates, a scoped claim, a half-shipped issue, a clean GO, a stale claim, fix-announcement PR links in sibling repos, a duplicate of a completed issue, and paused unsolicited PRs with a close-external-PRs workflow.
 
-## Install
+## Install & quickstart
+
+No install needed; `npx` fetches Greenlight on first use (Node 20+ required). Three commands take you from zero to a verdict:
 
 ```bash
-npx @reneturcios/greenlight check <issue-url>
+# 1. Check your setup (Node version, token, GitHub quota, cache).
+npx @reneturcios/greenlight doctor
+
+# greenlight 0.4.1: setup check
+#   [PASS] node: v22.14.0 (>= v20 required)
+#   [WARN] github token: no token set; sharing the 60 req/hr anonymous quota
+#         fix: Create a classic personal access token ...
+#   [PASS] github api: reachable, 43/60 requests remaining
+#   [PASS] cache: /Users/you/.cache/greenlight is writable
+# Result: READY with warnings — greenlight works, but see the WARN lines.
+
+# 2. (Optional) Set up your AI coding tool.
+npx @reneturcios/greenlight init --agent claude-code
+
+# 3. Get a verdict on an issue.
+npx @reneturcios/greenlight check https://github.com/CloudCorpRecords/greenlight/issues/1
+
+# [TAKEN] CloudCorpRecords/greenlight#1
+#   Bug: linked-PR detection false positives from loose text search
+#   https://github.com/CloudCorpRecords/greenlight/issues/1
+#   - issue is closed on CloudCorpRecords/greenlight
 ```
+
+Every command has built-in help: `greenlight help`, `greenlight help <command>`, or `greenlight <command> --help`. All read commands accept `--json` for scripting, and the write commands (`claim`, `prep`, `pr`) default to a dry run.
 
 Or from source:
 
@@ -62,6 +92,14 @@ npm run build
 Set `GITHUB_TOKEN` (a classic personal access token, no scopes needed for public repos) to raise the GitHub API rate limit from 60 to 5000 requests per hour. Greenlight caches API responses under `~/.cache/greenlight`.
 
 Run the MCP server with `npx @reneturcios/greenlight mcp` (stdio), or point your agent at the `greenlight` command with the single argument `mcp`.
+
+### Troubleshooting
+
+* **"GitHub rate limit hit"** — without a token you share 60 requests/hour. Set `GITHUB_TOKEN` (classic PAT, no scopes needed for public repos) for 5000/hr. `greenlight doctor` shows your remaining quota.
+* **"Not a GitHub issue URL"** — `check`/`claim`/`prep` need a full issue URL like `https://github.com/owner/repo/issues/123`; `ci`/`review`/`guard` need a `/pull/123` URL; `scan`/`friction` need `owner/repo`.
+* **Agent doesn't see the greenlight server** — restart the tool after `init`, then ask it to list its MCP tools. If the config already existed, `init` merges into it; re-run with `--dry-run` to see what it would change.
+* **`init` says a file exists with different content** — your file differs from the pack. Re-run with `--force` to overwrite, or merge by hand following [`integrations/`](integrations/README.md).
+* **Stale answers after a repo changed** — delete `~/.cache/greenlight` to drop cached API responses (issues cache for 6h, CONTRIBUTING files for 24h).
 
 ## The toolkit
 

@@ -1,8 +1,8 @@
 # Greenlight rules for Claude Code
 
-Paste this file's contents into your project's CLAUDE.md (or keep the file
-and reference it from CLAUDE.md). It teaches the agent the Greenlight
-workflow through the greenlight MCP tools.
+Drop-in rules for the Greenlight workflow through the greenlight MCP tools.
+Installed by `greenlight init --agent claude-code`, or paste manually into
+your project's CLAUDE.md (or keep the file and reference it from CLAUDE.md).
 
 ## Greenlight: check before you open a PR
 

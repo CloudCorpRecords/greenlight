@@ -6,7 +6,24 @@ and teach the agent the workflow: check the issue first, stop on TAKEN or
 GATED, triage red CI before touching code, triage reviews before fixing,
 and never post anything to GitHub without the human's go-ahead.
 
-## Install per tool
+## Fastest install: `greenlight init`
+
+In your project directory, run one command and skip the manual table:
+
+```bash
+npx @reneturcios/greenlight init --agent claude-code
+```
+
+Init copies the MCP config (merging into an existing one, so your other
+servers are kept) and installs the instruction snippet, then prints the
+restart step. `--agent` takes `claude-code`, `cursor`, `copilot`,
+`windsurf`, `cline`, or `generic` (repeatable and comma-separated, or
+`--all` for everything); `--list` shows the tools, `--dry-run` previews
+without writing, and `--force` overwrites conflicting files. Instruction
+appends are marker-guarded and idempotent, and Windsurf's home-level
+config is merged in place.
+
+## Install per tool (manual fallback)
 
 | Tool | Copy this file | To this destination |
 |---|---|---|

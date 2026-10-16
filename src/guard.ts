@@ -47,7 +47,7 @@ import { titleSlug } from "./automate.js";
 import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 
-export const GUARD_VERSION = "0.3.10";
+export const GUARD_VERSION = "0.4.1";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";

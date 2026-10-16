@@ -29,7 +29,7 @@ import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 
-const server = new McpServer({ name: "greenlight", version: "0.3.10" });
+const server = new McpServer({ name: "greenlight", version: "0.4.1" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -62,7 +62,7 @@ server.tool(
   async ({ repo }) => {
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
-      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
       const { issues, fallbackUsed } = await scanCandidates(m[1], m[2], { limit: 10 });
       const results = [];
       for (const issue of issues) {
@@ -92,7 +92,7 @@ server.tool(
   async ({ repo }) => {
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
-      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      if (!m) return text({ error: `Expected owner/repo like "facebook/react", got: ${repo}` });
       const [contributing, policy, starterCount] = await Promise.all([
         fetchContributing(m[1], m[2]),
         detectRepoPolicy(m[1], m[2]),

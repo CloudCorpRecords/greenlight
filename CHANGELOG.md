@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 0.4.1 (2026-10-16)
+
+The onboarding release: two new commands plus help that teaches the tool, so a human or an agent goes from zero to a first verdict in minutes.
+
+- **`greenlight init --agent <tool>` sets up your AI coding tool in one command.** It installs the MCP server config from the shipped `integrations/` pack (JSON-merging into an existing config so other servers are kept) plus the tool's instruction snippet, for `claude-code`, `cursor`, `copilot`, `windsurf` (home-level config merged in place), `cline`, and `generic`. `--agent` is repeatable and comma-separated, `--all` sets up everything, `--list` shows the tools, `--dry-run` previews without writing, `--no-instructions` installs the config only, and `--json` reports for scripts. Safety rules: instruction appends are marker-guarded and idempotent, nothing is overwritten without `--force`, and running bare `init` in a project names the tools it detects.
+- **`greenlight doctor` checks the setup before anything else.** Node >= 20, token presence (a warning, never a failure), live GitHub quota via one `/rate_limit` call with the reset time quoted when exhausted, and cache-dir writability. Every WARN/FAIL carries its fix; exit code 1 only when something is actually broken.
+- **Help everywhere.** `greenlight help [command]`, `greenlight <command> --help`, `greenlight --version`, per-command usage/flags/examples from one tested module, a quickstart-first overview, typo suggestions ("chek" -> "check"), and specific missing-argument errors instead of a bare usage dump. Parse errors now show the expected shape (`Not a GitHub issue URL: ... (expected https://github.com/<owner>/<repo>/issues/<number>)`).
+- **Docs catch up.** The README's agent section leads with `init` (and now correctly counts 9 MCP tools), Install becomes a quickstart with real captured output, and a Troubleshooting section covers rate limits, URL shapes, the missing-server restart, init conflicts, and the cache. The integrations README documents `init` as the primary path with the copy table as fallback; snippet preambles read correctly whether installed by `init` or pasted by hand.
+- 26 new tests (`init`, `doctor`, `help` suites, all offline); full suite and `tsc` clean. Honest limits: `init` cannot restart your editor for you, and `doctor`'s quota reading is a point sample on a shared hourly budget.
+
+
 ## 0.3.10 (2026-10-16)
 
 Closes the three honest gaps from the v0.3.9 report:

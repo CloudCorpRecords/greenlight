@@ -1,7 +1,9 @@
 # Greenlight instructions for GitHub Copilot / VS Code
 
-Paste this file's contents into your project's
-`.github/copilot-instructions.md` (create the folder if it does not exist).
+Drop-in instructions for the Greenlight workflow through the greenlight MCP
+tools. Installed by `greenlight init --agent copilot`, or paste manually
+into your project's `.github/copilot-instructions.md` (create the folder if
+it does not exist).
 
 ## Greenlight: check before you open a PR
 

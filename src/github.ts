@@ -144,14 +144,14 @@ export interface IssueURL {
 
 export function parseIssueUrl(url: string): IssueURL {
   const m = /github\.com\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)/.exec(url);
-  if (!m) throw new Error(`Not a GitHub issue URL: ${url}`);
+  if (!m) throw new Error(`Not a GitHub issue URL: ${url} (expected https://github.com/<owner>/<repo>/issues/<number>)`);
   return { owner: m[1], repo: m[2], number: Number(m[3]) };
 }
 
 /** Strict parser for PR URLs (ci triage only accepts /pull/ URLs). */
 export function parsePullUrl(url: string): IssueURL {
   const m = /github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(url);
-  if (!m) throw new Error(`Not a GitHub pull request URL: ${url}`);
+  if (!m) throw new Error(`Not a GitHub pull request URL: ${url} (expected https://github.com/<owner>/<repo>/pull/<number>)`);
   return { owner: m[1], repo: m[2], number: Number(m[3]) };
 }
 

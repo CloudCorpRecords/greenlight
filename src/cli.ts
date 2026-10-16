@@ -11,6 +11,9 @@
  *   greenlight claim <issue-url> [--yes] [--force] [--json]
  *   greenlight prep <issue-url> [--dir path] [--yes] [--json]
  *   greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]
+ *   greenlight init --agent <tool> [--all] [--list] [--force] [--dry-run] [--json]
+ *   greenlight doctor [--json]
+ *   greenlight help [command] | greenlight <command> --help | greenlight --version
  *
  * Set GITHUB_TOKEN for the 5000 req/hr authenticated rate limit.
  * The claim/prep/pr commands default to a DRY RUN: nothing is posted or
@@ -45,6 +48,9 @@ import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
+import { initTools, detectTools, parseAgentList, formatInitHuman, INIT_TOOLS } from "./init.js";
+import { runDoctor, formatDoctorHuman } from "./doctor.js";
+import { overviewText, commandHelpText, findCommand, suggestCommand, versionText } from "./help.js";
 
 const SYMBOL: Record<string, string> = {
   GO: "[GO]",
@@ -80,7 +86,7 @@ function printVerdict(snapshot: { sourceUrl: string; title: string; owner: strin
 
 function parseRepoRef(ref: string): { owner: string; repo: string } {
   const m = /^([^/]+)\/([^/]+)$/.exec(ref.trim());
-  if (!m) throw new Error(`Expected owner/repo, got: ${ref}`);
+  if (!m) throw new Error(`Expected owner/repo like "facebook/react", got: ${ref}`);
   return { owner: m[1], repo: m[2] };
 }
 
@@ -414,33 +420,106 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
 }
 
 function usage(): void {
-  console.log("greenlight: pre-flight checks for open-source contributions");
-  console.log("");
-  console.log("  greenlight check <issue-url> [--json] [--gates-file path]");
-  console.log("  greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]");
-  console.log("  greenlight mcp   (run the MCP server on stdio)");
-  console.log("  greenlight friction <owner/repo> [--json]");
-  console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
-  console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
-  console.log("  greenlight guard <pr-url> [--json] [--quiet]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged)");
-  console.log("  greenlight claim <issue-url> [--yes] [--force] [--json]");
-  console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
-  console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
-  console.log("");
-  console.log("claim/prep/pr default to a DRY RUN: nothing is posted or created without");
-  console.log("--yes, and writes require GITHUB_TOKEN (or GH_TOKEN) to be set.");
-  console.log("");
-  console.log("Set GITHUB_TOKEN to raise the GitHub API rate limit (60 -> 5000 req/hr).");
+  console.log(overviewText());
+}
+
+/** What each target-taking command needs, for the missing-argument error. */
+const NEEDS_TARGET: Record<string, string> = {
+  check: 'an issue URL, e.g. greenlight check https://github.com/owner/repo/issues/123',
+  scan: "a repo, e.g. greenlight scan facebook/react",
+  friction: "a repo, e.g. greenlight friction vercel/next.js",
+  ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
+  review: "a PR URL, e.g. greenlight review https://github.com/owner/repo/pull/456",
+  guard: "a PR URL, e.g. greenlight guard https://github.com/owner/repo/pull/456",
+  claim: 'an issue URL, e.g. greenlight claim https://github.com/owner/repo/issues/123',
+  prep: 'an issue URL, e.g. greenlight prep https://github.com/owner/repo/issues/123',
+  pr: 'an issue URL plus --branch, e.g. greenlight pr https://github.com/owner/repo/issues/123 --branch fix/issue-123',
+};
+
+function collectFlagValues(args: string[], name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name && i + 1 < args.length) out.push(args[++i]);
+  }
+  return out;
+}
+
+async function cmdInit(args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  if (args.includes("--list")) {
+    if (asJson) {
+      console.log(
+        JSON.stringify(
+          {
+            tools: INIT_TOOLS.map((t) => ({
+              id: t.id,
+              label: t.label,
+              config: t.homeDest ? `~/${t.configDest}` : t.configDest,
+              instructions: t.instructionsDest ?? null,
+            })),
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      console.log("Supported agents for 'greenlight init --agent <tool>':");
+      for (const t of INIT_TOOLS) {
+        console.log(`  ${t.id.padEnd(12)} ${t.label}`);
+        console.log(`               config: ${t.homeDest ? `~/${t.configDest}` : t.configDest}`);
+        if (t.instructionsDest) console.log(`               instructions: ${t.instructionsDest}`);
+      }
+      console.log("Example: greenlight init --agent claude-code");
+    }
+    return;
+  }
+  const ids = args.includes("--all")
+    ? INIT_TOOLS.map((t) => t.id)
+    : parseAgentList(collectFlagValues(args, "--agent"));
+  if (ids.length === 0) {
+    const detected = detectTools(process.cwd());
+    throw new Error(
+      "No agent selected. " +
+        (detected.length > 0
+          ? `Detected in this project: ${detected.join(", ")}; re-run with e.g. --agent ${detected[0]} (or --all). `
+          : "") +
+        "Run 'greenlight init --list' to see the supported tools."
+    );
+  }
+  const dryRun = args.includes("--dry-run");
+  const results = initTools(ids, {
+    force: args.includes("--force"),
+    includeInstructions: !args.includes("--no-instructions"),
+    dryRun,
+  });
+  if (asJson) {
+    console.log(JSON.stringify({ dryRun, tools: results }, null, 2));
+    return;
+  }
+  console.log(formatInitHuman(results, dryRun));
+}
+
+async function cmdDoctor(args: string[]): Promise<void> {
+  const report = await runDoctor();
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(formatDoctorHuman(report));
+  }
+  if (report.checks.some((c) => c.status === "fail")) process.exitCode = 1;
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet"]);
+  const flags = new Set([
+    "--json", "--yes", "--force", "--no-fallback", "--quiet",
+    "--all", "--list", "--no-instructions", "--dry-run", "--help", "-h",
+  ]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--agent") {
       i++; // skip the value with its flag
       continue;
     }
@@ -449,10 +528,53 @@ async function main(): Promise<void> {
   const [command, target] = positional;
 
   try {
+    if (args.includes("--version") || args.includes("-V") || command === "version") {
+      console.log(versionText());
+      return;
+    }
+    if (args.includes("--help") || args.includes("-h")) {
+      const helpTarget = command && command !== "help" ? command : undefined;
+      const cmd = helpTarget ? findCommand(helpTarget) : undefined;
+      if (helpTarget && !cmd) {
+        const suggestion = suggestCommand(helpTarget);
+        console.log(
+          `Unknown command "${helpTarget}".` +
+            (suggestion ? ` Did you mean "${suggestion}"?` : "") +
+            "\n"
+        );
+        process.exitCode = 1;
+      }
+      console.log(helpTarget && cmd ? commandHelpText(cmd) : overviewText());
+      return;
+    }
+    if (command === "help") {
+      if (target && !findCommand(target)) {
+        const suggestion = suggestCommand(target);
+        console.log(
+          `Unknown command "${target}".` +
+            (suggestion ? ` Did you mean "${suggestion}"?` : "") +
+            "\n"
+        );
+        usage();
+        process.exitCode = 1;
+        return;
+      }
+      const cmd = target ? findCommand(target) : undefined;
+      console.log(cmd ? commandHelpText(cmd) : overviewText());
+      return;
+    }
     if (command === "mcp") {
       // Start the MCP server (stdio). The module connects on import; stdout
       // stays pure JSON-RPC because everything above this dispatch is silent.
       await import("./index.js");
+      return;
+    }
+    if (command === "init") return await cmdInit(args);
+    if (command === "doctor") return await cmdDoctor(args);
+    if (command && NEEDS_TARGET[command] && !target) {
+      console.error(`Error: greenlight ${command} needs ${NEEDS_TARGET[command]}.`);
+      console.log(commandHelpText(findCommand(command)!));
+      process.exitCode = 1;
       return;
     }
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
@@ -464,8 +586,17 @@ async function main(): Promise<void> {
     if (command === "claim" && target) return await cmdClaim(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);
-    usage();
-    process.exitCode = command ? 1 : 0;
+    if (!command) {
+      usage();
+      return;
+    }
+    const suggestion = suggestCommand(command);
+    console.error(
+      `Error: unknown command "${command}".` +
+        (suggestion ? ` Did you mean "${suggestion}"?` : "") +
+        " Run 'greenlight help' to see all commands."
+    );
+    process.exitCode = 1;
   } catch (err) {
     if (err instanceof RateLimitError) {
       console.error(`Rate limited: ${err.message}`);
