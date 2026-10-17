@@ -71,7 +71,7 @@ import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 import { fetchProtocolState, type ProtocolFetchResult } from "./protocol-fetch.js";
 
-export const GUARD_VERSION = "0.6.0";
+export const GUARD_VERSION = "0.9.1";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
@@ -176,6 +176,18 @@ export interface GuardFinding {
   severity: "flag" | "note";
   title: string;
   evidence: string[];
+  /**
+   * What the flag is about (v0.9.1). "pr" = this PR's own diff/commits/
+   * reviews (missing artifacts, first-time contributor). "issue" = one of
+   * the PR's linked issues (competing fix, foreign claims, protocol
+   * claims); `issueRef` names it as "owner/repo#N". "repo" = repo-wide
+   * signal not tied to this PR or its issues. Consumers (babysit) raise
+   * needs-you only for subject "pr", and for subject "issue" when the
+   * issue is the PR's own linked issue; everything else is informational.
+   */
+  subject: "pr" | "issue" | "repo";
+  /** Canonical "owner/repo#N" for subject "issue" findings. */
+  issueRef?: string;
 }
 
 export interface GuardResult {
@@ -431,6 +443,7 @@ export function checkMissingArtifacts(args: {
     if (!hasFile) {
       findings.push({
         check: "changeset-missing",
+        subject: "pr",
         severity: "flag",
         title: `Missing release-note file (repo uses ${dir}/)`,
         evidence: [
@@ -448,6 +461,7 @@ export function checkMissingArtifacts(args: {
     if (unsigned.length > 0) {
       findings.push({
         check: "dco-missing",
+        subject: "pr",
         severity: "flag",
         title: `DCO sign-off missing on ${unsigned.length} of ${commits.length} commit${commits.length === 1 ? "" : "s"}`,
         evidence: [
@@ -471,6 +485,7 @@ export function checkMissingArtifacts(args: {
     if (!labelSigned && !commentSigned) {
       findings.push({
         check: "cla-status",
+        subject: "pr",
         severity: "flag",
         title: "CLA status not visible",
         evidence: [
@@ -554,6 +569,7 @@ export function checkFirstTime(author: string, priorMerged: number | null): Guar
   if (priorMerged > 0) return null;
   return {
     check: "first-time",
+    subject: "pr",
     severity: "note",
     title: `First-time contributor`,
     evidence: [`@${author} has no previously merged PRs in this repo`],
@@ -856,6 +872,8 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
           competingPRs.push({ ...c, issueRef });
           findings.push({
             check: "competing-fix",
+            subject: "issue",
+            issueRef: `${ref.iOwner}/${ref.iRepo}#${ref.number}`,
             severity: "flag",
             title: `Competing fix for ${label}`,
             evidence: [
@@ -894,6 +912,8 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
           }
           findings.push({
             check: "other-claim",
+            subject: "issue",
+            issueRef: `${ref.iOwner}/${ref.iRepo}#${ref.number}`,
             severity: "flag",
             title: `Issue claimed by @${c.author} before this PR`,
             evidence,
@@ -903,6 +923,8 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
           claims.push({ ...authorClaimed, issueRef });
           findings.push({
             check: "author-claim",
+            subject: "issue",
+            issueRef: `${ref.iOwner}/${ref.iRepo}#${ref.number}`,
             severity: "note",
             title: `Claimed by the PR author`,
             evidence: [`@${pull.author} claimed ${label} in the issue comments before opening this PR — expected, no conflict`],
@@ -936,6 +958,8 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
       if (active.claimant === pull.author) {
         findings.push({
           check: "protocol-claim",
+          subject: "issue",
+          issueRef: `${ref.iOwner}/${ref.iRepo}#${ref.number}`,
           severity: "note",
           title: "Protocol claim held by the PR author",
           evidence: [
@@ -946,6 +970,8 @@ export async function guardPr(prUrl: string, deps: GuardDeps = {}, config: Guard
         const queue = (proto?.computation.queue ?? []).map((q) => `@${q.claimant}`).join(", ");
         findings.push({
           check: "protocol-claim",
+          subject: "issue",
+          issueRef: `${ref.iOwner}/${ref.iRepo}#${ref.number}`,
           severity: "flag",
           title: `Active protocol claim on ${ref.label} held by @${active.claimant}`,
           evidence: [
