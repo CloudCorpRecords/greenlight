@@ -27,6 +27,8 @@ import {
   countStarterIssues,
 } from "./github.js";
 import { scoreIssue } from "./verdict.js";
+import { applyLlmClaims } from "./llm-claims.js";
+import type { LLMClaimFlag } from "./types.js";
 import { parseGates } from "./gates.js";
 import { fetchMergeVelocity } from "./merge-velocity.js";
 import { scoreFriction } from "./friction.js";
@@ -431,6 +433,9 @@ const CLAIM_REASON_PREFIXES = [
   "stale claim by ",
   "stale partial claim by ",
   "soft claim by ",
+  // Optional Fireworks layer (llm-claims.ts): AI claim inference is legacy
+  // claim inference, so a live protocol claim supersedes it the same way.
+  "possible claim by ",
 ];
 
 function isClaimDerivedReason(reason: string): boolean {
@@ -440,7 +445,7 @@ function isClaimDerivedReason(reason: string): boolean {
 }
 
 /** Flags the legacy engine sets for claim inference; the protocol replaces them. */
-const CLAIM_DERIVED_FLAGS = ["claimed", "stale_claim", "partial-claim", "weak-claim"];
+const CLAIM_DERIVED_FLAGS = ["claimed", "stale_claim", "partial-claim", "weak-claim", "llm-claim"];
 
 export interface MergedCheckResult {
   verdict: Verdict;
@@ -457,6 +462,8 @@ export interface MergedCheckResult {
   };
   /** One to three plain lines for the text renderer. */
   protocolLines: string[];
+  /** AI claim-intent flags from the optional LLM layer; rides along for transparency. */
+  llm_claims?: LLMClaimFlag[];
 }
 
 /**
@@ -502,6 +509,7 @@ export function mergeProtocolVerdict(
         gates: legacy.gates,
         protocol: protocolField,
         protocolLines,
+        llm_claims: legacy.llm_claims,
       };
     }
     // Protocol wins over the legacy claim assessment; PR-derived evidence
@@ -516,6 +524,7 @@ export function mergeProtocolVerdict(
       gates: legacy.gates,
       protocol: protocolField,
       protocolLines,
+      llm_claims: legacy.llm_claims,
     };
   }
 
@@ -533,6 +542,7 @@ export function mergeProtocolVerdict(
       gates: legacy.gates,
       protocol: protocolField,
       protocolLines,
+      llm_claims: legacy.llm_claims,
     };
   }
 
@@ -546,6 +556,7 @@ export function mergeProtocolVerdict(
     gates: legacy.gates,
     protocol: protocolField,
     protocolLines,
+    llm_claims: legacy.llm_claims,
   };
 }
 
@@ -554,7 +565,7 @@ export interface CheckWithProtocolOptions {
   deps?: ProtocolFetchDeps;
 }
 
-/** The `check` command's full pipeline: legacy verdict merged with protocol. */
+/** The `check` command's full pipeline: legacy verdict, optional AI claim layer, merged with protocol. */
 export async function checkIssueWithProtocol(
   owner: string,
   repo: string,
@@ -567,6 +578,10 @@ export async function checkIssueWithProtocol(
   merged: MergedCheckResult;
 }> {
   const { snapshot, legacy, status } = await computeIssueStatus(owner, repo, number, opts);
-  return { snapshot, legacy, status, merged: mergeProtocolVerdict(legacy, status) };
+  // The optional Fireworks layer runs on the legacy verdict, before the
+  // protocol merge: it is a no-op unless FIREWORKS_API_KEY is set, and it
+  // can only ever downgrade GO to RISKY, never TAKEN or GATED.
+  const legacyWithLlm = await applyLlmClaims(snapshot, legacy);
+  return { snapshot, legacy: legacyWithLlm, status, merged: mergeProtocolVerdict(legacyWithLlm, status) };
 }
 

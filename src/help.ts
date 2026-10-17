@@ -20,7 +20,13 @@ export const COMMANDS: CommandHelp[] = [
     name: "check",
     usage: "greenlight check <issue-url> [--json] [--gates-file path]",
     description: "Verdict on one issue: GO, RISKY, TAKEN, GATED, or STALE, with reasons.",
-    flags: ["--json (machine-readable output)", "--gates-file <path> (use a committed contribution-gates.json)"],
+    flags: [
+      "--json (machine-readable output)",
+      "--gates-file <path> (use a committed contribution-gates.json)",
+      "FIREWORKS_API_KEY (optional: AI claim-intent detection; off by default, flags only)",
+      "GREENLIGHT_LLM_MODEL (default: accounts/fireworks/models/glm-5p3-flash)",
+      "GREENLIGHT_LLM_BASE_URL (default: https://api.fireworks.ai/inference/v1)",
+    ],
     examples: ["greenlight check https://github.com/owner/repo/issues/123"],
   },
   {
