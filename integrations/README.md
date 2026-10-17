@@ -41,7 +41,7 @@ without it the tools still work but share the small anonymous budget.
 ## Verify it worked
 
 Ask the agent: "list your MCP tools." You should see the `greenlight`
-server with all 15 tools:
+server with all 17 tools:
 
 - `check_issue` — verdict on whether an issue is landable (GO / RISKY / TAKEN / GATED / STALE)
 - `scan_repo` — find starter issues worth working in a repo
@@ -58,6 +58,8 @@ server with all 15 tools:
 - `verify_comment` — draft the verified-finding comment for maintainer-only repos (draft only, never posts)
 - `babysit_prs` — watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks
 - `evidence_pack` — the Verified PR evidence pack for one PR: guard verdict, CI triage, review triage, protocol status of linked issues, every claim citing its source
+- `scout_campaign` — campaign mode: scan repos, rank survivors, append SCOUTED rows to a campaign file, budget-aware
+- `my_claims` — bucket your my-claims registry by live protocol status (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost)
 
 ## Format notes
 
