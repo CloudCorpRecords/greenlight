@@ -54,6 +54,8 @@ import { guardPr, readGuardConfig } from "./guard.js";
 import { digestRepo, DEFAULT_DIGEST_LIMIT } from "./digest.js";
 import { checkIssueWithProtocol, computeIssueStatus } from "./protocol-fetch.js";
 import { defaultRegistryPath, registerClaim } from "./claims-registry.js";
+import { importLedgerClaims, importUrlList } from "./claim-import.js";
+import { resolveProxyConfig, startProxy, proxyClientEnv, PROXY_DEFAULT_PORT, PROXY_UPSTREAM } from "./proxy.js";
 import { scoutCampaign, SCOUT_DEFAULT_BUDGET } from "./scout.js";
 import {
   buildVerifiedComment,
@@ -338,6 +340,30 @@ function flagValue(args: string[], name: string): string | undefined {
 }
 
 async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
+  // --import backfills the my-claims registry (Ledger or manual URL list);
+  // it takes no issue URL, so it runs before the issue parsing below.
+  if (args.includes("--import") || issueUrl === "--import") {
+    const ledgerUser = flagValue(args, "--ledger-user");
+    const urlsRaw = flagValue(args, "--urls");
+    if (!ledgerUser && !urlsRaw) {
+      console.error("Error: greenlight claim --import needs --ledger-user <github-login> or --urls <issue-url,...>.");
+      process.exitCode = 1;
+      return;
+    }
+    const registryPath = defaultRegistryPath();
+    const result = ledgerUser
+      ? await importLedgerClaims(registryPath, ledgerUser)
+      : importUrlList(registryPath, urlsRaw!.split(","));
+    if (ledgerUser) {
+      console.log(`Scanned ${result.reposScanned} repos on the Claim Ledger for @${ledgerUser}.`);
+    }
+    console.log(`Imported ${result.added} claim${result.added === 1 ? "" : "s"} into the my-claims registry (${registryPath}).`);
+    if (result.skipped > 0) console.log(`Skipped ${result.skipped} (already registered, another claimant, or a retired state).`);
+    for (const c of result.claims) console.log(`  + ${c.issueUrl}`);
+    console.log(`The babysitter watches them from now on.`);
+    return;
+  }
+
   const { owner, repo, number } = parseIssueUrl(issueUrl);
   // v0.9.0: claim runs the same pipeline as check (protocol + optional
   // LLM claim layer), so the 30-day classification cache is shared
@@ -608,12 +634,22 @@ async function cmdBabysit(args: string[]): Promise<void> {
   const statePath = flagValue(args, "--state") ?? defaultStatePath();
   const prs = prsRaw ? prsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
   const repos = reposRaw ? reposRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
+  const concRaw = flagValue(args, "--concurrency");
+  let concurrency: number | undefined;
+  if (concRaw !== undefined) {
+    concurrency = Number(concRaw);
+    if (!Number.isFinite(concurrency) || concurrency < 1) {
+      console.error("Error: --concurrency must be a positive number.");
+      process.exitCode = 1;
+      return;
+    }
+  }
   if (prs.length === 0 && !mine && !claimsOnly) {
     console.error("Error: give --prs <url,...>, --mine --repos <owner/repo,...>, or --claims-only (e.g. greenlight babysit --mine --repos acme/widgets)");
     process.exitCode = 1;
     return;
   }
-  const run = await babysit({ prs, mine, repos, statePath, claimsOnly });
+  const run = await babysit({ prs, mine, repos, statePath, claimsOnly, concurrency });
   if (args.includes("--json")) {
     console.log(JSON.stringify(run.json, null, 2));
   } else {
@@ -866,6 +902,38 @@ async function cmdInit(args: string[]): Promise<void> {
 /**
  * `greenlight doctor`: the setup check. Exit 1 when any check fails.
  */
+async function cmdProxy(args: string[]): Promise<void> {
+  const portRaw = flagValue(args, "--port");
+  const port = portRaw !== undefined ? Number(portRaw) : PROXY_DEFAULT_PORT;
+  if (!Number.isFinite(port) || port < 1 || port > 65535) {
+    console.error("Error: --port must be a valid port number.");
+    process.exitCode = 1;
+    return;
+  }
+  const config = resolveProxyConfig(process.env, port);
+  if ("error" in config) {
+    console.error(`Error: ${config.error}`);
+    process.exitCode = 1;
+    return;
+  }
+  let started;
+  try {
+    started = await startProxy(config);
+  } catch (err) {
+    console.error(`Error: could not bind 127.0.0.1:${port}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`greenlight proxy listening on 127.0.0.1:${started.port} (upstream ${PROXY_UPSTREAM})`);
+  console.log(`Client env: ${proxyClientEnv(started.port)}`);
+  const shutdown = async () => {
+    await started.stop().catch(() => undefined);
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
 async function cmdDoctor(args: string[]): Promise<void> {
   const report = await runDoctor();
   if (args.includes("--json")) {
@@ -884,12 +952,12 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as" || a === "--ledger-user" || a === "--urls" || a === "--port" || a === "--concurrency") {
       i++; // skip the value with its flag
       continue;
     }
@@ -921,6 +989,7 @@ async function main(): Promise<void> {
     }
     if (command === "init") return await cmdInit(args);
     if (command === "doctor") return await cmdDoctor(args);
+    if (command === "proxy") return await cmdProxy(args);
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
     if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
@@ -929,7 +998,7 @@ async function main(): Promise<void> {
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
     if (command === "guard" && target) return await cmdGuard(target, args);
     if (command === "digest" && target) return await cmdDigest(target, args);
-    if (command === "claim" && target) return await cmdClaim(target, args);
+    if (command === "claim" && (target || args.includes("--import"))) return await cmdClaim(target ?? "--import", args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);
     if (command === "verify-comment" && target) return await cmdVerifyComment(target, args);
