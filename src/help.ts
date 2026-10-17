@@ -88,8 +88,8 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "claim",
-    usage: "greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json] | claim --register <issue-url> [--eta-days N] [--as login]",
-    description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN). Posted claims join the my-claims registry automatically.",
+    usage: "greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json] | claim --register <issue-url> [--eta-days N] [--as login] | claim --import --ledger-user <login> | claim --import --urls <issue-url,...>",
+    description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN). Posted claims join the my-claims registry automatically; --import backfills it from the public Claim Ledger or a URL list.",
     flags: [
       "--yes (actually post the comment)",
       "--force (post even on a bad verdict)",
@@ -97,11 +97,15 @@ export const COMMANDS: CommandHelp[] = [
       "--eta-days <N> (record an eta-days: line in the protocol claim)",
       "--register (record a claim posted by other means, without touching the API)",
       "--as <login> (with --register: who posted the claim)",
+      "--import (backfill the registry from the Claim Ledger or --urls; no issue URL needed)",
+      "--ledger-user <login> (with --import: import active/linked claims by this user from the public Ledger)",
+      "--urls <url,...> (with --import: import a manual list of issue URLs)",
       "--json (machine-readable output)",
     ],
     examples: [
       "greenlight claim https://github.com/owner/repo/issues/123",
       "greenlight claim --register https://github.com/owner/repo/issues/123 --eta-days 7",
+      "greenlight claim --import --ledger-user CloudCorpRecords",
     ],
   },
   {
@@ -143,9 +147,19 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight doctor"],
   },
   {
+    name: "proxy",
+    usage: "greenlight proxy [--port N]",
+    description: "Localhost forwarder that attaches your GitHub token server-side (127.0.0.1 only), lifting you from the 60/hr anonymous quota to the 5000/hr authenticated budget. Reads GITHUB_TOKEN (or GH_TOKEN) once at startup; never logs or stores it. Start it with a token exported, then point Greenlight at it: export GREENLIGHT_GITHUB_BASE_URL=http://127.0.0.1:8792 GITHUB_TOKEN=proxy",
+    flags: ["--port <N> (listen port; default 8792)"],
+    examples: [
+      "greenlight proxy",
+      "greenlight proxy --port 8793",
+    ],
+  },
+  {
     name: "mcp",
     usage: "greenlight mcp",
-    description: "Run the MCP server on stdio (15 tools). Your agent client launches this; see 'init'.",
+    description: "Run the MCP server on stdio (17 tools). Your agent client launches this; see 'init'.",
     flags: [],
     examples: ["greenlight mcp"],
   },
@@ -174,12 +188,13 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "babysit",
-    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--claims-only] [--json] [--fail-on-action]",
+    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--claims-only] [--concurrency N] [--json] [--fail-on-action]",
     description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet). Also watches your my-claims registry (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost).",
     flags: [
       "--prs <url,...> (watch these PR URLs)",
       "--mine --repos <o/r,...> (discover your open PRs across repos)",
       "--claims-only (skip the PR scan; show only the claims section)",
+      "--concurrency <N> (parallel PR fetches; default 5)",
       "--fail-on-action (exit 3 when the needs-you-now list is non-empty)",
       "--json (machine-readable output)",
     ],

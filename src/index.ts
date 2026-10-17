@@ -25,6 +25,8 @@ import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { babysit, defaultStatePath } from "./babysit.js";
+import { scoutCampaign, SCOUT_DEFAULT_BUDGET } from "./scout.js";
+import { defaultRegistryPath } from "./claims-registry.js";
 import { buildEvidencePack } from "./evidence.js";
 import { digestRepo } from "./digest.js";
 import {
@@ -43,7 +45,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.9.0" });
+const server = new McpServer({ name: "greenlight", version: "0.9.1" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -397,6 +399,51 @@ server.tool(
     try {
       const pack = await buildEvidencePack(pr_url, { verifyJsonPath: verify_json });
       return { content: [{ type: "text" as const, text: pack.markdown }] };
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "scout_campaign",
+  "Campaign mode: scan repos for winnable issues, rank survivors by friction, merge history, freshness, and verdict strength, and append them to a campaign file as SCOUTED. The campaign file dedupes against everything already claimed or PR'd. Budget-aware: stops with a resume cursor when the API budget is hit.",
+  {
+    repos: z.array(z.string()).describe("owner/repo list, e.g. [\"acme/widgets\"]"),
+    campaign_path: z.string().describe("Path to the campaign JSON file ({ entries: [{repo, issue, status, pr}], cursor })"),
+    budget: z.number().default(SCOUT_DEFAULT_BUDGET).describe("Max GitHub API calls; a resume cursor is saved on budget hit"),
+    write: z.boolean().default(false).describe("Append survivors to the campaign file; false prints only"),
+    scan_limit: z.number().optional().describe("Issues scanned per repo (default 10)"),
+    keep: z.number().optional().describe("Survivors kept per repo (default 5)"),
+  },
+  async ({ repos, campaign_path, budget, write, scan_limit, keep }) => {
+    try {
+      if (repos.length === 0) return text({ error: "Give at least one repo." });
+      const result = await scoutCampaign({
+        repos,
+        campaignPath: campaign_path,
+        budget: budget ?? SCOUT_DEFAULT_BUDGET,
+        write,
+        scanLimit: scan_limit,
+        keepPerRepo: keep,
+      });
+      return text(result.json);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "my_claims",
+  "The claims babysitter's claim half: bucket every claim in your my-claims registry (~/.greenlight/my-claims.json) by its live Claim Protocol status — linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost — and retire claims that completed or released. Pair with babysit_prs for the full portfolio picture.",
+  {
+    claims_registry_path: z.string().optional().describe("Override path for the my-claims registry. Defaults to ~/.greenlight/my-claims.json."),
+  },
+  async ({ claims_registry_path }) => {
+    try {
+      const run = await babysit({ claimsOnly: true, claimsRegistryPath: claims_registry_path ?? defaultRegistryPath() });
+      return text(run.json);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
