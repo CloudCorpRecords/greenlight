@@ -1,6 +1,9 @@
 /**
  * GitHub API client. Native fetch only, no extra dependencies.
  * Optional GITHUB_TOKEN env var raises the rate limit from 60 to 5000 req/hr.
+ * GREENLIGHT_GITHUB_BASE_URL overrides the API base (for a local proxy that
+ * attaches a stored token); trailing slashes are normalized away, and unset
+ * behaves exactly like the historical hardcoded api.github.com.
  * Responses are cached under ~/.cache/greenlight (6h TTL for issues/repos,
  * 1h for search) so repeated checks do not burn quota.
  */
@@ -13,8 +16,20 @@ import { detectWorkflowGates, type WorkflowFile } from "./gates.js";
 import { isBotAuthor } from "./claims.js";
 import { detectServerSideOnly } from "./server-side.js";
 
-const API = "https://api.github.com";
+const DEFAULT_API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
+
+/**
+ * The GitHub API base in use. Reads GREENLIGHT_GITHUB_BASE_URL so a
+ * vault-backed localhost proxy (gh-proxy.py) can attach a stored token to
+ * requests from tools that only know how to read env. Trailing slashes are
+ * stripped; with the env unset the return is the historical hardcoded value.
+ */
+export function githubApiBase(): string {
+  const env = process.env.GREENLIGHT_GITHUB_BASE_URL;
+  if (env && env.trim().length > 0) return env.trim().replace(/\/+$/, "");
+  return DEFAULT_API;
+}
 const CACHE_DIR = join(homedir(), ".cache", "greenlight");
 
 function ensureCache(): void {
@@ -84,7 +99,7 @@ export async function apiGet(path: string): Promise<unknown> {
   const token = githubToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API}${path}`, { headers });
+  const res = await fetch(`${githubApiBase()}${path}`, { headers });
   if (res.status === 403 || res.status === 429) {
     const body = await res.text().catch(() => "");
     const reset = res.headers.get("x-ratelimit-reset");
@@ -114,7 +129,7 @@ export async function apiPost(path: string, body: unknown): Promise<unknown> {
   const token = githubToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${API}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  const res = await fetch(`${githubApiBase()}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
   if (res.status === 403 || res.status === 429) {
     const reset = res.headers.get("x-ratelimit-reset");
     const wait = reset ? ` Rate limit resets at ${new Date(Number(reset) * 1000).toISOString()}.` : "";
