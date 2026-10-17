@@ -13,6 +13,10 @@
  *   greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]
  *   greenlight verify-comment <issue-url> [--json] [--from-file notes.md]
  *   greenlight verify [--base <ref>] [--cmd "<test command>"] [--parser node:test|pytest] [--allow-dirty] [--json]
+ *   greenlight init [--agent <tool>...] [--dry-run] [--force]
+ *   greenlight doctor [--json]
+ *   greenlight help [command]   (or <command> --help)
+ *   greenlight version   (or --version)
  *
  * Set GITHUB_TOKEN for the 5000 req/hr authenticated rate limit.
  * The claim/prep/pr commands default to a DRY RUN: nothing is posted or
@@ -63,6 +67,16 @@ import { buildPassport } from "./passport.js";
 import { renderLabelsDryRun } from "./guard.js";
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { initTools, parseAgentList, detectTools, formatInitHuman, INIT_TOOLS } from "./init.js";
+import { runDoctor, formatDoctorHuman } from "./doctor.js";
+import {
+  overviewText,
+  helpText,
+  versionText,
+  findCommand,
+  commandHelpText,
+  NEEDS_TARGET,
+} from "./help.js";
 
 // The one real fact the verified-comment footer is allowed to state about
 // the tool itself. Read from package.json so the version can never drift
@@ -694,41 +708,80 @@ async function cmdVerify(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * `greenlight init`: one-command agent setup. Collects repeated --agent
+ * values, falls back to detecting which tools the project uses when none
+ * is given, and hands the rest to initTools (dry run reports, --force
+ * overwrites). Exit 2 when nothing was given or detected; exit 1 on any
+ * setup error; 0 on success.
+ */
+async function cmdInit(args: string[]): Promise<void> {
+  if (args.includes("--list")) {
+    console.log("Supported agent ids:");
+    for (const t of INIT_TOOLS) console.log(`  ${t.id}  (${t.label})`);
+    return;
+  }
+  const dryRun = args.includes("--dry-run");
+  const force = args.includes("--force");
+  const agentValues: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--agent" && i + 1 < args.length) {
+      agentValues.push(args[i + 1]);
+      i++;
+    }
+  }
+  const projectDir = process.cwd();
+  let ids = parseAgentList(agentValues);
+  if (ids.length === 0) {
+    const detected = detectTools(projectDir);
+    if (detected.length > 0) {
+      console.log(`No --agent given; detected in this directory: ${detected.join(", ")}`);
+      ids = detected;
+    } else {
+      console.error("No --agent given, and no supported tool detected in this directory.");
+      console.error(`Supported: ${INIT_TOOLS.map((t) => t.id).join(", ")}`);
+      console.error("Example: greenlight init --agent claude-code");
+      process.exitCode = 2;
+      return;
+    }
+  }
+  try {
+    const results = initTools(ids, { projectDir, dryRun, force });
+    console.log(formatInitHuman(results, dryRun));
+  } catch (err) {
+    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Supported: ${INIT_TOOLS.map((t) => t.id).join(", ")}`);
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * `greenlight doctor`: the setup check. Exit 1 when any check fails.
+ */
+async function cmdDoctor(args: string[]): Promise<void> {
+  const report = await runDoctor();
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(formatDoctorHuman(report));
+  }
+  if (report.checks.some((c) => c.status === "fail")) process.exitCode = 1;
+}
+
 function usage(): void {
-  console.log("greenlight: pre-flight checks for open-source contributions");
-  console.log("");
-  console.log("  greenlight check <issue-url> [--json] [--gates-file path]");
-  console.log("  greenlight status <issue-url> [--json]   (Claim Protocol: who holds this issue, queue, expiry)");
-  console.log("  greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]");
-  console.log("  greenlight mcp   (run the MCP server on stdio)");
-  console.log("  greenlight friction <owner/repo> [--json]");
-  console.log("  greenlight ci <pr-url> [--json]   (CI failure triage: is the red check yours or pre-existing?)");
-  console.log("  greenlight review <pr-url> [--json]   (review triage: which review comments need you, with reply drafts)");
-  console.log("  greenlight guard <pr-url> [--json] [--quiet] [--labels-dry-run]   (maintainer-side: is this incoming PR worth your time? exit 3 when flagged; dry-run shows autopilot label decisions)");
-  console.log("  greenlight digest <owner/repo> [--json] [--limit N] [--fail-on-race]   (repo-level: PR races, claimed-by-other, stale claims, assignment conflicts)");
-  console.log("  greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--state path] [--json] [--fail-on-action]   (watch your open PRs: needs-you-now first; exit 0 unless --fail-on-action)");
-  console.log("  greenlight evidence <pr-url> [--out file.md] [--verify-json path] [--json]   (Verified PR evidence pack: every claim cites its source)");
-  console.log("  greenlight passport <github-login> [--json]   (contributor passport: protocol claims from the Claim Ledger + merged PRs)");
-  console.log("  greenlight verify-comment <issue-url> [--json] [--from-file notes.md] [--claim t] [--env t] [--repro t] [--observed t] [--expected t] [--root-cause t] [--fix t] [--ran t] [--by name]   (draft the verified-finding comment for maintainer-only repos; never posts)");
-  console.log("  greenlight verify [--base <ref>] [--cmd \"<test command>\"] [--parser node:test|pytest] [--timeout-secs N] [--allow-dirty] [--json]   (honest red-green test delta: base vs working tree; exit 3 on new failures, 1 when unverifiable)");
-  console.log("  greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json]");
-  console.log("  greenlight prep <issue-url> [--dir path] [--yes] [--json]");
-  console.log("  greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]");
-  console.log("");
-  console.log("claim/prep/pr default to a DRY RUN: nothing is posted or created without");
-  console.log("--yes, and writes require GITHUB_TOKEN (or GH_TOKEN) to be set.");
-  console.log("");
-  console.log("Set GITHUB_TOKEN to raise the GitHub API rate limit (60 -> 5000 req/hr).");
+  // One source of help text lives in help.ts; the CLI keeps the same
+  // console output style (a single console.log).
+  console.log(overviewText());
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--state" || a === "--out" || a === "--verify-json") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent") {
       i++; // skip the value with its flag
       continue;
     }
@@ -737,12 +790,29 @@ async function main(): Promise<void> {
   const [command, target] = positional;
 
   try {
+    if (args.includes("--help")) {
+      // <command> --help, and bare --help as the overview.
+      const names = positional.filter((p) => p !== "--help");
+      const known = names.find((n) => findCommand(n) !== undefined);
+      console.log(known ? helpText(known) : overviewText());
+      return;
+    }
+    if (command === "--version" || command === "version") {
+      console.log(versionText());
+      return;
+    }
+    if (command === "help") {
+      console.log(helpText(target));
+      return;
+    }
     if (command === "mcp") {
       // Start the MCP server (stdio). The module connects on import; stdout
       // stays pure JSON-RPC because everything above this dispatch is silent.
       await import("./index.js");
       return;
     }
+    if (command === "init") return await cmdInit(args);
+    if (command === "doctor") return await cmdDoctor(args);
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
     if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
@@ -759,8 +829,24 @@ async function main(): Promise<void> {
     if (command === "babysit") return await cmdBabysit(args);
     if (command === "evidence" && target) return await cmdEvidence(target, args);
     if (command === "passport" && target) return await cmdPassport(target, args);
-    usage();
-    process.exitCode = command ? 1 : 0;
+    if (command && NEEDS_TARGET[command]) {
+      // Known command with a missing argument: name the need and show its
+      // help, instead of the generic overview.
+      const cmd = findCommand(command);
+      console.error(`Error: greenlight ${command} needs ${NEEDS_TARGET[command]}`);
+      if (cmd) console.log(commandHelpText(cmd));
+      process.exitCode = 1;
+      return;
+    }
+    if (!command) {
+      // Bare `greenlight`: the overview, not an error.
+      console.log(overviewText());
+      return;
+    }
+    // Unknown command: the overview plus the did-you-mean suggestion when
+    // one exists. Exit 1 (usage error), not 0.
+    console.log(helpText(command));
+    process.exitCode = 1;
   } catch (err) {
     if (err instanceof RateLimitError) {
       console.error(`Rate limited: ${err.message}`);
