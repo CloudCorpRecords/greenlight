@@ -43,7 +43,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.8.0" });
+const server = new McpServer({ name: "greenlight", version: "0.8.1" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],

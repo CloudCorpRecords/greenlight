@@ -7,6 +7,7 @@
  * passport starts with your first protocol claim.
  */
 import { createRequire } from "node:module";
+import { githubApiBase } from "./github.js";
 
 const GREENLIGHT_VERSION: string = (() => {
   try {
@@ -140,7 +141,7 @@ async function defaultFetchClaimDetail(repo: string, issue: number): Promise<{ c
 async function defaultFetchMergedCount(login: string): Promise<number | null> {
   const q = encodeURIComponent(`author:${login} type:pr is:merged`);
   try {
-    const res = await fetch(`https://api.github.com/search/issues?q=${q}&per_page=1`, {
+    const res = await fetch(`${githubApiBase()}/search/issues?q=${q}&per_page=1`, {
       headers: { "User-Agent": "greenlight", Accept: "application/vnd.github+json" },
     });
     if (!res.ok) return null;

@@ -398,3 +398,38 @@ describe("listWorkflows and scanWorkflowGates", () => {
     assert.deepEqual(files.map((f) => f.name), ["ci.yml", "deploy.yaml"]);
   });
 });
+
+describe("githubApiBase", () => {
+  const saved = process.env.GREENLIGHT_GITHUB_BASE_URL;
+  const restore = () => {
+    if (saved === undefined) delete process.env.GREENLIGHT_GITHUB_BASE_URL;
+    else process.env.GREENLIGHT_GITHUB_BASE_URL = saved;
+  };
+  it("defaults to api.github.com with the env unset", async () => {
+    delete process.env.GREENLIGHT_GITHUB_BASE_URL;
+    try {
+      const { githubApiBase } = await import("../src/github.js");
+      assert.equal(githubApiBase(), "https://api.github.com");
+    } finally {
+      restore();
+    }
+  });
+  it("honors the override and strips trailing slashes", async () => {
+    process.env.GREENLIGHT_GITHUB_BASE_URL = "http://127.0.0.1:8792/";
+    try {
+      const { githubApiBase } = await import("../src/github.js");
+      assert.equal(githubApiBase(), "http://127.0.0.1:8792");
+    } finally {
+      restore();
+    }
+  });
+  it("treats a blank env as unset", async () => {
+    process.env.GREENLIGHT_GITHUB_BASE_URL = "   ";
+    try {
+      const { githubApiBase } = await import("../src/github.js");
+      assert.equal(githubApiBase(), "https://api.github.com");
+    } finally {
+      restore();
+    }
+  });
+});

@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { llmModelId } from "./llm-claims.js";
+import { githubApiBase } from "./github.js";
 
 export type DoctorStatus = "pass" | "warn" | "fail";
 
@@ -73,7 +74,7 @@ export async function defaultFetchRateLimit(token: string | undefined): Promise<
       "User-Agent": "greenlight-cli",
     };
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch("https://api.github.com/rate_limit", {
+    const res = await fetch(`${githubApiBase()}/rate_limit`, {
       headers,
       signal: AbortSignal.timeout(15000),
     });
