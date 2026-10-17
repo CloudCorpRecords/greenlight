@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { llmModelId } from "./llm-claims.js";
 
 export type DoctorStatus = "pass" | "warn" | "fail";
 
@@ -140,6 +141,22 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<DoctorReport> {
           status: "warn",
           detail: "no token set; sharing the 60 req/hr anonymous quota",
           fix: "Create a classic personal access token (no scopes needed for public repos) and export GITHUB_TOKEN=<token>.",
+        }
+  );
+
+  const llmModel = llmModelId(env);
+  checks.push(
+    env.FIREWORKS_API_KEY
+      ? {
+          name: "claim ai",
+          status: "pass",
+          detail: `FIREWORKS_API_KEY is set; AI claim-intent detection is on (model ${llmModel}, key not shown)`,
+        }
+      : {
+          name: "claim ai",
+          status: "warn",
+          detail: "claim AI is off; claim detection is pattern-based only",
+          fix: "Set FIREWORKS_API_KEY to enable AI-assisted claim-intent detection (optional; about a tenth of a cent per issue).",
         }
   );
 

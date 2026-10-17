@@ -10,6 +10,29 @@ export interface CommentSignal {
   author: string;
   body: string;
   createdAt: string; // ISO timestamp
+  /** GitHub comment id, when the fetch layer captured it. Absent on older fixtures. */
+  id?: number;
+}
+
+/**
+ * One AI-classified claim-intent signal from a comment. The optional
+ * Fireworks layer returns these; the deterministic engine never invents
+ * them, and they can only ever downgrade GO to RISKY (flag "llm-claim"),
+ * never produce TAKEN or override GATED.
+ */
+export interface LLMClaimFlag {
+  /** GitHub comment id, or a stable hash when the fixture had no id. */
+  commentId: string;
+  author: string;
+  createdAt: string; // ISO timestamp
+  /** Exact substring of the comment body; results without one are dropped. */
+  quote: string;
+  /** Model-reported confidence, 0 to 1. */
+  confidence: number;
+  /** Short model-supplied reason for the classification. */
+  reason: string;
+  /** Model id that produced the flag (env GREENLIGHT_LLM_MODEL). */
+  model: string;
 }
 
 /** A pull request that references the issue (linked, closes, or mentions). */
@@ -167,6 +190,8 @@ export interface VerdictResult {
   claims: ClaimSignal[];
   gates: Gate[];
   flags: string[]; // e.g. "claimed", "stale_claim"
+  /** AI claim-intent flags (optional layer, off by default). Absent when the layer is disabled. */
+  llm_claims?: LLMClaimFlag[];
 }
 
 /**
