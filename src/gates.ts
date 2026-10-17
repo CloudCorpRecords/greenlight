@@ -115,6 +115,41 @@ const RULES: GateRule[] = [
       /(external|outside).{0,40}(pull requests?|prs?).{0,60}(auto-?clos|will be closed)/i,
     ],
   },
+  {
+    // Field case 2026-10-17: nuxt/nuxt's AGENTS.md bans autonomous agent
+    // contributions outright ("Contributions may only be submitted by a
+    // human who fully understands them... autonomous agents are not
+    // allowed. Do not draft or post PR titles, PR descriptions, issues,
+    // or discussion comments."). This is a hard block for agent-driven
+    // work, and it lives in house-rules files, not CONTRIBUTING. The
+    // rules are anchored on explicit agent/bot-prohibition language, not
+    // on the mere word "AI", to avoid flagging repos that merely discuss
+    // AI features or ask for disclosure.
+    kind: "agents_banned",
+    regexes: [
+      /autonomous agents? (are|will be) not (allowed|accepted|welcome|permitted)/i,
+      /contributions? (by|from) autonomous agents? (are|is) not allowed/i,
+      /may only be submitted by a human/i,
+      /no ai[-\s]?(generated|authored|written) (pull requests?|prs?|contributions?)/i,
+      /do not (use|draft|post|submit|open).{0,80}(pr titles?|pr descriptions?|pull requests?|issues?, or discussion)/i,
+      /\b(bots?|agents?) (are|will be) (prohibited|banned|forbidden).{0,60}(from )?(contribut|opening|submitting)/i,
+    ],
+  },
+  {
+    // Field case 2026-10-17: actualbudget/actual's AI Usage Policy plus
+    // AGENTS.md requires an [AI] prefix on agent PR titles and commits
+    // and an AI disclosure sentence in the PR description. Disclosure is
+    // a ritual to satisfy, not a block, so this is a flag, never a
+    // verdict change: prep turns it into concrete required actions.
+    kind: "agents_disclosure",
+    regexes: [
+      /\bai\b.{0,40}disclosure/i,
+      /disclos(e|ing).{0,40}\bai\b/i,
+      /\[ai\].{0,60}(prefix|title|commit)/i,
+      /(prefix|title).{0,60}\[ai\]/i,
+      /ai[-\s]?generated.{0,60}(disclos|prefix|declare)/i,
+    ],
+  },
 ];
 
 /** Cut a short evidence snippet around the first regex match. */
@@ -170,7 +205,7 @@ export function parseGatesFromSources(sources: PolicySource[]): Gate[] {
 }
 
 /**
- * Parse contributing text into a gate list. Always returns all nine gates
+ * Parse contributing text into a gate list. Always returns all eleven gates
  * with detected true/false, plus an evidence snippet when detected.
  */
 export function parseGates(text: string | undefined, options: ParseOptions = {}): Gate[] {
@@ -245,7 +280,7 @@ export function parseGatefileJson(text: string): Gate[] {
 }
 
 /** Gates that block an outside PR before it can even be opened. */
-const HARD_GATES: GateKind[] = ["assignment_required", "vouch_required", "collaborators_only", "unsolicited_prs_paused", "external_prs_closed"];
+const HARD_GATES: GateKind[] = ["assignment_required", "vouch_required", "collaborators_only", "unsolicited_prs_paused", "external_prs_closed", "agents_banned"];
 
 export function hardGates(gates: Gate[]): Gate[] {
   return gates.filter((g) => g.detected && HARD_GATES.includes(g.kind));
@@ -263,6 +298,8 @@ export function gateLabel(kind: GateKind): string {
     case "collaborators_only": return "PR creation restricted to collaborators";
     case "unsolicited_prs_paused": return "unsolicited PRs paused";
     case "external_prs_closed": return "external PRs closed by automation";
+    case "agents_banned": return "agent contributions banned";
+    case "agents_disclosure": return "AI disclosure required";
   }
 }
 

@@ -152,7 +152,23 @@ export type GateKind =
    * A repo workflow closes external PRs automatically ("Close external
    * PRs" style), the sharp end of the paused-PR policy above.
    */
-  | "external_prs_closed";
+  | "external_prs_closed"
+  /**
+   * The repo bans autonomous-agent contributions outright, usually in
+   * AGENTS.md or CLAUDE.md rather than CONTRIBUTING (nuxt/nuxt's
+   * AGENTS.md: "Contributions may only be submitted by a human who
+   * fully understands them... autonomous agents are not allowed"). This
+   * is a hard block for anyone working through an agent: only a human
+   * may submit. Never satisfied by tooling; claim refuses.
+   */
+  | "agents_banned"
+  /**
+   * The repo permits agent-assisted work but requires disclosure, often
+   * plus an [AI] prefix on PR titles and commits (actualbudget/actual's
+   * AI Usage Policy + AGENTS.md). A flag, never a verdict change: prep
+   * turns it into concrete required actions.
+   */
+  | "agents_disclosure";
 
 /** Another issue this one is marked a duplicate of, with its live state. */
 export interface DuplicateTarget {
