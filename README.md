@@ -129,6 +129,12 @@ npx @reneturcios/greenlight ci <pr-url> --json
 # Review triage for a PR with review feedback: which comments need you?
 npx @reneturcios/greenlight review https://github.com/n8n-io/n8n/pull/41235
 
+# Campaign scout: rank repo targets, dedupe against the campaign file, append as SCOUTED
+npx @reneturcios/greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write
+
+# Babysit your registered claims: linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost
+npx @reneturcios/greenlight babysit --claims-only
+
 # [likely-real] interpolation drops `__proto__` (packages/bruno-cli/src/runner/interpolate-vars.js:42)
 #   why: anchor matches: the comment's quoted token Object.assign({}, params) is present in the anchored hunk
 #   draft reply: Good catch. Fixed in <next commit>: ...
@@ -256,14 +262,33 @@ Tools:
 * `ci_triage` - classify each failing check on a PR as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker, by comparing against the base branch's recent check history
 * `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
 * `guard_pr` - maintainer-side analysis of an incoming PR: competing fix, prior claims by someone other than the author, missing artifacts (changeset / DCO / CLA), first-time contributor. Returns comment-ready markdown (never posts).
-* `repo_digest` - repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts (never posts).
+* `repo_digest` - repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts, triage-held issues (never posts).
 * `claim_status` - Claim Protocol pre-flight for one issue: who holds it, until when, who is queued, competing PRs, gates, whether the repo honors the protocol
 * `preflight` - the one-call answer: claim_status plus the repo friction summary
 * `verify_comment` - draft the verified-finding comment for maintainer-only repos (draft only, never posts)
-* `babysit_prs` - watch open PRs and get the one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks
+* `babysit_prs` - watch open PRs and get the one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks; also watches the my-claims registry (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost)
 * `evidence_pack` - the Verified PR evidence pack for one PR: guard verdict, CI triage, review triage, protocol status of linked issues, every claim citing its source
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
+
+### v0.9.0: compliance + campaign
+
+Field work in October surfaced two repos publishing agent rules outside CONTRIBUTING (nuxt/nuxt's AGENTS.md bans autonomous-agent contributions outright; actualbudget/actual's AI policy requires an `[AI]` prefix plus a disclosure sentence), a fleet of mastra issues all carrying bot triage notices that scored GO with no gate kind for the hold, and two explicit soft claims the scan path missed because it ran the deterministic verdict alone. v0.9.0 closes all three gaps, then turns the campaign workflow into one command.
+
+**Agent-policy gates.** Gate loading already reads AGENTS.md and CLAUDE.md as house-rule sources; two new gate kinds now parse them. `agents_banned` is a hard gate: a repo that bans autonomous-agent contributions scores GATED, with the quoted policy line as evidence, and `claim` refuses it like TAKEN unless `--force` (a human must still open the PR). `agents_disclosure` is a flag, never a verdict change: repos that require an `[AI]` prefix and an AI disclosure get concrete required actions from `prep` and `check`. Repos with neither policy produce byte-identical output to before.
+
+**Triage hold.** A bot triage notice ("wait until maintainers remove the triage or approval label before opening a pull request") or a triage label (`needs triage`, `pending triage`, ...) marks an issue as held: `check` names the hold and caps an otherwise-GO verdict at RISKY with flag `triage-hold` (never TAKEN), scan demotes held issues below clean ones, and `digest` lists held issues per repo in their own section, the watch list for claims that may clear tomorrow.
+
+**Claim AI on the default path.** `scan` now runs the same per-issue pipeline as `check`: legacy verdict, the optional Fireworks claim-intent layer when `FIREWORKS_API_KEY` is set, merged with the Claim Protocol. The 30-day classification cache (comment id + model) is shared across check, scan, and claim, and the layer's governance holds everywhere: flags only downgrade GO to RISKY via the `llm-claim` flag, never TAKEN, never overriding GATED; every flag carries an exact-substring quote; a failed classification round caches nothing.
+
+**Claims babysitting.** When `claim` actually posts, the claim (issue URL, repo, number, posted_at, eta-days) is recorded into `~/.greenlight/my-claims.json`; `greenlight claim --register <issue-url>` records claims posted by other means. `babysit` gains a claims section (and `--claims-only`): each registered claim is bucketed by its live protocol status into linked (PR open, fine), healthy-active, heartbeat-due (no activity and the lease past half), expiring (lease under 48h), unlinked-stale (no PR after 72h), or queue-lost (someone ahead completed or the claim was superseded). Claims that complete retire from the registry with a note.
+
+**Campaign scout mode.** `greenlight scout --repos o/r,... --campaign campaign.json --write` turns a repo list into ranked campaign targets: the scan pipeline per repo, issues already in the campaign file dropped in ANY status, survivors ranked by `30*verdictWeight (GO=2, RISKY=1) + 0.25*friction + 20*outsideMergeShare + 15/(1+medianMergeDays/14) + 5*freshness`, appended as `SCOUTED` with verdict and evidence summary. `--budget N` caps GitHub API calls (default 300); on budget hit the campaign file keeps a resume cursor and the scout exits cleanly, and a rerun resumes where it stopped. `--repos-file` takes one owner/repo per line.
+
+```bash
+greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write
+greenlight babysit --claims-only
+```
 
 ### v0.6.0: the babysitter, the autopilot, and the trust layer
 
