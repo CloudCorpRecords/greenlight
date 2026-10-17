@@ -8,6 +8,18 @@ and never post anything to GitHub without the human's go-ahead.
 
 ## Install per tool
 
+The fastest path is the one-command setup, run in your project:
+
+```bash
+npx @reneturcios/greenlight init --agent claude-code
+```
+
+(use `cursor`, `copilot`, `windsurf`, or `cline` for the other tools). Init
+writes the MCP config and the instruction snippet for you, then tells you
+what to restart. After that, run `greenlight doctor` to verify the setup.
+
+The manual alternative, if you would rather copy files yourself:
+
 | Tool | Copy this file | To this destination |
 |---|---|---|
 | Claude Code | `claude-code/.mcp.json` | your project root as `.mcp.json` |

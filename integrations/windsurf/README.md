@@ -6,7 +6,7 @@ Windsurf's global MCP config lives at:
 
 Copy the `mcp_config.json` file in this folder there (merging with any
 servers you already have), then restart Windsurf and check its MCP panel:
-the `greenlight` server should list 12 tools. Newer Windsurf versions also
+the `greenlight` server should list 15 tools. Newer Windsurf versions also
 accept a project-level `.windsurf/mcp.json` file using the same
 `mcpServers` format.
 
