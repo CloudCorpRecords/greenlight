@@ -6,7 +6,13 @@ Greenlight checks a GitHub issue before you spend hours on it, and tells you in 
 
 ## Use Greenlight inside your AI coding tool
 
-Greenlight ships an agent drop-in pack in [`integrations/`](integrations/README.md): ready-to-copy MCP configs for Claude Code, Cursor, VS Code / Copilot, Windsurf, and Cline, plus instruction snippets that teach your agent the one behavior rule: **check Greenlight before it opens a PR.** Verify with a "list your MCP tools" prompt; the greenlight server carries 13 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment).
+One command sets it up:
+
+```bash
+npx @reneturcios/greenlight init --agent claude-code
+```
+
+(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 15 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment, babysit_prs, evidence_pack).
 
 ## The problem
 
@@ -52,6 +58,13 @@ A validation corpus of thirteen real cases from the campaign (`test/fixtures/cas
 npx @reneturcios/greenlight check <issue-url>
 ```
 
+Set up your AI coding tool and verify the setup:
+
+```bash
+npx @reneturcios/greenlight init --agent claude-code   # one-command MCP setup (cursor, copilot, windsurf, cline work too)
+npx @reneturcios/greenlight doctor                     # checks Node version, token, GitHub quota, cache
+```
+
 Or from source:
 
 ```bash
@@ -77,6 +90,16 @@ Each tool is a CLI and an MCP server (`<tool> mcp`).
 ## CLI
 
 ```bash
+# One-command setup for your AI coding tool (cursor, copilot, windsurf, cline work too)
+npx @reneturcios/greenlight init --agent claude-code
+
+# Verify the setup: Node version, token, GitHub quota, cache (exit 1 when anything fails)
+npx @reneturcios/greenlight doctor
+
+# Help: overview, one command's flags, or the version
+npx @reneturcios/greenlight help check
+npx @reneturcios/greenlight --version
+
 # Verdict for one issue
 npx @reneturcios/greenlight check https://github.com/batrapulkit/squidbrake/issues/74
 
@@ -220,6 +243,9 @@ Tools:
 * `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
 * `guard_pr` - maintainer-side analysis of an incoming PR: competing fix, prior claims by someone other than the author, missing artifacts (changeset / DCO / CLA), first-time contributor. Returns comment-ready markdown (never posts).
 * `repo_digest` - repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts (never posts).
+* `claim_status` - Claim Protocol pre-flight for one issue: who holds it, until when, who is queued, competing PRs, gates, whether the repo honors the protocol
+* `preflight` - the one-call answer: claim_status plus the repo friction summary
+* `verify_comment` - draft the verified-finding comment for maintainer-only repos (draft only, never posts)
 * `babysit_prs` - watch open PRs and get the one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks
 * `evidence_pack` - the Verified PR evidence pack for one PR: guard verdict, CI triage, review triage, protocol status of linked issues, every claim citing its source
 
