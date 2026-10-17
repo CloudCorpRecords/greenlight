@@ -378,6 +378,33 @@ async function fetchFailureLines(owner: string, repo: string, checkRunId: number
   }
 }
 
+/**
+ * Workflow runs waiting on maintainer approval are invisible to the
+ * check-runs API on the commit (see babysit.ts: the actions runs API is
+ * the source that reports them). Synthesize failing entries so ci triage
+ * classifies the approval gate even when GitHub hides the check run.
+ */
+async function fetchActionRequiredHeadChecks(owner: string, repo: string, headSha: string): Promise<HeadCheck[]> {
+  try {
+    const data = (await apiGet(`/repos/${owner}/${repo}/actions/runs?head_sha=${headSha}&per_page=20`)) as {
+      workflow_runs?: Array<{ name?: unknown; conclusion?: unknown }>;
+    };
+    const names = new Set<string>();
+    const out: HeadCheck[] = [];
+    for (const r of data.workflow_runs ?? []) {
+      if (String(r.conclusion ?? "") !== "action_required") continue;
+      const name = String(r.name ?? "unknown workflow");
+      if (!names.has(name)) {
+        names.add(name);
+        out.push({ name, conclusion: "action_required" });
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 async function defaultFetchHeadChecks(owner: string, repo: string, headSha: string): Promise<HeadCheck[]> {
   const data = (await apiGet(`/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`)) as {
     check_runs?: CheckRunApiItem[];
@@ -401,6 +428,16 @@ async function defaultFetchHeadChecks(owner: string, repo: string, headSha: stri
       detailsUrl: typeof c.details_url === "string" ? c.details_url : undefined,
       failureLines,
     });
+  }
+  // The check-runs API hides approval-gated workflow runs: merge the
+  // synthesized entries in, deduped by name, so the classifier sees the
+  // real waiting state.
+  const seen = new Set(out.map((c) => c.name));
+  for (const extra of await fetchActionRequiredHeadChecks(owner, repo, headSha)) {
+    if (!seen.has(extra.name)) {
+      out.push(extra);
+      seen.add(extra.name);
+    }
   }
   return out;
 }
