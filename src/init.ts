@@ -375,7 +375,7 @@ export function formatInitHuman(results: InitToolResult[], dryRun: boolean): str
     }
     for (const n of r.notes) lines.push(`  next: ${n}`);
   }
-  lines.push("Verify: ask your agent to list its MCP tools; greenlight should appear with 12 tools.");
+  lines.push("Verify: ask your agent to list its MCP tools; greenlight should appear with 15 tools.");
   lines.push("Tip: set GITHUB_TOKEN (classic PAT, no scopes needed for public repos) for the 5000 req/hr limit.");
   return lines.join("\n");
 }

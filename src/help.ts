@@ -114,18 +114,15 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "init",
-    usage: "greenlight init --agent <tool> [--agent <tool>...] [--all] [--list] [--force] [--no-instructions] [--dry-run] [--json]",
+    usage: "greenlight init --agent <tool> [--agent <tool>...] [--dry-run] [--force]",
     description: "Set up Greenlight in your AI coding tool: MCP config plus the workflow instructions.",
     flags: [
-      "--agent <tool> (repeatable, comma-separated; see --list)",
-      "--all (set up every supported tool)",
-      "--list (show the supported tools)",
+      "--agent <tool> (repeatable, comma-separated; claude-code, cursor, copilot, windsurf, cline)",
+      "--list (show the supported agent ids)",
       "--force (overwrite conflicting files)",
-      "--no-instructions (config only, skip the snippet)",
       "--dry-run (report without writing)",
-      "--json (machine-readable output)",
     ],
-    examples: ["greenlight init --agent claude-code", "greenlight init --all --dry-run"],
+    examples: ["greenlight init --agent claude-code", "greenlight init --agent cursor --dry-run"],
   },
   {
     name: "doctor",
@@ -137,9 +134,76 @@ export const COMMANDS: CommandHelp[] = [
   {
     name: "mcp",
     usage: "greenlight mcp",
-    description: "Run the MCP server on stdio (12 tools). Your agent client launches this; see 'init'.",
+    description: "Run the MCP server on stdio (15 tools). Your agent client launches this; see 'init'.",
     flags: [],
     examples: ["greenlight mcp"],
+  },
+  {
+    name: "verify-comment",
+    usage: "greenlight verify-comment <issue-url> [--json] [--from-file notes.md]",
+    description: "Draft the verified-finding comment for a maintainer-only repo. Never posts.",
+    flags: [
+      "--from-file <path> (read sections from a markdown notes file)",
+      "--claim/--env/--repro/--observed/--expected/--root-cause/--fix/--ran/--by (fill sections)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight verify-comment https://github.com/owner/repo/issues/123 --from-file notes.md"],
+  },
+  {
+    name: "verify",
+    usage: "greenlight verify [--base <ref>] [--cmd \"<test command>\"] [--parser node:test|pytest] [--json]",
+    description: "Honest red-green test delta: base vs working tree. Exit 3 on new failures, 1 when unverifiable.",
+    flags: [
+      "--base <ref> (base to compare; defaults to merge-base with upstream)",
+      "--cmd \"<test command>\" (override the detected test command)",
+      "--parser node:test|pytest (override the detected test parser)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight verify --base origin/main"],
+  },
+  {
+    name: "babysit",
+    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--json] [--fail-on-action]",
+    description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet).",
+    flags: [
+      "--prs <url,...> (watch these PR URLs)",
+      "--mine --repos <o/r,...> (discover your open PRs across repos)",
+      "--fail-on-action (exit 3 when the needs-you-now list is non-empty)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight babysit --mine --repos acme/widgets"],
+  },
+  {
+    name: "evidence",
+    usage: "greenlight evidence <pr-url> [--out file.md] [--verify-json path] [--json]",
+    description: "Verified PR evidence pack: guard verdict, CI triage, review triage, protocol status; every claim cites its source.",
+    flags: [
+      "--out <file> (write the pack to a markdown file)",
+      "--verify-json <path> (attach a greenlight verify --json test delta)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight evidence https://github.com/acme/widgets/pull/42 --out EVIDENCE.md"],
+  },
+  {
+    name: "passport",
+    usage: "greenlight passport <github-login> [--json]",
+    description: "Contributor passport: protocol claims from the Claim Ledger plus merged PRs.",
+    flags: ["--json (machine-readable output)"],
+    examples: ["greenlight passport CloudCorpRecords"],
+  },
+  {
+    name: "help",
+    usage: "greenlight help [command]",
+    description: "Show help: the overview, or one command's flags and examples. Also '<cmd> --help'.",
+    flags: [],
+    examples: ["greenlight help", "greenlight help check"],
+  },
+  {
+    name: "version",
+    usage: "greenlight version",
+    description: "Print the Greenlight version. The same as 'greenlight --version'.",
+    flags: [],
+    examples: ["greenlight version"],
   },
 ];
 
@@ -165,6 +229,9 @@ export const NEEDS_TARGET: Record<string, string> = {
   claim: "an issue URL, e.g. greenlight claim https://github.com/owner/repo/issues/123",
   prep: "an issue URL, e.g. greenlight prep https://github.com/owner/repo/issues/123",
   pr: "an issue URL plus --branch, e.g. greenlight pr https://github.com/owner/repo/issues/123 --branch fix/issue-123",
+  "verify-comment": "an issue URL, e.g. greenlight verify-comment https://github.com/owner/repo/issues/123",
+  evidence: "a PR URL, e.g. greenlight evidence https://github.com/owner/repo/pull/456",
+  passport: "a GitHub login, e.g. greenlight passport CloudCorpRecords",
 };
 
 /** First-run overview: quickstart first, then the command list. */
