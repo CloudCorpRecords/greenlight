@@ -17,7 +17,7 @@ function deps(over: Partial<DoctorDeps> = {}): DoctorDeps {
   created.push(cacheDir);
   return {
     nodeVersion: "v22.14.0",
-    env: { GITHUB_TOKEN: "fake" } as NodeJS.ProcessEnv,
+    env: { GITHUB_TOKEN: "fake", FIREWORKS_API_KEY: "fake" } as NodeJS.ProcessEnv,
     cacheDir,
     packageVersion: "0.0.0-test",
     fetchRateLimit: healthyRate,
@@ -47,6 +47,22 @@ describe("greenlight doctor", () => {
     const report = await runDoctor(deps({ env: {} as NodeJS.ProcessEnv }));
     assert.equal(statusOf(report, "github token"), "warn");
     assert.ok(report.checks.find((c) => c.name === "github token")!.fix);
+  });
+
+  it("claim AI passes with the key set and never prints the key", async () => {
+    const report = await runDoctor(deps());
+    const check = report.checks.find((c) => c.name === "claim ai")!;
+    assert.equal(check.status, "pass");
+    assert.ok(check.detail.includes("accounts/fireworks/models/glm-5p3-flash"), check.detail);
+    assert.ok(!check.detail.includes("fake"), "the key value must never appear in output");
+  });
+
+  it("claim AI warns when the key is unset and names the fix", async () => {
+    const report = await runDoctor(deps({ env: { GITHUB_TOKEN: "fake" } as NodeJS.ProcessEnv }));
+    assert.equal(statusOf(report, "claim ai"), "warn");
+    const check = report.checks.find((c) => c.name === "claim ai")!;
+    assert.ok(check.detail.includes("claim AI is off"));
+    assert.ok(check.fix, "an optional feature still carries its fix");
   });
 
   it("accepts GH_TOKEN as well as GITHUB_TOKEN", async () => {

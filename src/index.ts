@@ -43,7 +43,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.7.0" });
+const server = new McpServer({ name: "greenlight", version: "0.8.0" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -61,7 +61,7 @@ server.tool(
       // Merged verdict: the protocol claim state overrides legacy claim
       // inference, but never gates or cross-referenced PR evidence.
       const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number);
-      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol, suggests_verified_comment: suggestsVerifiedComment(merged.gates) });
+      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol, llm_claims: merged.llm_claims ?? [], suggests_verified_comment: suggestsVerifiedComment(merged.gates) });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
