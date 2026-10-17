@@ -209,6 +209,20 @@ The verdict engine is deterministic (no LLM) and checks, in order:
 
 Claim detection scans comments for explicit claim phrases, in-progress signals ("fix ready", "PR incoming", "opened a PR"), and soft offers ("happy to fix", "take a look at this one"). Bot authors are ignored, as are issue reporters unless they announce a ready fix. Soft claims now carry their comment date, so the verdict can show how old they are (the `weak-claim` flag, warning only). Scoped claims ("taking the remaining fallback ask", "claiming this half") are recorded as partial: a fresh partial claim downgrades an otherwise-GO verdict to RISKY with a reason naming the claimer and the scope, never TAKEN. PR references (#NNN) in non-author comments are cross-checked against the PR API: an open referenced PR that mentions the issue downgrades GO to RISKY with the `comment-mentioned-pr` flag, and a merged one feeds rule 12 above.
 
+### Optional AI claim detection
+
+The pattern layer cannot know every way a human says "I'm taking this" (one evening it missed "I'm looking into contributing a fix here" on a real issue). Set `FIREWORKS_API_KEY` and `check` gains an optional second pair of eyes: a cheap Fireworks model reads the eligible comments (bots and the issue author excluded, same pool as the patterns) and flags statements of intent the patterns missed.
+
+The governance is plain:
+
+- **Off by default.** No key, no calls, output byte-identical to the pattern-only engine.
+- **Patterns stay primary and cheaper.** The AI only runs when they found no strong claim.
+- **Flags, never verdicts.** An AI flag adds the `llm-claim` flag with the exact quote as evidence and downgrades an otherwise-GO verdict to **RISKY**. It can never produce **TAKEN** and never overrides **GATED**. Verdicts stay deterministic.
+- **No invented evidence.** The quote must be an exact substring of the comment body; anything else is dropped before it can reach the verdict.
+- **Failures are silent.** A timeout, a non-200 response, or an unparseable reply returns no signal, never an error into the check path. Classifications are cached by comment id and model id, so repeat checks cost nothing.
+
+Cost on the default model (`accounts/fireworks/models/glm-5p3-flash`): one issue check costs well under a tenth of a cent. Override the model with `GREENLIGHT_LLM_MODEL` and the endpoint with `GREENLIGHT_LLM_BASE_URL`. `greenlight doctor` reports whether the layer is configured (the key is never printed).
+
 ### v0.3.4: never race blind
 
 One evening, five of twelve claimed issues were already taken. The races were not in the comments: they were in the issue timelines, where GitHub records PRs that reference the issue even when their bodies never say "closes #N". So `check` now reads the timeline. An open cross-referenced PR caps the verdict at **TAKEN** with the PR URL and title quoted. A merged one adds a "the issue may already be fixed, verify what shipped" note instead, capped at **RISKY**, because a merged PR can fix only part of an issue. Also new: emoji-proof fix-announcement matching ("Opened #NNN", "🤖 ..." prefixes), bounty-liveness warnings (dead platforms like Algora are named, unverified bounties are flagged, and bounties never raise a verdict), and a `possibly-server-side` warning when the issue's quoted error text does not exist anywhere in the repo. The `friction` command gains one more line when computable: the share of recent merged PRs written by outsiders and the median time to merge, straight from the API.
