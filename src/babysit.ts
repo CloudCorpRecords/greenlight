@@ -350,7 +350,21 @@ export function buildPrReport(input: BabysitPrInput): BabysitPrReport {
   if (pending.length > 0) {
     add("waiting", `Checks still running: ${pending.slice(0, 5).join(", ")}${pending.length > 5 ? ` (+${pending.length - 5} more)` : ""}`, "Nothing to do yet; this report updates when they finish.");
   }
-  const externalBlocked = ci.checks.some((c) => c.class === "external-blocker");
+  // GitHub's maintainer-approval gate (conclusion action_required on the
+  // check runs, e.g. fork PRs touching workflow files): the run never
+  // executed, so this is a waiting state on the maintainer, never a green
+  // or failing one. Field case: mealie-recipes/mealie#8753.
+  const approvalWaiting =
+    ci.checks.some((c) => c.class === "external-blocker" && c.conclusion === "action_required") ||
+    checkRuns.some((r) => r.status === "completed" && r.conclusion === "action_required");
+  if (approvalWaiting) {
+    add(
+      "waiting",
+      "checks waiting on maintainer workflow approval",
+      "A maintainer must approve the workflow run before it executes (typical for fork PRs touching workflow files); there is nothing for you to fix."
+    );
+  }
+  const externalBlocked = ci.checks.some((c) => c.class === "external-blocker" && c.conclusion !== "action_required");
   if (externalBlocked) {
     add("waiting", "CI blocked by the repo's own infrastructure (deploy/auth), not your code", "Nothing to fix; mention it to the maintainer if it persists.");
   }

@@ -140,6 +140,43 @@ describe("buildPrReport: the clean first-run picture", () => {
     assert.match(r.actions[0].text, /no review feedback/i);
   });
 
+  it("an action_required check run is waiting on maintainer approval, not fine", () => {
+    const run: BabysitCheckRun = {
+      name: "CI Gate",
+      status: "completed",
+      conclusion: "action_required",
+      startedAt: new Date(NOW.getTime() - 30 * 60000).toISOString(),
+    };
+    const r = buildPrReport({ prUrl: PR, pr: pull(), checkRuns: [run], ci: ci(), review: review(), guard: guardRes(), watermark: null, now: NOW });
+    // Completed runs never read as pending...
+    assert.deepEqual(r.pendingChecks, []);
+    const a = r.actions.find((x) => x.text.includes("waiting on maintainer workflow approval"));
+    assert.ok(a, `actions: ${JSON.stringify(r.actions.map((x) => x.text))}`);
+    assert.equal(a.urgency, "waiting");
+    // ...and no one calls this fine
+    assert.ok(!r.actions.some((x) => /no review feedback/i.test(x.text)), "calm action must not fire");
+  });
+
+  it("the ci-triage path also surfaces the waiting action without check runs", () => {
+    const triage = ci({
+      verdict: "ALL PRE-EXISTING",
+      checks: [
+        {
+          name: "CI Gate",
+          conclusion: "action_required",
+          class: "external-blocker",
+          evidence: "check run conclusion is action_required: the workflow run is waiting on maintainer approval",
+        },
+      ],
+    });
+    const r = buildPrReport({ prUrl: PR, pr: pull(), checkRuns: [], ci: triage, review: review(), guard: guardRes(), watermark: null, now: NOW });
+    const a = r.actions.find((x) => x.text.includes("waiting on maintainer workflow approval"));
+    assert.ok(a, `actions: ${JSON.stringify(r.actions.map((x) => x.text))}`);
+    assert.equal(a.urgency, "waiting");
+    // the generic deploy/auth message must not double-report this one
+    assert.ok(!r.actions.some((x) => x.text.includes("repo's own infrastructure")), "no duplicate blocker message");
+  });
+
   it("a pending check run under the stuck threshold is waiting, not now", () => {
     const run: BabysitCheckRun = {
       name: "unit",
