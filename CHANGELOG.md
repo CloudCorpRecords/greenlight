@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 0.8.0 (2026-10-16)
+
+The pattern layer learns a second pair of eyes, with the verdict math untouched.
+
+- **Optional AI claim-intent detection (Fireworks).** Patterns cannot know every way a human says "I'm taking this": one evening the checker missed "I'm looking into contributing a fix here" on a real issue. Set `FIREWORKS_API_KEY` and `greenlight check` sends the eligible comments (bots and the issue author excluded, same pool as the patterns) to a cheap Fireworks model (default `accounts/fireworks/models/glm-5p3-flash`; `GREENLIGHT_LLM_MODEL` / `GREENLIGHT_LLM_BASE_URL` override) when the patterns found no strong claim. The governance is the feature: off by default (no key, no calls, output identical to the pattern-only engine), flags only (the `llm-claim` flag with the exact quote as evidence, downgrading an otherwise-GO verdict to RISKY), never TAKEN and never overriding GATED, quotes must be exact substrings of the comment body or the result is dropped, and timeouts/non-200s/unparseable replies return no signal instead of an error. Classifications are cached by comment id + model id. One issue check costs well under a tenth of a cent on the default model. `greenlight doctor` reports whether the layer is configured (the key is never printed); `greenlight help check` documents the env vars; the README states the governance in plain language.
+- The Claim Protocol merge treats AI claim inference like any legacy claim inference: a live protocol claim supersedes the `llm-claim` flag and its reasons, while the `llm_claims` array still rides along in JSON output (also added to `check_issue`).
+
 ## 0.7.0 (2026-10-16)
 
 Setup and help stop being the friction: one command onboards your agent, one command verifies the setup, and help finally works everywhere.
