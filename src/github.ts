@@ -25,13 +25,17 @@ const TTL_MS: Record<string, number> = {
   issue: 6 * 60 * 60 * 1000,
   search: 60 * 60 * 1000,
   contributing: 24 * 60 * 60 * 1000,
+  // LLM claim classifications: comment bodies are immutable, so a long TTL
+  // means repeat checks cost nothing after the first classification.
+  llm: 30 * 24 * 60 * 60 * 1000,
 };
 
 function cacheKey(kind: string, parts: string[]): string {
   return `${kind}-${parts.join("-").replace(/[^a-zA-Z0-9_.-]/g, "_")}.json`;
 }
 
-function cacheGet(kind: string, parts: string[]): unknown | undefined {
+/** File-backed best-effort cache shared by the fetch layer and the optional LLM layer. */
+export function cacheGet(kind: string, parts: string[]): unknown | undefined {
   ensureCache();
   const file = join(CACHE_DIR, cacheKey(kind, parts));
   if (!existsSync(file)) return undefined;
@@ -44,7 +48,7 @@ function cacheGet(kind: string, parts: string[]): unknown | undefined {
   }
 }
 
-function cacheSet(kind: string, parts: string[], data: unknown): void {
+export function cacheSet(kind: string, parts: string[], data: unknown): void {
   ensureCache();
   const file = join(CACHE_DIR, cacheKey(kind, parts));
   try {
@@ -164,6 +168,7 @@ export async function fetchComments(owner: string, repo: string, number: number)
     author: (c.user as Record<string, string>).login,
     body: String(c.body ?? ""),
     createdAt: String(c.created_at),
+    id: typeof c.id === "number" ? c.id : undefined,
   }));
   cacheSet("issue", [owner, repo, String(number), "comments"], comments);
   return comments;
