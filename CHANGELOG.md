@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.7.0 (2026-10-16)
+
+Setup and help stop being the friction: one command onboards your agent, one command verifies the setup, and help finally works everywhere.
+
+- **`greenlight init`: one-command agent setup.** `greenlight init --agent claude-code` (also cursor, copilot, windsurf, cline; repeatable and comma-separated) copies the MCP config into your project (merging into an existing config, keeping other servers) and installs the workflow instruction snippet (marker-guarded, idempotent). Run it with no `--agent` and it detects which tools the project uses from their marker files; with nothing detected it prints the supported ids and exits 2 with an example. `--dry-run` reports without writing, `--force` overwrites conflicting files. Exits nonzero on any setup error.
+- **`greenlight doctor`: the setup check.** Node version (>= 20), GITHUB_TOKEN presence, GitHub API reachability plus your actual rate-limit quota, and cache-directory writability. Every check carries its fix; exit 1 when any check fails. The missing piece for the new Install section: doctor is now the documented "did I set this up right" step.
+- **Unified help.** `greenlight help [command]` prints the overview or one command's flags and examples, any known command followed by `--help` does the same, `greenlight --version` (and `greenlight version`) prints the version, and unknown commands keep exit 1 but now show the overview with a "Did you mean ...?" suggestion. The hardcoded CLI usage block is gone: `help.ts` is the single source of help text for both the CLI and the test suite, and every dispatched command now has a help entry (init, doctor, verify, verify-comment, babysit, evidence, passport, help, version were added). A known command with a missing argument now shows its own help instead of the generic overview.
+- **Docs and integrations refreshed to all 15 tools.** The README leads with `npx @reneturcios/greenlight init --agent claude-code` as the install path (manual `integrations/` copy as fallback), the Install section adds init plus `greenlight doctor` as setup verification, and the MCP tool list now names all 15 (claim_status, preflight, and verify_comment were missing). The claude-code, cursor, and copilot instruction snippets teach the new rules: preflight/claim_status before claiming, verify_comment instead of a PR when the repo takes no outside PRs, babysit_prs to check on open PRs, evidence_pack when the human wants proof a PR is sound.
+
+
 ## 0.6.0 (2026-10-16)
 
 The three tools that turn Greenlight from a check you run into infrastructure you live in.
