@@ -177,6 +177,22 @@ describe("buildPrReport: the clean first-run picture", () => {
     assert.ok(!r.actions.some((x) => x.text.includes("repo's own infrastructure")), "no duplicate blocker message");
   });
 
+  it("merging: mealie #8753 shape (2 check runs + 3 approval-gated workflows)", async () => {
+    const { mergeActionRequiredRuns } = await import("../src/babysit.js");
+    const existing: BabysitCheckRun[] = [
+      { name: "draft_release", status: "completed", conclusion: "skipped", startedAt: null },
+      { name: "auto_label", status: "completed", conclusion: "success", startedAt: null },
+      { name: "PR CI", status: "completed", conclusion: "action_required", startedAt: null },
+    ];
+    const merged = mergeActionRequiredRuns(existing, ["PR CI", "Auto-merge dependency PRs", "Auto-merge l10n PRs"]);
+    assert.equal(merged.length, 5);
+    assert.deepEqual(merged.map((r) => r.name), ["draft_release", "auto_label", "PR CI", "Auto-merge dependency PRs", "Auto-merge l10n PRs"]);
+    const r = buildPrReport({ prUrl: PR, pr: pull(), checkRuns: merged, ci: ci(), review: review(), guard: guardRes(), watermark: null, now: NOW });
+    const a = r.actions.find((x) => x.text.includes("waiting on maintainer workflow approval"));
+    assert.ok(a && a.urgency === "waiting");
+    assert.equal(r.actions.filter((x) => x.urgency === "now").length, 0);
+  });
+
   it("a pending check run under the stuck threshold is waiting, not now", () => {
     const run: BabysitCheckRun = {
       name: "unit",

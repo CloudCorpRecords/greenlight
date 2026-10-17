@@ -104,6 +104,42 @@ async function defaultFetchPr(owner: string, repo: string, number: number): Prom
   };
 }
 
+/**
+ * Workflow runs waiting on maintainer approval are the check-runs API's
+ * blind spot: GitHub does not surface them as check runs on the commit
+ * (mealie-recipes/mealie#8753: the actions runs API reported three
+ * action_required workflow runs while check-runs showed only two benign
+ * entries). Merge the two sources so the approval gate is visible. Pure;
+ * tests drive it with fixtures.
+ */
+export function mergeActionRequiredRuns(
+  existing: BabysitCheckRun[],
+  actionRequiredNames: string[]
+): BabysitCheckRun[] {
+  const names = new Set(existing.map((r) => r.name));
+  const out = [...existing];
+  for (const name of actionRequiredNames) {
+    if (!names.has(name)) {
+      out.push({ name, status: "completed", conclusion: "action_required", startedAt: null });
+      names.add(name);
+    }
+  }
+  return out;
+}
+
+async function fetchActionRequiredWorkflowRuns(owner: string, repo: string, headSha: string): Promise<string[]> {
+  try {
+    const data = (await apiGet(
+      `/repos/${owner}/${repo}/actions/runs?head_sha=${headSha}&per_page=20`
+    )) as { workflow_runs?: Array<{ name?: unknown; conclusion?: unknown }> };
+    return (data.workflow_runs ?? [])
+      .filter((r) => String(r.conclusion ?? "") === "action_required")
+      .map((r) => String(r.name ?? "unknown workflow"));
+  } catch {
+    return [];
+  }
+}
+
 async function defaultFetchCheckRuns(
   owner: string,
   repo: string,
@@ -127,7 +163,7 @@ async function defaultFetchCheckRuns(
     }
     if (runs.length < 100) break;
   }
-  return out;
+  return mergeActionRequiredRuns(out, await fetchActionRequiredWorkflowRuns(owner, repo, headSha));
 }
 
 async function defaultDiscoverPrs(author: string, repos: string[]): Promise<string[]> {
