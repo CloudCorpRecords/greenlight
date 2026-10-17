@@ -20,7 +20,7 @@ import { detectClaims, isBotAuthor } from "./claims.js";
 import { extractLinkedIssueNumbers, extractCrossRepoIssues, splitIssueClaims, type GuardClaim } from "./guard.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 
-export const DIGEST_VERSION = "0.6.0";
+export const DIGEST_VERSION = "0.9.0";
 
 /** Default cap for list fetches; --limit overrides. The true total is always reported. */
 export const DEFAULT_DIGEST_LIMIT = 50;
@@ -78,6 +78,20 @@ export interface DigestStaleClaim {
   action: string;
 }
 
+/**
+ * An open issue the repo holds in triage: contributors are told not to
+ * build until triage clears (mastra's bot triage notice, nuxt's "pending
+ * triage" label). Future pipeline, not a current target; Digest lists
+ * them so a watch can turn into a claim the day the hold clears.
+ */
+export interface DigestTriageHold {
+  number: number;
+  title: string;
+  url: string;
+  /** The label or notice that created the hold, quoted for the digest reader. */
+  evidence: string;
+}
+
 export interface DigestAssignmentConflict {
   pr: DigestPR;
   issue: DigestIssueKey;
@@ -98,6 +112,8 @@ export interface DigestResult {
   claimConflicts: DigestClaimConflict[];
   staleClaims: DigestStaleClaim[];
   assignmentConflicts: DigestAssignmentConflict[];
+  /** Open issues held in triage (label or bot notice); watch, don't build. */
+  triageHolds: DigestTriageHold[];
   /** Sections that could not be computed, with the reason why. */
   degraded: DigestSectionNote[];
   /** "# of sections zero" friendly summary header. */
@@ -315,12 +331,39 @@ function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
 }
 
+import { hasTriageLabel } from "./triage.js";
+
+/**
+ * Triage holds from an already-fetched open-issue list: label-only
+ * detection, zero extra API calls. Bot-notice variants need comments and
+ * stay in the per-issue verdict path. Pure over list data; fixtures prove
+ * the filtering.
+ */
+export function buildTriageHolds(
+  issues: Array<{ number: number; title: string; url: string; labels: string[] }>
+): DigestTriageHold[] {
+  const out: DigestTriageHold[] = [];
+  for (const issue of issues) {
+    const label = hasTriageLabel(issue.labels);
+    if (label) {
+      out.push({
+        number: issue.number,
+        title: issue.title,
+        url: issue.url,
+        evidence: `held by label "${label}"`,
+      });
+    }
+  }
+  return out;
+}
+
 export function buildDigestSummary(args: {
   repo: string;
   races: number;
   claimConflicts: number;
   staleClaims: number;
   assignmentConflicts: number;
+  triageHolds: number;
   prCap: number;
   trueOpenPRs: number | null;
 }): string {
@@ -328,7 +371,7 @@ export function buildDigestSummary(args: {
     args.trueOpenPRs !== null && args.trueOpenPRs > args.prCap
       ? ` (showing ${args.prCap} of ${args.trueOpenPRs} open PRs)`
       : "";
-  return `Digest for ${args.repo}${capped}: ${args.races} ${plural(args.races, "race", "races")}, ${args.claimConflicts} claimed-by-other ${plural(args.claimConflicts, "conflict", "conflicts")}, ${args.staleClaims} stale ${plural(args.staleClaims, "claim", "claims")}, ${args.assignmentConflicts} assignment ${plural(args.assignmentConflicts, "conflict", "conflicts")}`;
+  return `Digest for ${args.repo}${capped}: ${args.races} ${plural(args.races, "race", "races")}, ${args.claimConflicts} claimed-by-other ${plural(args.claimConflicts, "conflict", "conflicts")}, ${args.staleClaims} stale ${plural(args.staleClaims, "claim", "claims")}, ${args.assignmentConflicts} assignment ${plural(args.assignmentConflicts, "conflict", "conflicts")}, ${args.triageHolds} triage ${plural(args.triageHolds, "hold", "holds")}`;
 }
 
 export function renderDigestMarkdown(result: DigestResult): string {
@@ -397,15 +440,26 @@ export function renderDigestMarkdown(result: DigestResult): string {
     lines.push("");
   }
 
+  // Triage holds are not conflicts and never a reason to stop; they are
+  // the watch list: issues whose hold may clear into claimable work.
+  if (result.triageHolds.length > 0) {
+    lines.push(`## Triage-held issues (${result.triageHolds.length})`);
+    for (const h of result.triageHolds) {
+      lines.push(`- #${h.number} "${h.title.slice(0, 60)}": ${h.evidence} (watch; claim when the hold clears)`);
+      lines.push(`  ${h.url}`);
+    }
+    lines.push("");
+  }
+
   if (result.degraded.length > 0) {
     lines.push(`## Could not compute`);
     for (const d of result.degraded) lines.push(`- ${d.section}: ${d.note}`);
     lines.push("");
   }
 
-  const zero = result.races.length === 0 && result.claimConflicts.length === 0 && result.staleClaims.length === 0 && result.assignmentConflicts.length === 0;
+  const zero = result.races.length === 0 && result.claimConflicts.length === 0 && result.staleClaims.length === 0 && result.assignmentConflicts.length === 0 && result.triageHolds.length === 0;
   if (zero && result.degraded.length === 0) {
-    lines.push("_Nothing needs attention:_ no PR races, no claimed-by-other conflicts, no stale claims, no assignment conflicts.");
+    lines.push("_Nothing needs attention:_ no PR races, no claimed-by-other conflicts, no stale claims, no assignment conflicts, no triage holds.");
     lines.push("");
   }
 
@@ -438,6 +492,7 @@ interface IssueListItem {
   comments?: unknown;
   html_url?: unknown;
   assignees?: Array<{ login?: unknown }>;
+  labels?: Array<{ name?: unknown }>;
   pull_request?: unknown;
 }
 
@@ -705,6 +760,17 @@ export async function digestRepo(
     }
   }
 
+  // 7. Triage holds: label-only detection over the issue list already
+  //    fetched above. No extra API calls; the watch list, not a verdict.
+  const triageHolds = buildTriageHolds(
+    openIssues.map((item) => ({
+      number: Number(item.number),
+      title: String(item.title ?? ""),
+      url: String(item.html_url ?? `https://github.com/${owner}/${repo}/issues/${item.number}`),
+      labels: (item.labels ?? []).map((l) => String(l.name ?? "")),
+    }))
+  );
+
   const summary = buildDigestSummary({
     repo: `${owner}/${repo}`,
     races: races.length,
@@ -713,6 +779,7 @@ export async function digestRepo(
     claimConflicts: claimConflicts.filter((c) => c.foreignClaims.some((f) => f.strength === "strong")).length,
     staleClaims: staleClaims.length,
     assignmentConflicts: assignmentConflicts.length,
+    triageHolds: triageHolds.length,
     prCap: limit,
     trueOpenPRs,
   });
@@ -723,6 +790,7 @@ export async function digestRepo(
     claimConflicts,
     staleClaims,
     assignmentConflicts,
+    triageHolds,
     degraded,
     summary,
     prCap: limit,

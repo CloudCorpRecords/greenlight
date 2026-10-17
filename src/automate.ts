@@ -348,6 +348,12 @@ export function gateActions(gates: Gate[]): string[] {
       case "collaborators_only":
         actions.push("Only collaborators can open PRs in this repo.");
         break;
+      case "agents_banned":
+        actions.push("This repo bans agent contributions (see the quoted policy): only a human who fully understands the change may submit it. An agent must not open the PR, draft its text, or post it.");
+        break;
+      case "agents_disclosure":
+        actions.push("Disclose AI assistance in the PR description and prefix the PR title and commits with [AI] as the repo's policy requires.");
+        break;
     }
   }
   return actions;
@@ -385,6 +391,15 @@ export async function claimIssue(
   if ((result.verdict === "TAKEN" || result.verdict === "STALE") && !opts.force) {
     throw new AutomationRefusal(
       `refusing to claim ${ref}: verdict is ${result.verdict} (${result.reasons[0] ?? "no reason"}). Pass --force to claim anyway.`
+    );
+  }
+  // Agent-ban (nuxt/nuxt AGENTS.md case): the repo only accepts human
+  // submissions. Refuse like TAKEN unless forced; a --force claim here
+  // still needs a human to open and write the PR.
+  const banned = result.gates.find((g) => g.kind === "agents_banned" && g.detected);
+  if (banned && !opts.force) {
+    throw new AutomationRefusal(
+      `refusing to claim ${ref}: this repo bans agent contributions (${banned.source ?? "AGENTS.md"}: "${banned.evidence}"). Only a human may submit. Pass --force to claim anyway.`
     );
   }
   const gates = parseGates(snapshot.contributing);

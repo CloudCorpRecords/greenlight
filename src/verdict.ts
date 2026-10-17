@@ -44,12 +44,14 @@
  *     counts as "a PR was opened" here; a mere mention does not. Stale
  *     partial claims get the same treatment, scoped.
  *  7. Any hard gate (assignment / vouch / collaborators_only /
- *     unsolicited_prs_paused / external_prs_closed) with no assignee ->
- *     GATED. The code might be welcome, but the ritual blocks you:
- *     PrefectHQ/fastmcp#5718 (assignment), triggerdotdev/trigger.dev#5016
- *     (vouch), activepieces/activepieces (paused unsolicited PRs plus a
- *     "Close external PRs" workflow that auto-closed two finished PRs
- *     within about a minute).
+ *     unsolicited_prs_paused / external_prs_closed / agents_banned) with
+ *     no assignee -> GATED. The code might be welcome, but the ritual
+ *     blocks you: PrefectHQ/fastmcp#5718 (assignment),
+ *     triggerdotdev/trigger.dev#5016 (vouch),
+ *     activepieces/activepieces (paused unsolicited PRs plus a "Close
+ *     external PRs" workflow that auto-closed two finished PRs within
+ *     about a minute), nuxt/nuxt (AGENTS.md bans autonomous agent
+ *     contributions outright).
  *  8. No activity for 180+ days -> STALE. The issue is probably abandoned,
  *     the repro may not even hold on current code.
  *  9. Soft claim-first gate (comment before starting, shadcn-labs/pdfcn
@@ -83,12 +85,20 @@
  *     verdict at RISKY with a scoping reason; never TAKEN. Seen on
  *     reticlehq/reticle#894 (half A shipped in v3.1.0 via #905/#915,
  *     half B still open).
+ *  13. Triage hold: a bot triage notice ("wait until maintainers remove
+ *     the triage or approval label before opening a pull request") or a
+ *     triage label ("needs triage", "pending triage") means the repo says
+ *     do not build until triage clears (mastra-ai/mastra#27360). Never
+ *     TAKEN; caps an otherwise-GO verdict at RISKY with flag
+ *     "triage-hold". Held issues are future pipeline, not current
+ *     targets.
  */
 import type { IssueSnapshot, VerdictResult, Verdict } from "./types.js";
 import { detectClaims, strongClaimants } from "./claims.js";
 import { parseGates, parseGatesFromSources, hardGates, gateLabel } from "./gates.js";
 import { isClosingPR } from "./linkstrength.js";
 import { detectBounty } from "./bounty.js";
+import { detectTriageHold } from "./triage.js";
 import { extractPRReferences } from "./github.js";
 
 const FRESH_CLAIM_DAYS = 45;
@@ -342,6 +352,16 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     reasons.push(snapshot.serverSide.evidence);
   }
 
+  // Triage hold (mastra-ai/mastra#27360 family, nuxt/nuxt#36626): the repo
+  // says do not build until triage clears. A hold is not a claim, so it
+  // never produces TAKEN; it flags and caps an otherwise-GO verdict at
+  // RISKY so held issues read as future pipeline, not current targets.
+  const triageHold = detectTriageHold({ labels: snapshot.labels, comments: snapshot.comments });
+  if (triageHold.held) {
+    flags.push("triage-hold");
+    reasons.push(triageHold.evidence);
+  }
+
   // Rule 10: nothing blocking, unless an open PR merely mentions the issue.
   let verdict: Verdict = "GO";
   if (openMentionPRs.length > 0) {
@@ -464,6 +484,10 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   // returns carry it; cap an otherwise-GO verdict at RISKY here, after
   // every other rule has had its say.
   if (attemptLinkedOpen.length > 0 && verdict === "GO") verdict = "RISKY";
+
+  // Triage-hold cap: an otherwise-GO verdict on a held issue reads RISKY
+  // (the hold is named in the reasons above). Never TAKEN.
+  if (triageHold.held && verdict === "GO") verdict = "RISKY";
 
   return { verdict, reasons, claims, gates, flags };
 }

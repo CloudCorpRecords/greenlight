@@ -90,7 +90,21 @@ export function githubToken(): string | undefined {
   return process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 }
 
+/** GitHub API calls made through apiGet this process. Read by scout's --budget. */
+let apiCallCount = 0;
+
+/** How many GitHub API calls this process has made. */
+export function apiCallsUsed(): number {
+  return apiCallCount;
+}
+
+/** Reset the call counter (tests). */
+export function resetApiCalls(): void {
+  apiCallCount = 0;
+}
+
 export async function apiGet(path: string): Promise<unknown> {
+  apiCallCount++;
   const headers: Record<string, string> = {
     "Accept": "application/vnd.github+json",
     "User-Agent": "greenlight-cli",
