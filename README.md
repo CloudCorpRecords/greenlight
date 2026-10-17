@@ -4,6 +4,12 @@ Greenlight checks a GitHub issue before you spend hours on it, and tells you in 
 
 **New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data.
 
+## Watch it work
+
+![Greenlight demo](docs/assets/greenlight-demo.gif)
+
+*The 59-second demo: real issue checks on real repos, an AI-caught hidden claim, a GATED agent ban, campaign scouting, and the claims babysitter. [Full narrated video](docs/assets/greenlight-demo.mp4).*
+
 ## Use Greenlight inside your AI coding tool
 
 One command sets it up:
