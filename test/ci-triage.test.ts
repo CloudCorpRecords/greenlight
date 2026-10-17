@@ -72,6 +72,41 @@ describe("external-blocker classification", () => {
   });
 });
 
+describe("action_required classification", () => {
+  it("routes an action_required conclusion to external-blocker, not a code failure", () => {
+    const c = classifyCheck(check("CI", "action_required"), [], ["packages/vite/src/node/plugins/html.ts"]);
+    assert.equal(c.class, "external-blocker");
+    assert.equal(c.conclusion, "action_required");
+    assert.ok(c.evidence.includes("waiting on maintainer approval"), `evidence: ${c.evidence}`);
+  });
+  it("wins over name-pattern and base-failure rules", () => {
+    // Even a Vercel check in action_required is waiting on approval,
+    // and even a matching base failure cannot make it yours.
+    const c = classifyCheck(check("Vercel", "action_required"), [base("Vercel", "failure")], []);
+    assert.equal(c.class, "external-blocker");
+    assert.ok(c.evidence.includes("action_required"), `evidence: ${c.evidence}`);
+  });
+  it("an action_required check never reads as likely-yours", () => {
+    const c = classifyCheck(check("unit-tests", "action_required"), [], ["packages/cli/src/unit-tests.ts"]);
+    assert.notEqual(c.class, "likely-yours");
+    assert.notEqual(c.class, "indeterminate");
+  });
+  it("the action_required fixture from mealie #8753 stays out of yoursFailing", () => {
+    const result = classifyCiTriage({
+      prUrl: "https://github.com/mealie-recipes/mealie/pull/8753",
+      prTitle: "chore: reduce redundant work",
+      baseRef: "mealie-next",
+      baseSha: "base000",
+      headSha: "head111",
+      headChecks: [check("pull-requests / CI Gate", "action_required")],
+      baseRecords: [],
+      changedFiles: [".github/workflows/pull-requests.yml"],
+    });
+    assert.deepEqual(result.checks.map((x) => x.class), ["external-blocker"]);
+    assert.notEqual(result.verdict, "HAS LIKELY-YOURS");
+  });
+});
+
 describe("pre-existing classification", () => {
   it("matches base failures across matrix variants as a family", () => {
     const c = classify(

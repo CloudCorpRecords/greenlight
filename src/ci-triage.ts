@@ -14,8 +14,10 @@
  *   - Vercel "Authorization required" -> external-blocker (not the PR)
  *
  * Rule order per failing head check:
- *   1. external-blocker: the check name matches a known deploy/auth
- *      pattern (Vercel, Netlify, deploy previews). Evidence quotes the match.
+ *   1. external-blocker: a conclusion of action_required (maintainer
+ *      workflow approval pending; not a code failure), or a check name
+ *      matching a known deploy/auth pattern (Vercel, Netlify, deploy
+ *      previews). Evidence quotes the match.
  *   2. pre-existing: the same check name failed in the recent base
  *      window (exact variant first, then the matrix family, e.g. a windows
  *      install-gate flake with no exact-variant history). Evidence quotes
@@ -85,7 +87,14 @@ export interface CiTriageResult {
   verdict: CiTriageVerdict;
 }
 
-/** Conclusions that count as "this check failed". "stale" (superseded by a newer push) is not a failure. */
+/**
+ * Conclusions that count as "this check needs attention". "stale"
+ * (superseded by a newer push) is not one. "action_required" is NOT a code
+ * failure: it is GitHub's maintainer-approval gate for the workflow run
+ * (typical for fork PRs touching workflow files). classifyCheck routes it
+ * to external-blocker with waiting-on-maintainer evidence so CI triage and
+ * the babysitter report it as waiting, never as your failing code.
+ */
 const FAILING = new Set(["failure", "timed_out", "action_required"]);
 
 /** Check-name patterns that mean the failure is infrastructure, not the PR. */
@@ -168,6 +177,21 @@ export function classifyCheck(
   changedFiles: string[]
 ): ClassifiedCheck {
   const name = head.name;
+  // Maintainer workflow approval beats every other rule: the check never
+  // ran, so there is nothing to blame on the PR's code. Field case:
+  // mealie-recipes/mealie#8753 sat in action_required while downstream
+  // tooling treated it as fine.
+  if (head.conclusion === "action_required") {
+    return {
+      name,
+      conclusion: head.conclusion,
+      class: "external-blocker",
+      evidence:
+        "check run conclusion is action_required: the workflow run is waiting on maintainer approval (GitHub's approval gate for fork PRs, e.g. ones touching workflow files); this is not a code failure",
+      detailsUrl: head.detailsUrl,
+      failureLines: head.failureLines,
+    };
+  }
   for (const { pattern, label } of EXTERNAL_PATTERNS) {
     if (pattern.test(name)) {
       return {
