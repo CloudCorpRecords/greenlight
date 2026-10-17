@@ -11,6 +11,7 @@ import { join } from "node:path";
 import {
   babysit,
   buildPrReport,
+  classifyBabysitError,
   reviewFindingId,
   guardFlagId,
   watermarkKey,
@@ -513,5 +514,191 @@ describe("babysit claims section (v0.9.0)", () => {
     });
     assert.equal(run.claimsRegistryMissing, true);
     assert.ok(run.markdown.includes("No claims registry yet"));
+  });
+});
+
+describe("v0.9.1 babysit: concurrency, retries, transient bucket, guard subjects", () => {
+  let stateDir: string;
+  let statePath: string;
+  beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), "gl-babysit091-"));
+    statePath = join(stateDir, "babysit.json");
+  });
+
+  function prUrl(n: number): string {
+    return `https://github.com/acme/widgets/pull/${n}`;
+  }
+
+  function prFor(n: number): BabysitPull {
+    return pull({ number: n, url: prUrl(n), headSha: `sha${n}` });
+  }
+
+  function quietDeps(over: Partial<BabysitDeps> = {}): BabysitDeps {
+    return {
+      fetchPr: async (o, r, n) => prFor(n),
+      fetchCheckRuns: async () => [],
+      triageCi: async () => ci(),
+      triageReview: async () => review(),
+      guard: async () => guardRes(),
+      ...over,
+    };
+  }
+
+  it("retries a PR whose fetch fails once, then lands it in the right bucket", async () => {
+    let calls = 0;
+    const run = await babysit({
+      claimsRegistryPath: join(stateDir, "my-claims.json"),
+      prs: [prUrl(42)],
+      statePath,
+      now: NOW,
+      deps: quietDeps({
+        fetchPr: async (o, r, n) => {
+          calls++;
+          if (calls === 1) throw new Error("fetch failed");
+          return prFor(n);
+        },
+      }),
+    });
+    assert.equal(calls, 2);
+    assert.equal(run.transientFailures.length, 0);
+    assert.equal(run.reports.length, 1);
+    // Calm first run: green CI, no reviews yet -> the waiting bucket, never needs-you.
+    assert.ok(run.waitingOnThem.some((a) => a.pr === "acme/widgets#42"));
+    assert.equal(run.needsYouNow.length, 0);
+    // Watermark written: the PR was observed.
+    const state = JSON.parse(readFileSync(statePath, "utf8"));
+    assert.ok(state.watermarks["acme/widgets#42"]);
+  });
+
+  it("parks a persistently failing PR in the transient section with no watermark and no findings", async () => {
+    const run = await babysit({
+      claimsRegistryPath: join(stateDir, "my-claims.json"),
+      prs: [prUrl(42), prUrl(43)],
+      statePath,
+      now: NOW,
+      deps: quietDeps({
+        fetchPr: async (o, r, n) => {
+          if (n === 42) throw new Error("fetch failed");
+          return prFor(n);
+        },
+      }),
+    });
+    assert.equal(run.transientFailures.length, 1);
+    assert.equal(run.transientFailures[0].pr, "acme/widgets#42");
+    assert.equal(run.transientFailures[0].errorKind, "transient");
+    assert.equal(run.reports.length, 1);
+    assert.equal(run.needsYouNow.length, 0);
+    assert.ok(run.markdown.includes("## Could not check (transient)"));
+    assert.ok(!run.markdown.includes("Could not check this PR:"));
+    // Watermark untouched: a rerun must observe it as if this run never happened.
+    const state = JSON.parse(readFileSync(statePath, "utf8"));
+    assert.ok(!state.watermarks["acme/widgets#42"]);
+    assert.ok(state.watermarks["acme/widgets#43"]);
+  });
+
+  it("marks a malformed PR URL as usage, not transient", async () => {
+    const run = await babysit({
+      claimsRegistryPath: join(stateDir, "my-claims.json"),
+      prs: ["not-a-pr-url"],
+      statePath,
+      now: NOW,
+      deps: quietDeps(),
+    });
+    assert.equal(run.transientFailures.length, 1);
+    assert.equal(run.transientFailures[0].errorKind, "usage");
+    assert.equal(run.needsYouNow.length, 0);
+  });
+
+  it("fetches PRs concurrently (bounded)", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const slow = async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 60));
+      inFlight--;
+      return [];
+    };
+    const urls = [42, 43, 44, 45, 46].map(prUrl);
+    const started = Date.now();
+    const run = await babysit({
+      claimsRegistryPath: join(stateDir, "my-claims.json"),
+      prs: urls,
+      statePath,
+      now: NOW,
+      concurrency: 5,
+      deps: quietDeps({ fetchCheckRuns: slow, triageCi: async () => { await slow(); return ci(); } }),
+    });
+    const elapsed = Date.now() - started;
+    assert.equal(run.reports.length, 5);
+    assert.ok(maxInFlight > 1, `expected overlap, saw max in-flight ${maxInFlight}`);
+    // Serial would take 5 * 120ms = 600ms minimum; concurrent must be far under it.
+    assert.ok(elapsed < 450, `took ${elapsed}ms, looks serial`);
+  });
+
+  it("routes guard flags by subject: the actual #9250 regression shape", async () => {
+    // A PR whose guard run surfaces a competing-fix flag about a DIFFERENT
+    // issue (#123) must produce zero needs-you items from guard; the flag
+    // lands in repoNotes instead. A subject-"pr" flag still counts.
+    const g = guardRes({
+      linkedIssues: [{ number: 9246, title: "Add API", url: "https://github.com/actualbudget/actual/issues/9246", state: "open" }],
+      findings: [
+        { check: "competing-fix", subject: "issue", issueRef: "actualbudget/actual#123", severity: "flag", title: "Competing fix for #123", evidence: ["another open PR already claims this issue: #122 by @other"] },
+        { check: "changeset-missing", subject: "pr", severity: "flag", title: "Missing release-note file (repo uses upcoming-release-notes/)", evidence: ["no file under upcoming-release-notes/"] },
+      ],
+      summary: "Greenlight guard: 2 things to check",
+      hasFindings: true,
+    });
+    const run = await babysit({
+      claimsRegistryPath: join(stateDir, "my-claims.json"),
+      prs: ["https://github.com/actualbudget/actual/pull/9250"],
+      statePath,
+      now: NOW,
+      deps: {
+        fetchPr: async () => pull({ owner: "actualbudget", repo: "actual", number: 9250, title: "Add API", url: "https://github.com/actualbudget/actual/pull/9250", headSha: "bbb222" }),
+        fetchCheckRuns: async () => [],
+        triageCi: async () => ci(),
+        triageReview: async () => review(),
+        guard: async () => g,
+      },
+    });
+    const report = run.reports[0];
+    assert.deepEqual(report.newGuardFlags, ["Missing release-note file (repo uses upcoming-release-notes/)"]);
+    assert.ok(report.repoNotes.some((n) => n.includes("Competing fix for #123")));
+    const guardActions = run.needsYouNow.filter((a) => a.text.includes("Guard flagged"));
+    assert.equal(guardActions.length, 1);
+    assert.ok(guardActions[0].text.includes("1 new thing"));
+    assert.ok(run.markdown.includes("## Repo notes (informational)"));
+    assert.ok(run.markdown.includes("Competing fix for #123"));
+  });
+
+  it("classifies 404/401 as usage (no retry) and network/5xx as transient", () => {
+    assert.equal(classifyBabysitError(new Error("GitHub API 404 for /repos/a/b/pulls/1")), "usage");
+    assert.equal(classifyBabysitError(new Error("GitHub API 401: Bad credentials")), "usage");
+    assert.equal(classifyBabysitError(new Error("not a GitHub pull request URL: xyz")), "usage");
+    assert.equal(classifyBabysitError(new Error("GitHub API 403 for /rate_limit: Blocked")), "transient");
+    assert.equal(classifyBabysitError(new Error("GitHub API 500 for /repos/a/b")), "transient");
+    assert.equal(classifyBabysitError(new Error("fetch failed")), "transient");
+  });
+
+  it("treats an issue-subject flag on the PR's own linked issue as needs-you", async () => {
+    const g = guardRes({
+      linkedIssues: [{ number: 123, title: "Bug", url: "https://github.com/acme/widgets/issues/123", state: "open" }],
+      findings: [
+        { check: "competing-fix", subject: "issue", issueRef: "acme/widgets#123", severity: "flag", title: "Competing fix for #123", evidence: [] },
+      ],
+      summary: "Greenlight guard: 1 thing to check",
+      hasFindings: true,
+    });
+    const run = await babysit({
+      claimsRegistryPath: join(stateDir, "my-claims.json"),
+      prs: [prUrl(42)],
+      statePath,
+      now: NOW,
+      deps: quietDeps({ guard: async () => g }),
+    });
+    assert.deepEqual(run.reports[0].newGuardFlags, ["Competing fix for #123"]);
+    assert.equal(run.reports[0].repoNotes.length, 0);
+    assert.ok(run.needsYouNow.some((a) => a.text.includes("Competing fix for #123")));
   });
 });

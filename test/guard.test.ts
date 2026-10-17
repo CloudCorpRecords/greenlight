@@ -699,3 +699,67 @@ describe("action.yml autopilot label step", () => {
     assert.ok(doc.includes("core.warning") || doc.includes("::warning::"), "label failures degrade to warnings, never a failed run");
   });
 });
+
+describe("v0.9.1 guard flag subjects", () => {
+  it("artifact findings are subject pr", () => {
+    const findings = checkMissingArtifacts({
+      conventions: { dcoRequired: true, claRequired: true },
+      changedFiles: ["src/a.ts"],
+      commits: [{ sha: "abc123", message: "fix: a thing" }],
+      prLabels: [],
+      prAuthor: "someone",
+      prComments: [],
+    });
+    assert.ok(findings.length > 0);
+    for (const f of findings) {
+      assert.equal(f.subject, "pr", f.check);
+      assert.ok(f.issueRef === undefined);
+    }
+  });
+
+  it("first-time finding is subject pr", () => {
+    const f = checkFirstTime("newbie", 0);
+    assert.ok(f);
+    assert.equal(f.subject, "pr");
+  });
+
+  it("linked-issue findings are subject issue with a canonical issueRef", async () => {
+    const pull: GuardPullDetail = {
+      title: "Fix export",
+      body: "Fixes #9246\n\nAlso fixes #123",
+      author: "CloudCorpRecords",
+      headRef: "fix/export",
+      createdAt: "2026-10-17T12:00:00Z",
+      labels: [],
+    };
+    const result = await guardPr("https://github.com/actualbudget/actual/pull/9250", {
+      fetchPull: async () => pull,
+      fetchIssue: async (o, r, n) => ({
+        number: n,
+        title: n === 9246 ? "Add API" : "Other",
+        author: "reporter",
+        state: "open",
+        labels: [],
+        comments: [],
+        url: `https://github.com/${o}/${r}/issues/${n}`,
+      }),
+      fetchLinkedPRs: async (o, r, issueNumber) =>
+        issueNumber === 9246
+          ? [{ number: 9250, title: "Fix export", author: "CloudCorpRecords", state: "open", url: `https://github.com/${o}/${r}/pull/9250`, body: "Fixes #9246", headRef: "fix/export" }]
+          : [
+              { number: 122, title: "Other fix", author: "other", state: "open", url: `https://github.com/${o}/${r}/pull/122`, body: "Fixes #123", headRef: "other/branch", linkStrength: "closing" as const },
+              { number: 124, title: "Another fix", author: "third", state: "open", url: `https://github.com/${o}/${r}/pull/124`, body: "Fixes #123", headRef: "third/branch", linkStrength: "closing" as const },
+            ],
+      fetchPRAuthor: async () => "other",
+      fetchConventions: async () => ({ dcoRequired: false, claRequired: false }),
+      fetchPriorMerged: async () => 1,
+      fetchProtocol: async () => null,
+    });
+    const competing = result.findings.filter((f) => f.check === "competing-fix");
+    assert.ok(competing.length > 0);
+    for (const f of competing) {
+      assert.equal(f.subject, "issue");
+      assert.ok(/^actualbudget\/actual#\d+$/.test(f.issueRef ?? ""), f.issueRef);
+    }
+  });
+});
