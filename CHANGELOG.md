@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.9.1 (2026-10-17)
+
+The trust patch: a day of dogfooding at portfolio scale (43 open PRs) surfaced five fidelity problems, all fixed here.
+
+- **Babysit speed and honest failures.** Per-PR fetching now runs with bounded concurrency (default 5, `--concurrency N` to override): a 15-PR sweep drops from ~9 minutes toward ~2. Each PR's reads get 2 attempts with a short backoff (250ms); a PR that still cannot be observed lands in a new `Could not check (transient)` section with its error kind (`transient` vs `usage`), never in needs-you or waiting, and its watermark is untouched so the next run reports it as if this run never happened. New JSON fields: `transientFailures`, `repoNotes`, `prsChecked` (failures count). Guard and babysit version markers are 0.9.1.
+- **Guard flag subjects.** Every guard finding now carries a `subject`: `pr` (this PR's own diff, e.g. missing artifacts), `issue` (a linked issue, e.g. a competing fix, with canonical `owner/repo#N` `issueRef`), or `repo` (repo-wide signal). Babysit raises needs-you only for subject `pr`, and for subject `issue` when the issue is the PR's own linked issue; everything else collects into a `Repo notes` section, informational only. Field case: babysit on actual #9250 once reported "Competing fix for #123" as a new guard thing when it belonged to other PRs in the repo; that shape now produces zero needs-you items from guard.
+- **Claim registry import.** `greenlight claim --import --ledger-user <github-login>` fetches the public Claim Ledger and imports every active or linked claim by that user into `~/.greenlight/my-claims.json`; `greenlight claim --import --urls <issue-url,...>` backfills manually. Re-imports dedupe; retired states (completed, released, expired, superseded) are skipped.
+- **The proxy, shipped.** `greenlight proxy [--port N]` starts the localhost forwarder that lifts you from the 60/hr anonymous quota to the 5000/hr authenticated budget: it reads `GITHUB_TOKEN` (or `GH_TOKEN`) once at startup, attaches it server-side, ignores incoming Authorization headers, binds 127.0.0.1 only, rejects absolute-form request targets, and refuses to start with a clear message when no token is set. `greenlight doctor` now names the proxy as the remedy when GitHub reads are unauthenticated (the authenticated pass output is byte-identical).
+- **MCP parity.** Two new tools bring the server to 17: `scout_campaign` (campaign mode over MCP) and `my_claims` (the claims-bucketing half of the babysitter).
+
 ## 0.8.0 (2026-10-16)
 
 The pattern layer learns a second pair of eyes, with the verdict math untouched.

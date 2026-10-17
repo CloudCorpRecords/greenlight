@@ -12,7 +12,7 @@ One command sets it up:
 npx @reneturcios/greenlight init --agent claude-code
 ```
 
-(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 15 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment, babysit_prs, evidence_pack).
+(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 17 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment, babysit_prs, evidence_pack, scout_campaign, my_claims).
 
 ## The problem
 
@@ -288,6 +288,27 @@ Field work in October surfaced two repos publishing agent rules outside CONTRIBU
 ```bash
 greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write
 greenlight babysit --claims-only
+```
+
+### v0.9.1: the trust patch
+
+A full day of dogfooding at portfolio scale (43 open PRs) found five fidelity problems, all fixed here. No new features, no new surface area beyond the repair.
+
+**Babysit speed and honest failures.** Per-PR fetching is now parallel with a bounded concurrency (default 5, `--concurrency N` to override): a 15-PR sweep drops from ~9 minutes toward ~2. Each PR's reads get 2 attempts with a short backoff; a PR that still cannot be observed lands in a new `Could not check (transient)` section with its error kind (`transient` vs `usage`), never in needs-you or waiting, and its watermark is untouched so the next run reports it as if this run never happened.
+
+**Guard flag subjects.** Every guard flag now carries a `subject`: `pr` (this PR's own diff, e.g. missing artifacts), `issue` (one of the PR's linked issues, e.g. a competing fix, with a canonical `owner/repo#N` `issueRef`), or `repo` (repo-wide signal). Babysit raises needs-you only for subject `pr`, and for subject `issue` when the issue is the PR's own linked issue; everything else collects into a `Repo notes` section, informational only. Field case: a babysit run on actual #9250 once reported "17 new things: Competing fix for #123" that belonged to other PRs in the repo; that shape now produces zero needs-you items from guard.
+
+**Claim registry import.** `greenlight claim --import --ledger-user <github-login>` fetches the public Claim Ledger and imports every active or linked claim by that user into `~/.greenlight/my-claims.json`; `greenlight claim --import --urls <issue-url,...>` backfills manually. Re-imports dedupe; retired states are skipped.
+
+**The proxy, shipped.** `greenlight proxy` starts the localhost forwarder that lifts you from the 60/hr anonymous quota to the 5000/hr authenticated budget: it reads `GITHUB_TOKEN` (or `GH_TOKEN`) once at startup, attaches it server-side, ignores incoming Authorization headers, binds 127.0.0.1 only, and refuses to start without a token. `greenlight doctor` now names the proxy as the remedy when you are unauthenticated.
+
+**MCP parity.** Two new tools bring the server to 17: `scout_campaign` (campaign mode over MCP) and `my_claims` (the claims-bucketing half of the babysitter).
+
+```bash
+export GITHUB_TOKEN=<your-classic-token> && greenlight proxy &
+export GREENLIGHT_GITHUB_BASE_URL=http://127.0.0.1:8792 GITHUB_TOKEN=proxy
+greenlight claim --import --ledger-user <your-login>
+greenlight babysit --concurrency 5
 ```
 
 ### v0.6.0: the babysitter, the autopilot, and the trust layer
