@@ -33,10 +33,23 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-export const BABYSIT_VERSION = "0.9.0";
+export const BABYSIT_VERSION = "0.9.1";
 
 /** Checks pending longer than this are reported as stuck, not just running. */
 export const STUCK_CHECK_MINUTES = 120;
+
+/**
+ * Default bound on concurrent per-PR fetches (v0.9.1): a 15-PR sweep was
+ * ~9 minutes serial. Override per run with BabysitRunOptions.concurrency
+ * or the CLI --concurrency flag.
+ */
+export const BABYSIT_CONCURRENCY = 5;
+
+/** How many times to attempt one PR's network reads before calling it a transient failure. */
+export const BABYSIT_RETRIES = 2;
+
+/** Base backoff between retries, scaled by attempt number (attempt * base). */
+export const BABYSIT_RETRY_BACKOFF_MS = 250;
 
 /** Cap on discovered PRs per --mine run; the summary always states the cap. */
 export const MINE_DISCOVERY_CAP = 100;
@@ -248,6 +261,77 @@ export function guardFlagId(check: string, title: string): string {
   return `${check}|${title}`;
 }
 
+/** Parse a linked-issue URL into the canonical "owner/repo#N" ref; null when unparseable. */
+export function linkedIssueRef(url: string): string | null {
+  const m = /github\.com\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)/.exec(url);
+  return m ? `${m[1]}/${m[2]}#${m[3]}` : null;
+}
+
+/**
+ * Retry a network-shaped function. Intentionally small: babysit runs one
+ * logical operation per PR, and a single flaky call should not poison the
+ * whole sweep. Re-throws the last error after the attempts run out.
+ */
+export async function withRetry<T>(fn: () => Promise<T>, attempts = BABYSIT_RETRIES, backoffMs = BABYSIT_RETRY_BACKOFF_MS): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+    }
+  }
+  throw last;
+}
+
+/**
+ * Bounded-concurrency map: runs fn over items with at most `limit` in
+ * flight. Order of results matches order of items.
+ */
+export async function mapBounded<T, U>(items: T[], limit: number, fn: (item: T) => Promise<U>): Promise<U[]> {
+  const out = new Array<U>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  const workers = Array.from({ length: Math.max(1, limit) }, () => worker());
+  await Promise.all(workers);
+  return out;
+}
+
+/** "usage" = the input was bad (bad PR URL); "transient" = the network/GitHub flaked. Only transient failures are retried. */
+export type BabysitErrorKind = "usage" | "transient";
+
+export function classifyBabysitError(err: unknown): BabysitErrorKind {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  // parsePullUrl throws messages like "not a GitHub pull request URL" —
+  // those are the caller's fault, never the network's.
+  if (/not a github (pull request|issue) url|could not parse|invalid url/.test(msg)) return "usage";
+  // A 404 on the PR itself means the PR is not there (wrong number,
+  // deleted); a 401 means the token is bad. Retrying either is pointless,
+  // and the brief scopes retries to network/5xx failures.
+  // The codebase's transport errors read "GitHub API {status} for {path}"
+  // or "HTTP {status}". A 404/401 there is permanent: wrong PR number or
+  // a bad token. Everything else is the network or GitHub flaking.
+  if (/(api|http) 404\b/.test(msg)) return "usage";
+  if (/(api|http) 401\b/.test(msg)) return "usage";
+  // Everything else is the network or GitHub flaking: retryable. 403 stays
+  // transient (rate limits and abuse blocks can lift; reads are unaffected
+  // by comment blocks), 429 and 5xx likewise.
+  return "transient";
+}
+
+/** A PR that could not be observed this run: it gets no watermark and never appears as a finding. */
+export interface BabysitTransientFailure {
+  pr: string;
+  errorKind: BabysitErrorKind;
+  detail: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Per-PR report (pure over injected data)                             */
 /* ------------------------------------------------------------------ */
@@ -292,6 +376,12 @@ export interface BabysitPrReport {
   newLikelyReal: ClassifiedFinding[];
   newNeedsDecision: ClassifiedFinding[];
   newGuardFlags: string[];
+  /**
+   * Guard flags NOT actionable on this PR (v0.9.1): subject "repo" flags
+   * and subject "issue" flags whose issue is not one of this PR's linked
+   * issues. Informational only; they never raise needs-you.
+   */
+  repoNotes: string[];
   guardSummary: string;
   actions: BabysitAction[];
 }
@@ -339,11 +429,29 @@ export function buildPrReport(input: BabysitPrInput): BabysitPrReport {
   const newLikelyReal = newFindings.filter((f) => f.class === "likely-real");
   const newNeedsDecision = newFindings.filter((f) => f.class === "needs-decision");
 
-  // New guard flags since the watermark.
+  // New guard flags since the watermark (v0.9.1 subject routing).
+  // A flag raises needs-you only when it is about THIS PR (subject "pr"),
+  // or about one of the PR's own linked issues (subject "issue" with a
+  // matching issueRef). Flags about other issues or repo-wide signals go
+  // to repoNotes, informational only. Field case: actual #9250's repo had
+  // "Competing fix for #123" flags pinned on the wrong PR.
   const seenFlags = new Set(watermark?.seenGuardFlags ?? []);
-  const newGuardFlags = guard.findings
-    .filter((f) => f.severity === "flag" && !seenFlags.has(guardFlagId(f.check, f.title)))
-    .map((f) => f.title);
+  const ownIssues = new Set(
+    guard.linkedIssues.map((i) => linkedIssueRef(i.url)).filter((s): s is string => s !== null)
+  );
+  const newGuardFlags: string[] = [];
+  const repoNotes: string[] = [];
+  for (const f of guard.findings) {
+    if (f.severity !== "flag") continue;
+    const id = guardFlagId(f.check, f.title);
+    if (seenFlags.has(id)) continue;
+    const subject = f.subject ?? "pr"; // pre-v0.9.1 fixtures had no subject: old behavior
+    if (subject === "pr" || (subject === "issue" && f.issueRef !== undefined && ownIssues.has(f.issueRef))) {
+      newGuardFlags.push(f.title);
+    } else {
+      repoNotes.push(`${f.title} (about ${f.issueRef ?? "the repo"}, not this PR)`);
+    }
+  }
 
   const conflicts = pr.mergeable === false || pr.mergeableState === "dirty";
 
@@ -449,6 +557,7 @@ export function buildPrReport(input: BabysitPrInput): BabysitPrReport {
     newLikelyReal,
     newNeedsDecision,
     newGuardFlags,
+    repoNotes,
     guardSummary: guard.summary,
     actions,
   };
@@ -484,6 +593,8 @@ export interface BabysitRunOptions {
   claimsOnly?: boolean;
   /** Override path for the my-claims registry. */
   claimsRegistryPath?: string;
+  /** Max concurrent per-PR fetches (v0.9.1); defaults to BABYSIT_CONCURRENCY. */
+  concurrency?: number;
 }
 
 /** One registered claim, bucketed for the report. */
@@ -509,6 +620,10 @@ export interface BabysitRun {
   needsYouNow: BabysitAction[];
   waitingOnThem: BabysitAction[];
   quiet: string[];
+  /** PRs that could not be observed this run (own section; never findings, never watermarks). */
+  transientFailures: BabysitTransientFailure[];
+  /** Informational repo notes aggregated across PRs. */
+  repoNotes: string[];
   firstRun: boolean;
   prsChecked: number;
   /** Claims section (empty when the registry has no claims). */
@@ -528,7 +643,8 @@ function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markd
   if (run.claimsOnly) {
     lines.push(`**Claims babysitter: ${run.claims.length} active claims** (${run.retiredClaims.length} retired this run)`);
   } else {
-    lines.push(`**PR babysitter: ${run.needsYouNow.length} need you now, ${run.waitingOnThem.length} waiting, ${run.quiet.length} quiet** (${run.prsChecked} PRs checked)`);
+    const unchecked = run.transientFailures.length > 0 ? `, ${run.transientFailures.length} could not check` : "";
+    lines.push(`**PR babysitter: ${run.needsYouNow.length} need you now, ${run.waitingOnThem.length} waiting, ${run.quiet.length} quiet${unchecked}** (${run.prsChecked} PRs checked)`);
   }
   if (run.firstRun) lines.push("_First run: no watermarks yet, so this is the full picture. Reruns report what changed since the last check._");
   lines.push("");
@@ -550,6 +666,27 @@ function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markd
   if (run.quiet.length === 0) lines.push("_None._");
   else for (const q of run.quiet) lines.push(`- ${q}`);
   lines.push("");
+
+  // v0.9.1: transient failures are their own section, never mixed into
+  // needs-you or waiting. A PR here was not observed: its watermark is
+  // unchanged, so the next run reports it as if this run never happened.
+  if (run.transientFailures.length > 0) {
+    lines.push(`## Could not check (transient)`);
+    for (const f of run.transientFailures) {
+      const next = f.errorKind === "usage" ? "Check the URL and rerun." : "Rerun; transient failures never update watermarks and never appear as findings.";
+      lines.push(`- **${f.pr}** — ${f.detail}`);
+      lines.push(`  Next: ${next}`);
+    }
+    lines.push("");
+  }
+
+  // v0.9.1: guard flags about other issues or the repo at large, filed
+  // here informational only. They never raise needs-you.
+  if (run.repoNotes.length > 0) {
+    lines.push(`## Repo notes (informational)`);
+    for (const n of run.repoNotes) lines.push(`- ${n}`);
+    lines.push("");
+  }
 
   // Claims section (v0.9.0): the operator's registered claims, bucketed.
   if (run.claimsRegistryMissing) {
@@ -608,6 +745,8 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
         needsYouNow: [],
         waitingOnThem: [],
         quiet: [],
+        transientFailures: [],
+        repoNotes: [],
         firstRun,
         prsChecked: 0,
         claims: [],
@@ -622,64 +761,68 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
   }
 
   const reports: BabysitPrReport[] = [];
+  const transientFailures: BabysitTransientFailure[] = [];
   const fetchPr = deps.fetchPr ?? defaultFetchPr;
   const fetchCheckRuns = deps.fetchCheckRuns ?? defaultFetchCheckRuns;
   const triageCi = deps.triageCi ?? triagePr;
   const triageReview = deps.triageReview ?? defaultTriageReview;
   const guard = deps.guard ?? guardPr;
+  const concurrency = opts.concurrency ?? BABYSIT_CONCURRENCY;
 
-  for (const prUrl of prUrls) {
+  const emptyReport = (tag: string, owner: string, repo: string, number: number): BabysitPrReport => ({
+    pr: tag, owner, repo, number, title: "", author: "",
+    headSha: "", headChanged: false,
+    conflicts: false, mergeableState: null,
+    ciVerdict: "INDETERMINATE",
+    yoursFailing: [], pendingChecks: [], stuckChecks: [],
+    newLikelyReal: [], newNeedsDecision: [], newGuardFlags: [], repoNotes: [],
+    guardSummary: "",
+    actions: [],
+  });
+
+  /** One PR through the pipeline, retried on transient failures. Never throws. */
+  const checkOnePr = async (prUrl: string): Promise<void> => {
+    let owner = "";
+    let repo = "";
+    let number = 0;
     try {
-      const { owner, repo, number } = parsePullUrl(prUrl);
-      const pr = await fetchPr(owner, repo, number);
+      ({ owner, repo, number } = parsePullUrl(prUrl));
+    } catch (err) {
+      transientFailures.push({
+        pr: prUrl,
+        errorKind: classifyBabysitError(err),
+        detail: `Not a GitHub PR URL: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      return;
+    }
+    const tag = watermarkKey(owner, repo, number);
+    try {
+      // Fetch the PR itself, retried: a flaky call should not poison the
+      // run, and an unobserved PR must never update its watermark.
+      const pr = await withRetry(() => fetchPr(owner, repo, number));
       if (pr.state !== "open") {
         // A closed or merged PR is done being babysat: it lands on the
         // quiet list with its resolution, and its watermark is retired so a
         // reopen shows up as a fresh full picture.
         const resolution = pr.state === "merged" ? "merged" : "closed";
-        const tag = watermarkKey(owner, repo, number);
-        reports.push({
-          pr: tag, owner, repo, number,
-          title: pr.title, author: pr.author,
-          headSha: pr.headSha, headChanged: false,
-          resolution,
-          conflicts: false, mergeableState: null,
-          ciVerdict: "INDETERMINATE",
-          yoursFailing: [], pendingChecks: [], stuckChecks: [],
-          newLikelyReal: [], newNeedsDecision: [], newGuardFlags: [],
-          guardSummary: "",
-          actions: [],
-        });
+        const r = emptyReport(tag, owner, repo, number);
+        r.title = pr.title;
+        r.author = pr.author;
+        r.headSha = pr.headSha;
+        r.resolution = resolution;
+        reports.push(r);
         delete state.watermarks[tag];
-        continue;
+        return;
       }
-      const [checkRuns, ci, review, guardResult] = await Promise.all([
-        fetchCheckRuns(owner, repo, pr.headSha).catch(() => [] as BabysitCheckRun[]),
-        triageCi(prUrl).catch(() => null),
-        triageReview(prUrl).catch(() => null),
-        guard(prUrl).catch(() => null),
-      ]);
-      if (!ci || !review || !guardResult) {
-        reports.push({
-          pr: watermarkKey(owner, repo, number),
-          owner, repo, number,
-          title: pr.title, author: pr.author,
-          headSha: pr.headSha, headChanged: false,
-          conflicts: false, mergeableState: pr.mergeableState,
-          ciVerdict: "INDETERMINATE",
-          yoursFailing: [], pendingChecks: [], stuckChecks: [],
-          newLikelyReal: [], newNeedsDecision: [], newGuardFlags: [],
-          guardSummary: "",
-          actions: [{
-            urgency: "waiting",
-            pr: watermarkKey(owner, repo, number),
-            text: "Could not read this PR's signals this run (API hiccup)",
-            next: "Rerun the babysitter; this is a transient gap, not a finding.",
-          }],
-        });
-        continue;
-      }
-      const key = watermarkKey(owner, repo, number);
+      const headSha = pr.headSha;
+      const [checkRuns, ci, review, guardResult] = await withRetry(() =>
+        Promise.all([
+          fetchCheckRuns(owner, repo, headSha),
+          triageCi(prUrl),
+          triageReview(prUrl),
+          guard(prUrl),
+        ])
+      );
       const report = buildPrReport({
         prUrl,
         pr,
@@ -687,31 +830,26 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
         ci,
         review,
         guard: guardResult,
-        watermark: state.watermarks[key] ?? null,
+        watermark: state.watermarks[tag] ?? null,
         now,
       });
       reports.push(report);
-      state.watermarks[key] = watermarkFromReport(report, review, guardResult, now);
+      state.watermarks[tag] = watermarkFromReport(report, review, guardResult, now);
     } catch (err) {
-      const tag = prUrl;
-      reports.push({
-        pr: tag, owner: "", repo: "", number: 0,
-        title: "", author: "",
-        headSha: "", headChanged: false,
-        conflicts: false, mergeableState: null,
-        ciVerdict: "INDETERMINATE",
-        yoursFailing: [], pendingChecks: [], stuckChecks: [],
-        newLikelyReal: [], newNeedsDecision: [], newGuardFlags: [],
-        guardSummary: "",
-        actions: [{
-          urgency: "waiting",
-          pr: tag,
-          text: `Could not check this PR: ${err instanceof Error ? err.message : String(err)}`,
-          next: "Check the URL and rerun.",
-        }],
+      // After retries, the PR was not observed: no watermark change, no
+      // finding. It lands in the transient section with its error kind.
+      const kind = classifyBabysitError(err);
+      transientFailures.push({
+        pr: tag,
+        errorKind: kind,
+        detail: kind === "usage"
+          ? `Not a GitHub PR URL: ${err instanceof Error ? err.message : String(err)}`
+          : `Could not read this PR's signals after ${BABYSIT_RETRIES} attempts: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
-  }
+  };
+
+  await mapBounded(prUrls, concurrency, checkOnePr);
 
   saveState(statePath, state);
 
@@ -725,6 +863,7 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
         ? `${r.pr} "${r.title}" — ${r.resolution} since the last check`
         : `${r.pr} "${r.title}" — nothing needs you`
     );
+  const repoNotes = [...new Set(reports.flatMap((r) => r.repoNotes))];
 
   // Claims section (v0.9.0): bucket every registered claim by its live
   // protocol status. Claims whose issue resolved (merged/closed issue, a
@@ -755,7 +894,9 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
   }
 
   const partial: Omit<BabysitRun, "markdown" | "json"> = {
-    reports, needsYouNow, waitingOnThem, quiet, firstRun, prsChecked: reports.length,
+    reports, needsYouNow, waitingOnThem, quiet,
+    transientFailures, repoNotes,
+    firstRun, prsChecked: reports.length + transientFailures.length,
     claims, retiredClaims, claimsRegistryMissing, claimsOnly: opts.claimsOnly ?? false,
   };
   const markdown = renderMarkdown(reports, partial);
@@ -765,6 +906,8 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
     needsYouNow: needsYouNow.map((a) => ({ pr: a.pr, text: a.text, next: a.next })),
     waitingOnThem: waitingOnThem.map((a) => ({ pr: a.pr, text: a.text, next: a.next })),
     quiet,
+    transientFailures: transientFailures.map((f) => ({ pr: f.pr, errorKind: f.errorKind, detail: f.detail })),
+    repoNotes,
     claims: claims.map((c) => ({ issue: c.claim.issueUrl, bucket: c.bucket, detail: c.detail, prUrl: c.prUrl ?? null, error: c.error ?? null })),
     retiredClaims,
     reports: reports.map((r) => ({
@@ -773,7 +916,7 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
       yoursFailing: r.yoursFailing, pendingChecks: r.pendingChecks, stuckChecks: r.stuckChecks,
       newLikelyReal: r.newLikelyReal.map((f) => f.summary),
       newNeedsDecision: r.newNeedsDecision.map((f) => f.summary),
-      newGuardFlags: r.newGuardFlags, guardSummary: r.guardSummary,
+      newGuardFlags: r.newGuardFlags, repoNotes: r.repoNotes, guardSummary: r.guardSummary,
     })),
   };
   return { ...partial, markdown, json };
