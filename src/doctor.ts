@@ -134,15 +134,23 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<DoctorReport> {
 
   const tokenVar = env.GITHUB_TOKEN ? "GITHUB_TOKEN" : env.GH_TOKEN ? "GH_TOKEN" : undefined;
   const token = tokenVar ? env[tokenVar] : undefined;
+  const proxyBase = env.GREENLIGHT_GITHUB_BASE_URL;
   checks.push(
     tokenVar
       ? { name: "github token", status: "pass", detail: `${tokenVar} is set` }
-      : {
-          name: "github token",
-          status: "warn",
-          detail: "no token set; sharing the 60 req/hr anonymous quota",
-          fix: "Create a classic personal access token (no scopes needed for public repos) and export GITHUB_TOKEN=<token>.",
-        }
+      : proxyBase
+        ? {
+            name: "github token",
+            status: "warn",
+            detail: `no token set, but GREENLIGHT_GITHUB_BASE_URL points at ${proxyBase} (proxy mode); reads route through it`,
+            fix: "If the proxy attaches your token server-side you are fine. Otherwise export GITHUB_TOKEN=<your-classic-token> for the 5000 req/hr limit.",
+          }
+        : {
+            name: "github token",
+            status: "warn",
+            detail: "no token set; sharing the 60 req/hr anonymous quota",
+            fix: "For the 5000 req/hr budget, run the bundled proxy with your token once, then point Greenlight at it:\n  export GITHUB_TOKEN=<your-classic-token> && greenlight proxy &\n  export GREENLIGHT_GITHUB_BASE_URL=http://127.0.0.1:8792 GITHUB_TOKEN=proxy\nThe proxy attaches the token server-side on localhost only; your reads stay cheap and your token stays out of every request you make.",
+          }
   );
 
   const llmModel = llmModelId(env);
