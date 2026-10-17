@@ -53,6 +53,8 @@ import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { digestRepo, DEFAULT_DIGEST_LIMIT } from "./digest.js";
 import { checkIssueWithProtocol, computeIssueStatus } from "./protocol-fetch.js";
+import { defaultRegistryPath, registerClaim } from "./claims-registry.js";
+import { scoutCampaign, SCOUT_DEFAULT_BUDGET } from "./scout.js";
 import {
   buildVerifiedComment,
   suggestsVerifiedComment,
@@ -257,12 +259,18 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   }
   const externalGates = loadExternalGates(args);
   const results: Array<{ url: string; title: string; verdict: string; reasons: string[]; flags: string[] }> = [];
+  // Scan runs the same per-issue pipeline as check (v0.9.0): legacy
+  // verdict, optional AI claim layer, merged with the Claim Protocol.
+  // Field lesson 2026-10-17: a scan that ran the deterministic verdict
+  // alone missed two explicit soft claims ("Working on this.", "I'm
+  // going to reproduce this on current main and fix...") that the
+  // check pipeline's LLM layer was built to catch. The protocol state
+  // costs extra API calls per issue; the scan's 10-issue cap and the
+  // budget notes in help keep that visible.
   for (const issue of issues) {
     try {
-      const snapshot = await buildIssueSnapshot(owner, repo, issue.number);
-      snapshot.externalGates = externalGates;
-      const scored = scoreIssue(snapshot);
-      results.push({ url: issue.url, title: issue.title, verdict: scored.verdict, reasons: scored.reasons, flags: scored.flags });
+      const { merged } = await checkIssueWithProtocol(owner, repo, issue.number, { externalGates });
+      results.push({ url: issue.url, title: issue.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags });
     } catch (err) {
       results.push({ url: issue.url, title: issue.title, verdict: "ERROR", reasons: [err instanceof Error ? err.message : String(err)], flags: [] });
     }
@@ -331,14 +339,34 @@ function flagValue(args: string[], name: string): string | undefined {
 
 async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
   const { owner, repo, number } = parseIssueUrl(issueUrl);
-  const snapshot = await buildIssueSnapshot(owner, repo, number);
-  printVerdict(snapshot, scoreIssue(snapshot), false);
+  // v0.9.0: claim runs the same pipeline as check (protocol + optional
+  // LLM claim layer), so the 30-day classification cache is shared
+  // across check, scan and claim instead of being per-command.
   const etaRaw = flagValue(args, "--eta-days");
+  const etaDays = etaRaw !== undefined ? Number(etaRaw) : undefined;
+
+  // --register records a claim posted by other means (a comment you wrote
+  // by hand, a maintainer's assignment) without touching the API.
+  if (args.includes("--register")) {
+    registerClaim(defaultRegistryPath(), {
+      issueUrl: `https://github.com/${owner}/${repo}/issues/${number}`,
+      owner, repo, number,
+      postedAt: new Date().toISOString(),
+      etaDays,
+      claimant: flagValue(args, "--as") ?? null,
+    });
+    console.log(`Registered claim on ${owner}/${repo}#${number} in the my-claims registry (${defaultRegistryPath()}).`);
+    console.log(`The babysitter watches it from now on.`);
+    return;
+  }
+
+  const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {});
+  printVerdict(snapshot, merged, false);
   const plan: ClaimResult = await claimIssue(createRestClient(), snapshot, {
     yes: args.includes("--yes"),
     force: args.includes("--force"),
     plan: flagValue(args, "--plan"),
-    etaDays: etaRaw !== undefined ? Number(etaRaw) : undefined,
+    etaDays,
   });
   if (args.includes("--json")) {
     console.log(
@@ -358,6 +386,16 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
   }
   if (plan.executed) {
     console.log(`Claim comment posted: ${plan.commentUrl}`);
+    // The campaign's memory: a posted claim joins the my-claims registry
+    // so the babysitter watches its health.
+    registerClaim(defaultRegistryPath(), {
+      issueUrl: snapshot.sourceUrl,
+      owner, repo, number,
+      postedAt: new Date().toISOString(),
+      etaDays,
+      commentUrl: plan.commentUrl ?? undefined,
+    });
+    console.log(`Registered in the my-claims registry.`);
   } else {
     console.log(`\nDry run: claim comment NOT posted.`);
     console.log(`--- comment that would be posted on ${owner}/${repo}#${number} ---`);
@@ -565,22 +603,84 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
 async function cmdBabysit(args: string[]): Promise<void> {
   const prsRaw = flagValue(args, "--prs");
   const mine = args.includes("--mine");
+  const claimsOnly = args.includes("--claims-only");
   const reposRaw = flagValue(args, "--repos");
   const statePath = flagValue(args, "--state") ?? defaultStatePath();
   const prs = prsRaw ? prsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
   const repos = reposRaw ? reposRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
-  if (prs.length === 0 && !mine) {
-    console.error("Error: give --prs <url,...> or --mine --repos <owner/repo,...> (e.g. greenlight babysit --mine --repos acme/widgets)");
+  if (prs.length === 0 && !mine && !claimsOnly) {
+    console.error("Error: give --prs <url,...>, --mine --repos <owner/repo,...>, or --claims-only (e.g. greenlight babysit --mine --repos acme/widgets)");
     process.exitCode = 1;
     return;
   }
-  const run = await babysit({ prs, mine, repos, statePath });
+  const run = await babysit({ prs, mine, repos, statePath, claimsOnly });
   if (args.includes("--json")) {
     console.log(JSON.stringify(run.json, null, 2));
   } else {
     console.log(run.markdown);
   }
   if (args.includes("--fail-on-action") && run.needsYouNow.length > 0) process.exitCode = 3;
+}
+
+/**
+ * Campaign scout mode (v0.9.0). Reads repos from --repos or --repos-file,
+ * scans each with the check pipeline, dedupes against the campaign file,
+ * ranks the survivors, and with --write appends them as SCOUTED.
+ */
+async function cmdScout(args: string[]): Promise<void> {
+  const reposRaw = flagValue(args, "--repos");
+  const reposFile = flagValue(args, "--repos-file");
+  const campaignPath = flagValue(args, "--campaign");
+  if (!campaignPath) {
+    console.error("Error: --campaign <campaign.json> is required.");
+    process.exitCode = 1;
+    return;
+  }
+  let repos = reposRaw ? reposRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
+  if (reposFile) {
+    try {
+      const { readFileSync } = await import("node:fs");
+      const lines = readFileSync(reposFile, "utf8").split("\n");
+      for (const line of lines) {
+        const t = line.trim();
+        if (t.length > 0 && !t.startsWith("#")) repos.push(t);
+      }
+    } catch (err) {
+      console.error(`Error: cannot read repos file ${reposFile}: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+      return;
+    }
+  }
+  if (repos.length === 0) {
+    console.error("Error: give --repos <o/r,...> or --repos-file <path> (e.g. greenlight scout --repos acme/widgets --campaign campaign.json).");
+    process.exitCode = 1;
+    return;
+  }
+  const budgetRaw = flagValue(args, "--budget");
+  const budget = budgetRaw !== undefined ? Number(budgetRaw) : SCOUT_DEFAULT_BUDGET;
+  if (!Number.isFinite(budget) || budget <= 0) {
+    console.error("Error: --budget must be a positive number.");
+    process.exitCode = 1;
+    return;
+  }
+  const scanLimitRaw = flagValue(args, "--scan-limit");
+  const keepRaw = flagValue(args, "--keep");
+  const result = await scoutCampaign({
+    repos,
+    campaignPath,
+    budget,
+    write: args.includes("--write"),
+    scanLimit: scanLimitRaw !== undefined ? Number(scanLimitRaw) : undefined,
+    keepPerRepo: keepRaw !== undefined ? Number(keepRaw) : undefined,
+  });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result.json, null, 2));
+  } else {
+    console.log(result.markdown);
+  }
+  if (result.budgetHit) {
+    console.log(`\nStopped on budget after ${result.reposProcessed.length} repos. The campaign file holds the resume cursor; rerun the same command to continue.`);
+  }
 }
 
 /**
@@ -784,12 +884,12 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as") {
       i++; // skip the value with its flag
       continue;
     }
@@ -835,6 +935,7 @@ async function main(): Promise<void> {
     if (command === "verify-comment" && target) return await cmdVerifyComment(target, args);
     if (command === "verify") return await cmdVerify(args);
     if (command === "babysit") return await cmdBabysit(args);
+    if (command === "scout") return await cmdScout(args);
     if (command === "evidence" && target) return await cmdEvidence(target, args);
     if (command === "passport" && target) return await cmdPassport(target, args);
     if (command && NEEDS_TARGET[command]) {

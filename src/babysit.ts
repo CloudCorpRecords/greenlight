@@ -19,11 +19,21 @@ import { apiGet, parsePullUrl } from "./github.js";
 import { triagePr, type CiTriageResult, type CiTriageVerdict } from "./ci-triage.js";
 import { triageReview as defaultTriageReview, type ReviewTriageResult, type ClassifiedFinding } from "./review-triage.js";
 import { guardPr, type GuardResult } from "./guard.js";
+import { computeIssueStatus } from "./protocol-fetch.js";
+import type { IssueStatusPayload } from "./protocol.js";
+import {
+  defaultRegistryPath,
+  loadRegistry,
+  removeClaim,
+  registryExists,
+  type MyClaim,
+} from "./claims-registry.js";
+import { bucketClaim, type ClaimBucket } from "./claim-health.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-export const BABYSIT_VERSION = "0.6.0";
+export const BABYSIT_VERSION = "0.9.0";
 
 /** Checks pending longer than this are reported as stuck, not just running. */
 export const STUCK_CHECK_MINUTES = 120;
@@ -61,6 +71,8 @@ export interface BabysitDeps {
   triageReview?: (prUrl: string) => Promise<ReviewTriageResult>;
   guard?: (prUrl: string) => Promise<GuardResult>;
   discoverPrs?: (author: string, repos: string[]) => Promise<string[]>;
+  /** Protocol status per registered claim; the default hits the API. */
+  computeStatus?: (owner: string, repo: string, number: number) => Promise<{ status: IssueStatusPayload; issueUpdatedAt: string | null }>;
 }
 
 interface PullApiItem {
@@ -468,6 +480,28 @@ export interface BabysitRunOptions {
   statePath?: string;
   deps?: BabysitDeps;
   now?: Date;
+  /** Only run the claims section (skip the PR scan entirely). */
+  claimsOnly?: boolean;
+  /** Override path for the my-claims registry. */
+  claimsRegistryPath?: string;
+}
+
+/** One registered claim, bucketed for the report. */
+export interface BabysitClaimReport {
+  claim: MyClaim;
+  bucket: ClaimBucket;
+  detail: string;
+  prUrl?: string;
+  error?: string;
+}
+
+async function defaultComputeStatus(
+  owner: string,
+  repo: string,
+  number: number
+): Promise<{ status: IssueStatusPayload; issueUpdatedAt: string | null }> {
+  const { status, snapshot } = await computeIssueStatus(owner, repo, number);
+  return { status, issueUpdatedAt: snapshot.updatedAt ?? null };
 }
 
 export interface BabysitRun {
@@ -477,13 +511,25 @@ export interface BabysitRun {
   quiet: string[];
   firstRun: boolean;
   prsChecked: number;
+  /** Claims section (empty when the registry has no claims). */
+  claims: BabysitClaimReport[];
+  /** Claim issues that resolved this run (merged/closed/released) and were retired from the registry. */
+  retiredClaims: string[];
+  /** True when the registry file did not exist at all. */
+  claimsRegistryMissing: boolean;
+  /** True when this run skipped the PR scan (--claims-only). */
+  claimsOnly: boolean;
   markdown: string;
   json: Record<string, unknown>;
 }
 
 function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markdown" | "json">): string {
   const lines: string[] = [];
-  lines.push(`**PR babysitter: ${run.needsYouNow.length} need you now, ${run.waitingOnThem.length} waiting, ${run.quiet.length} quiet** (${run.prsChecked} PRs checked)`);
+  if (run.claimsOnly) {
+    lines.push(`**Claims babysitter: ${run.claims.length} active claims** (${run.retiredClaims.length} retired this run)`);
+  } else {
+    lines.push(`**PR babysitter: ${run.needsYouNow.length} need you now, ${run.waitingOnThem.length} waiting, ${run.quiet.length} quiet** (${run.prsChecked} PRs checked)`);
+  }
   if (run.firstRun) lines.push("_First run: no watermarks yet, so this is the full picture. Reruns report what changed since the last check._");
   lines.push("");
   const section = (title: string, items: BabysitAction[]) => {
@@ -504,6 +550,28 @@ function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markd
   if (run.quiet.length === 0) lines.push("_None._");
   else for (const q of run.quiet) lines.push(`- ${q}`);
   lines.push("");
+
+  // Claims section (v0.9.0): the operator's registered claims, bucketed.
+  if (run.claimsRegistryMissing) {
+    lines.push("## My claims");
+    lines.push("_No claims registry yet: `greenlight claim --register <issue-url>` records one._");
+    lines.push("");
+  } else if (run.claims.length > 0 || run.retiredClaims.length > 0) {
+    lines.push(`## My claims (${run.claims.length} active)`);
+    const order: ClaimBucket[] = ["linked", "queue-lost", "expiring", "heartbeat-due", "unlinked-stale", "healthy-active"];
+    for (const bucket of order) {
+      const group = run.claims.filter((c) => c.bucket === bucket);
+      if (group.length === 0) continue;
+      lines.push(`### ${bucket}`);
+      for (const c of group) {
+        if (c.error) lines.push(`- ${c.claim.issueUrl} — could not read status: ${c.error}`);
+        else lines.push(`- ${c.detail}${c.prUrl ? ` (${c.prUrl})` : ""}`);
+      }
+      lines.push("");
+    }
+    for (const r of run.retiredClaims) lines.push(`_${r}_`);
+    if (run.retiredClaims.length > 0) lines.push("");
+  }
   for (const r of reports) {
     if (r.headChanged) lines.push(`_${r.pr}: new head ${r.headSha.slice(0, 7)} since the last check._`);
   }
@@ -542,6 +610,10 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
         quiet: [],
         firstRun,
         prsChecked: 0,
+        claims: [],
+        retiredClaims: [],
+        claimsRegistryMissing: true,
+        claimsOnly: false,
         markdown: `**PR babysitter: could not discover PRs** — ${err instanceof Error ? err.message : String(err)}`,
         json: { error: err instanceof Error ? err.message : String(err) },
       };
@@ -654,8 +726,37 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
         : `${r.pr} "${r.title}" — nothing needs you`
     );
 
+  // Claims section (v0.9.0): bucket every registered claim by its live
+  // protocol status. Claims whose issue resolved (merged/closed issue, a
+  // completed protocol claim, a released claim) retire from the registry.
+  const computeStatus = deps.computeStatus ?? defaultComputeStatus;
+  const registryPath = opts.claimsRegistryPath ?? defaultRegistryPath();
+  const claimsRegistryMissing = !registryExists(registryPath);
+  const claims: BabysitClaimReport[] = [];
+  const retiredClaims: string[] = [];
+  if (!claimsRegistryMissing) {
+    for (const claimEntry of loadRegistry(registryPath).claims) {
+      try {
+        const { status, issueUpdatedAt } = await computeStatus(claimEntry.owner, claimEntry.repo, claimEntry.number);
+        const claimState = status.claim?.state;
+        if (claimState === "completed" || claimState === "released") {
+          // A completed or released claim is done: retire it.
+          if (removeClaim(registryPath, claimEntry.issueUrl)) {
+            retiredClaims.push(`${claimEntry.owner}/${claimEntry.repo}#${claimEntry.number} "${claimEntry.issueUrl}" — claim ${claimState ?? "resolved"}; retired from the registry`);
+          }
+          continue;
+        }
+        const h = bucketClaim({ claim: claimEntry, status, issueUpdatedAt, now });
+        claims.push({ claim: claimEntry, bucket: h.bucket, detail: h.detail, prUrl: h.prUrl });
+      } catch (err) {
+        claims.push({ claim: claimEntry, bucket: "healthy-active", detail: "", error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+
   const partial: Omit<BabysitRun, "markdown" | "json"> = {
     reports, needsYouNow, waitingOnThem, quiet, firstRun, prsChecked: reports.length,
+    claims, retiredClaims, claimsRegistryMissing, claimsOnly: opts.claimsOnly ?? false,
   };
   const markdown = renderMarkdown(reports, partial);
   const json = {
@@ -664,6 +765,8 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
     needsYouNow: needsYouNow.map((a) => ({ pr: a.pr, text: a.text, next: a.next })),
     waitingOnThem: waitingOnThem.map((a) => ({ pr: a.pr, text: a.text, next: a.next })),
     quiet,
+    claims: claims.map((c) => ({ issue: c.claim.issueUrl, bucket: c.bucket, detail: c.detail, prUrl: c.prUrl ?? null, error: c.error ?? null })),
+    retiredClaims,
     reports: reports.map((r) => ({
       pr: r.pr, title: r.title, headSha: r.headSha, headChanged: r.headChanged,
       conflicts: r.conflicts, ciVerdict: r.ciVerdict,

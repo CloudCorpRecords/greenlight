@@ -88,16 +88,21 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "claim",
-    usage: "greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json]",
-    description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN).",
+    usage: "greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json] | claim --register <issue-url> [--eta-days N] [--as login]",
+    description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN). Posted claims join the my-claims registry automatically.",
     flags: [
       "--yes (actually post the comment)",
       "--force (post even on a bad verdict)",
       "--plan <text> (record a plan: line in the protocol claim)",
       "--eta-days <N> (record an eta-days: line in the protocol claim)",
+      "--register (record a claim posted by other means, without touching the API)",
+      "--as <login> (with --register: who posted the claim)",
       "--json (machine-readable output)",
     ],
-    examples: ["greenlight claim https://github.com/owner/repo/issues/123"],
+    examples: [
+      "greenlight claim https://github.com/owner/repo/issues/123",
+      "greenlight claim --register https://github.com/owner/repo/issues/123 --eta-days 7",
+    ],
   },
   {
     name: "prep",
@@ -169,15 +174,39 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "babysit",
-    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--json] [--fail-on-action]",
-    description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet).",
+    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--claims-only] [--json] [--fail-on-action]",
+    description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet). Also watches your my-claims registry (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost).",
     flags: [
       "--prs <url,...> (watch these PR URLs)",
       "--mine --repos <o/r,...> (discover your open PRs across repos)",
+      "--claims-only (skip the PR scan; show only the claims section)",
       "--fail-on-action (exit 3 when the needs-you-now list is non-empty)",
       "--json (machine-readable output)",
     ],
-    examples: ["greenlight babysit --mine --repos acme/widgets"],
+    examples: [
+      "greenlight babysit --mine --repos acme/widgets",
+      "greenlight babysit --claims-only",
+    ],
+  },
+  {
+    name: "scout",
+    usage: "greenlight scout --repos <o/r,...> --campaign <campaign.json> [--budget N] [--write] [--json]",
+    description: "Campaign mode: scan repos, rank survivors by friction, merge history, freshness, and verdict strength, and append them to a campaign file as SCOUTED.",
+    flags: [
+      "--repos <o/r,...> (repos to scout, or --repos-file <path> with one per line)",
+      "--repos-file <path> (one owner/repo per line)",
+      "--campaign <path> (campaign file: { entries: [{repo, issue, status, pr}], cursor })",
+      "--budget <N> (max GitHub API calls; default 300; on budget hit a resume cursor is saved)",
+      "--write (append survivors to the campaign file; without it, print only)",
+      "--scan-limit <N> (issues scanned per repo; default 10)",
+      "--keep <N> (survivors kept per repo; default 5)",
+      "Ranking formula: score = 30*verdictWeight (GO=2, RISKY=1) + 0.25*friction (0-100) + 20*outsideMergeShare (0-1) + 15/(1+medianMergeDays/14) + 5*freshness (1/(1+daysSinceUpdated/30))",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write",
+      "greenlight scout --repos-file repos.txt --campaign campaign.json --budget 150",
+    ],
   },
   {
     name: "evidence",
