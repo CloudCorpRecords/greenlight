@@ -115,6 +115,12 @@ function printVerdict(snapshot: { sourceUrl: string; title: string; owner: strin
   if (softClaims.length > 0) {
     console.log(`  soft claims: ${softClaims.map((c) => `${c.author} (${c.ageDays}d, ${c.phrase})`).join("; ")}`);
   }
+  const llmClaims = result.llm_claims ?? [];
+  if (llmClaims.length > 0) {
+    console.log(
+      `  ai claim signals: ${llmClaims.map((f) => `@${f.author} (${f.confidence.toFixed(2)}): "${f.quote}"`).join("; ")}`
+    );
+  }
   const detected = result.gates.filter((g) => g.detected);
   if (detected.length > 0) {
     console.log(`  gates: ${detected.map((g) => g.kind).join(", ")}`);
@@ -159,6 +165,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
     flags: merged.flags,
     claims: merged.claims,
     gates: merged.gates,
+    llm_claims: merged.llm_claims,
   };
   // Maintainer-only repos (inspector, servers) close outside PRs on sight;
   // the contribution that lands is a verified issue comment. Say so right
@@ -179,6 +186,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
           gates: merged.gates,
           duplicateOf: snapshot.duplicateOf ?? [],
           protocol: merged.protocol,
+          llm_claims: merged.llm_claims ?? [],
           suggestion,
         },
         null,
