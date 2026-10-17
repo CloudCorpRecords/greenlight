@@ -395,3 +395,123 @@ describe("helpers", () => {
     assert.deepEqual(wm.seenReviewIds, [reviewFindingId(finding())]);
   });
 });
+
+describe("babysit claims section (v0.9.0)", () => {
+  const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600000).toISOString();
+  const hoursFromNow = (h: number) => new Date(NOW.getTime() + h * 3600000).toISOString();
+
+  function statusFor(over: Record<string, unknown> = {}) {
+    return {
+      issue: "https://github.com/acme/widgets/issues/1",
+      verdict: null,
+      reason: null,
+      claim: null,
+      protocol_note: null,
+      competing_prs: [],
+      gates: [],
+      repo_protocol: null,
+      checked_at: NOW.toISOString(),
+      stale_after_seconds: 21600,
+      ...over,
+    };
+  }
+
+  it("buckets registered claims and skips the PR scan with --claims-only", async () => {
+    const claimsPath = join(stateDir, "my-claims.json");
+    const { registerClaim } = await import("../src/claims-registry.js");
+    registerClaim(claimsPath, {
+      issueUrl: "https://github.com/acme/widgets/issues/1",
+      owner: "acme",
+      repo: "widgets",
+      number: 1,
+      postedAt: hoursAgo(24),
+      etaDays: 7,
+      claimant: "me",
+    });
+    registerClaim(claimsPath, {
+      issueUrl: "https://github.com/acme/widgets/issues/2",
+      owner: "acme",
+      repo: "widgets",
+      number: 2,
+      postedAt: hoursAgo(120),
+      etaDays: 7,
+      claimant: "me",
+    });
+
+    const computeStatus = async (owner: string, repo: string, number: number) => {
+      if (number === 1) {
+        return {
+          status: statusFor({
+            claim: { state: "linked", claimant: "me", claimed_at: hoursAgo(24), expires_at: hoursFromNow(144), queue: [] },
+            competing_prs: [{ number: 42, author: "me", state: "open", url: "https://github.com/acme/widgets/pull/42" }],
+          }),
+          issueUpdatedAt: hoursAgo(2),
+        };
+      }
+      return {
+        status: statusFor({
+          claim: { state: "active", claimant: "me", claimed_at: hoursAgo(120), expires_at: hoursFromNow(30), queue: [] },
+        }),
+        issueUpdatedAt: hoursAgo(1),
+      };
+    };
+
+    const run = await babysit({
+      claimsOnly: true,
+      statePath,
+      claimsRegistryPath: claimsPath,
+      now: NOW,
+      deps: { computeStatus: computeStatus as never },
+    });
+    assert.equal(run.claimsOnly, true);
+    assert.equal(run.claims.length, 2);
+    assert.deepEqual(run.claims.map((c) => c.bucket).sort(), ["expiring", "linked"]);
+    assert.ok(run.markdown.includes("## My claims (2 active)"));
+    assert.ok(run.markdown.includes("### linked"));
+    assert.ok(run.markdown.includes("### expiring"));
+    const jsonClaims = (run.json.claims as Array<{ bucket: string }>).map((c) => c.bucket).sort();
+    assert.deepEqual(jsonClaims, ["expiring", "linked"]);
+  });
+
+  it("retires completed claims and notes them", async () => {
+    const claimsPath = join(stateDir, "my-claims.json");
+    const { registerClaim, loadRegistry } = await import("../src/claims-registry.js");
+    registerClaim(claimsPath, {
+      issueUrl: "https://github.com/acme/widgets/issues/3",
+      owner: "acme",
+      repo: "widgets",
+      number: 3,
+      postedAt: hoursAgo(24),
+      claimant: "me",
+    });
+    const run = await babysit({
+      claimsOnly: true,
+      statePath,
+      claimsRegistryPath: claimsPath,
+      now: NOW,
+      deps: {
+        computeStatus: (async () => ({
+          status: statusFor({
+            claim: { state: "completed", claimant: "me", claimed_at: hoursAgo(24), expires_at: hoursFromNow(144), queue: [] },
+          }),
+          issueUpdatedAt: hoursAgo(1),
+        })) as never,
+      },
+    });
+    assert.equal(run.claims.length, 0);
+    assert.equal(run.retiredClaims.length, 1);
+    assert.deepEqual(loadRegistry(claimsPath).claims, []);
+  });
+
+  it("says so when the registry does not exist", async () => {
+    const run = await babysit({
+      claimsOnly: true,
+      statePath,
+      claimsRegistryPath: join(stateDir, "nope.json"),
+      now: NOW,
+      deps: {},
+    });
+    assert.equal(run.claimsRegistryMissing, true);
+    assert.ok(run.markdown.includes("No claims registry yet"));
+  });
+});

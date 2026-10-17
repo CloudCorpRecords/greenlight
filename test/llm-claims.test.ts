@@ -393,3 +393,50 @@ describe("protocol merge with llm_claims", () => {
     assert.deepEqual(merged.llm_claims, [flag]);
   });
 });
+
+describe("regression: the two 2026-10-17 misses (v0.9.0)", () => {
+  // Field case: the scan path ran the deterministic verdict alone and
+  // missed two explicit soft claims the check pipeline's LLM layer was
+  // built to catch. v0.9.0 puts the LLM layer on the scan path, so both
+  // fixtures must classify as claim intent through the layer's test
+  // double, while the deterministic layer gains nothing.
+  const misses: Array<{ repo: string; number: number; author: string; body: string; quote: string }> = [
+    {
+      repo: "ollama/ollama",
+      number: 19078,
+      author: "Gitcoder12",
+      body: "Working on this.",
+      quote: "Working on this.",
+    },
+    {
+      repo: "vitejs/vite",
+      number: 23757,
+      author: "mikamikasuki",
+      body: "I'm going to reproduce this on current main and fix the optimizer bookkeeping for duplicated entry chunks.",
+      quote: "I'm going to reproduce this on current main and fix the optimizer bookkeeping for duplicated entry chunks.",
+    },
+  ];
+
+  for (const m of misses) {
+    it(`${m.repo}#${m.number} (${m.author}): deterministic gains nothing, LLM caps at RISKY`, async () => {
+      const snapshot = baseSnapshot({
+        sourceUrl: `https://github.com/${m.repo}/issues/${m.number}`,
+        number: m.number,
+        comments: [comment(m.author, m.body, "2026-10-17T08:00:00Z", m.number * 1000)],
+      });
+      const legacy = scoreIssue(snapshot);
+      assert.equal(legacy.verdict, "GO", `deterministic layer must gain nothing on ${m.repo}#${m.number}`);
+      assert.equal(legacy.claims.length, 0);
+
+      // The layer's test double: the model replies that the comment is a claim.
+      const { impl } = stubFetch(llmJson([{ index: 0, claim: true, quote: m.quote, confidence: 0.9, reason: "States intent to do the work." }]));
+      const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
+      assert.equal(out.verdict, "RISKY");
+      assert.ok(out.flags.includes("llm-claim"), out.flags.join(","));
+      assert.equal(out.llm_claims?.length, 1);
+      assert.equal(out.llm_claims?.[0].author, m.author);
+      assert.ok(snapshot.comments[0].body.includes(out.llm_claims?.[0].quote ?? "x"), "quote must be an exact substring");
+      assert.ok(!out.reasons.some((r) => r.includes("TAKEN")), "never TAKEN from an LLM flag");
+    });
+  }
+});

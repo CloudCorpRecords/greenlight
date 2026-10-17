@@ -327,6 +327,37 @@ describe("claimIssue", () => {
     );
     assert.equal(client.writes.length, 0);
   });
+
+  it("refuses an agent-banned repo without --force", async () => {
+    const snap = makeSnapshot({
+      houseRules: [
+        {
+          file: "AGENTS.md",
+          text: "Contributions may only be submitted by a human who fully understands them. Autonomous agents are not allowed.",
+        },
+      ],
+    });
+    await assert.rejects(
+      claimIssue(client, snap, { yes: false, force: false }),
+      (err: unknown) => err instanceof AutomationRefusal && /bans agent/i.test(err.message)
+    );
+    assert.equal(client.writes.length, 0);
+  });
+
+  it("--force overrides an agent-ban refusal (a human still opens the PR)", async () => {
+    const snap = makeSnapshot({
+      houseRules: [
+        {
+          file: "AGENTS.md",
+          text: "Contributions may only be submitted by a human who fully understands them. Autonomous agents are not allowed.",
+        },
+      ],
+    });
+    const plan = await claimIssue(client, snap, { yes: false, force: true });
+    assert.equal(plan.executed, false);
+    assert.ok(plan.commentBody.length > 0);
+    assert.equal(client.writes.length, 0);
+  });
 });
 
 describe("prepIssue", () => {

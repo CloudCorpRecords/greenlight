@@ -94,9 +94,9 @@ describe("parseGates", () => {
     assert.equal(gates.find((x) => x.kind === "collaborators_only")!.detected, false);
   });
 
-  it("returns all gates (now nine) with false when nothing matches", () => {
+  it("returns all gates (now eleven) with false when nothing matches", () => {
     const gates = parseGates("Thanks for contributing! Just open a PR.");
-    assert.equal(gates.length, 9);
+    assert.equal(gates.length, 11);
     assert.ok(gates.every((g) => !g.detected));
   });
 
@@ -171,9 +171,9 @@ describe("parseGatesFromSources", () => {
     assert.equal(gates.find((x) => x.kind === "vouch_required")!.source, "CLAUDE.md");
   });
 
-  it("returns all nine kinds even when nothing matches", () => {
+  it("returns all eleven kinds even when nothing matches", () => {
     const gates = parseGatesFromSources([{ file: "AGENTS.md", text: "Run the linter." }]);
-    assert.equal(gates.length, 9);
+    assert.equal(gates.length, 11);
     assert.ok(gates.every((g) => g.detected === false));
   });
 });
@@ -238,5 +238,49 @@ describe("paused and auto-closed outside PRs (field case 2026-10-15)", () => {
       { name: "publish.yml" },
     ]);
     assert.deepEqual(gates, []);
+  });
+});
+
+describe("agent policy gates (v0.9.0)", () => {
+  it("detects an agent ban in AGENTS.md style prose", () => {
+    const text =
+      "Contributions may only be submitted by a human who fully understands them and can explain them. " +
+      "Contributions by autonomous agents are not allowed. " +
+      "Do not draft or post PR titles, PR descriptions, issues, or discussion comments.";
+    const gates = parseGatesFromSources([
+      { file: "CONTRIBUTING.md", text: "# Contributing\nFork and PR." },
+      { file: "AGENTS.md", text },
+    ]);
+    const g = gates.find((x) => x.kind === "agents_banned")!;
+    assert.equal(g.detected, true);
+    assert.equal(g.source, "AGENTS.md");
+    assert.ok(g.evidence.length > 0);
+    assert.ok(hardGates(gates).some((x) => x.kind === "agents_banned"));
+    assert.equal(gateLabel("agents_banned"), "agent contributions banned");
+    // The disclosure rule must not fire on a ban: the repo says nothing about disclosure.
+    assert.equal(gates.find((x) => x.kind === "agents_disclosure")!.detected, false);
+  });
+
+  it("detects an AI disclosure requirement in actual's style", () => {
+    const text =
+      "AI Usage Policy: If you use AI assistance on a pull request, you must include an AI disclosure " +
+      "sentence in the PR description, and prefix the PR title and your commits with [AI].";
+    const gates = parseGatesFromSources([{ file: "AGENTS.md", text }]);
+    const g = gates.find((x) => x.kind === "agents_disclosure")!;
+    assert.equal(g.detected, true);
+    assert.equal(g.source, "AGENTS.md");
+    // A disclosure requirement is a flag, never a hard block.
+    assert.ok(!hardGates(gates).some((x) => x.kind === "agents_disclosure"));
+    assert.equal(gateLabel("agents_disclosure"), "AI disclosure required");
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+
+  it("stays byte-identical quiet when no agent policy exists", () => {
+    const gates = parseGates("# Contributing\n\nFork, branch, and open a PR. Tests must pass.");
+    assert.equal(gates.length, 11);
+    for (const g of gates) {
+      assert.equal(g.detected, false, g.kind);
+      assert.equal(g.evidence, "");
+    }
   });
 });

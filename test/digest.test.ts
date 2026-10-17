@@ -240,15 +240,17 @@ describe("buildAssignmentConflicts", () => {
 
 describe("buildDigestSummary", () => {
   it("pluralizes and states the cap", () => {
-    const s = buildDigestSummary({ repo: "o/r", races: 2, claimConflicts: 1, staleClaims: 0, assignmentConflicts: 0, prCap: 50, trueOpenPRs: 87 });
+    const s = buildDigestSummary({ repo: "o/r", races: 2, claimConflicts: 1, staleClaims: 0, assignmentConflicts: 0, triageHolds: 0, prCap: 50, trueOpenPRs: 87 });
     assert.ok(s.includes("2 races"));
     assert.ok(s.includes("1 claimed-by-other conflict"));
     assert.ok(s.includes("showing 50 of 87 open PRs"));
+    assert.ok(s.includes("0 triage holds"));
   });
   it("omits the cap note when uncapped", () => {
-    const s = buildDigestSummary({ repo: "o/r", races: 0, claimConflicts: 0, staleClaims: 0, assignmentConflicts: 0, prCap: 50, trueOpenPRs: 3 });
+    const s = buildDigestSummary({ repo: "o/r", races: 0, claimConflicts: 0, staleClaims: 0, assignmentConflicts: 0, triageHolds: 2, prCap: 50, trueOpenPRs: 3 });
     assert.ok(!s.includes("showing"));
     assert.ok(s.includes("0 races"));
+    assert.ok(s.includes("2 triage holds"));
   });
 });
 
