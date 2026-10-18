@@ -213,3 +213,83 @@ describe("scoutCampaign", () => {
     assert.ok(campaignHas(final, "o/three", 1));
   });
 });
+
+describe("capability exclusion", () => {
+  it("excludes repos whose latest pr_create outcome is a structural block, naming the reason", async () => {
+    const capPath = join(dir, "capabilities.json");
+    writeFileSync(
+      capPath,
+      JSON.stringify({
+        entries: [
+          {
+            repo: "o/blocked",
+            action: "pr_create",
+            outcome: "blocked-422",
+            evidence: 'PR creation failed: GitHub API 422: user is blocked (2026-10-18)',
+            at: "2026-10-18T14:00:00.000Z",
+          },
+        ],
+      }),
+      "utf8"
+    );
+    const listed: string[] = [];
+    const result = await scoutCampaign({
+      repos: ["o/blocked", "o/fine"],
+      campaignPath,
+      budget: 100,
+      write: false,
+      now: NOW,
+      capabilitiesPath: capPath,
+      deps: {
+        budgetUsed: () => 0,
+        listIssues: async (o: string, r: string) => {
+          listed.push(`${o}/${r}`);
+          return [issue({ number: 1 })];
+        },
+        scanIssue: async (_o, _r, n) => issue({ number: n }),
+        friction: async () => ({ score: 80 } as never),
+        velocity: async () => ({ externalShare: 0.5, medianMergeDays: 3 } as never),
+      },
+    });
+    // The blocked repo is never listed or scanned; the fine one is.
+    assert.deepEqual(listed, ["o/fine"]);
+    assert.equal(result.reposBlocked.length, 1);
+    assert.equal(result.reposBlocked[0].repo, "o/blocked");
+    assert.match(result.reposBlocked[0].reason, /blocked-422/);
+    assert.match(result.reposBlocked[0].reason, /user is blocked/);
+    assert.deepEqual(result.reposProcessed, ["o/fine"]);
+    assert.ok(Array.isArray(result.json.reposBlocked), "json carries the exclusion");
+    assert.equal((result.json.reposBlocked as Array<{ repo: string }>).length, 1);
+    assert.match(result.markdown, /o\/blocked/);
+  });
+
+  it("does not exclude repos whose latest outcome is ok", async () => {
+    const capPath = join(dir, "capabilities.json");
+    writeFileSync(
+      capPath,
+      JSON.stringify({
+        entries: [
+          { repo: "o/fine", action: "pr_create", outcome: "ok", evidence: "PR opened", at: "2026-10-18T14:00:00.000Z" },
+        ],
+      }),
+      "utf8"
+    );
+    const result = await scoutCampaign({
+      repos: ["o/fine"],
+      campaignPath,
+      budget: 100,
+      write: false,
+      now: NOW,
+      capabilitiesPath: capPath,
+      deps: {
+        budgetUsed: () => 0,
+        listIssues: async () => [issue({ number: 1 })],
+        scanIssue: async (_o, _r, n) => issue({ number: n }),
+        friction: async () => ({ score: 80 } as never),
+        velocity: async () => ({ externalShare: 0.5, medianMergeDays: 3 } as never),
+      },
+    });
+    assert.equal(result.reposBlocked.length, 0);
+    assert.deepEqual(result.reposProcessed, ["o/fine"]);
+  });
+});

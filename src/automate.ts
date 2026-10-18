@@ -37,6 +37,10 @@ import {
   type PostingLedgerEntry,
 } from "./posting-ledger.js";
 import { CLAIM_MARKER } from "./protocol.js";
+import {
+  recordCapability,
+  capabilityOutcomeForError,
+} from "./capabilities.js";
 
 /** Thrown when an automation command refuses to proceed. CLI exits 1 on this. */
 export class AutomationRefusal extends Error {
@@ -501,8 +505,25 @@ export async function claimIssue(
   let commentUrl: string;
   try {
     commentUrl = await client.postIssueComment(snapshot.owner, snapshot.repo, snapshot.number, commentBody);
+    // v0.10.1: remember what this repo let us do, so scout and
+    // preflight never pay for the same lesson twice.
+    recordCapability(
+      `${snapshot.owner}/${snapshot.repo}`,
+      "claim",
+      "ok",
+      `claim comment posted ${commentUrl}`
+    );
   } catch (err) {
     const outcome = outcomeForError(err);
+    const capOutcome = capabilityOutcomeForError(err);
+    if (capOutcome) {
+      recordCapability(
+        `${snapshot.owner}/${snapshot.repo}`,
+        "claim",
+        capOutcome,
+        `claim comment failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     finishPost(
       ledgerPath,
       reservation.entry!,
@@ -1017,6 +1038,10 @@ export async function openPr(
       head,
       base: defaultBranch,
     });
+    // v0.10.1: the account's per-repo PR capability, recorded at the
+    // moment it is proven. A 422 or 404 here is structural: preflight
+    // and scout read it back before any future build starts.
+    recordCapability(`${owner}/${repo}`, "pr_create", "ok", `PR opened ${prUrl}`);
     appendLedgerEntry(
       {
         kind: "pr",
@@ -1027,6 +1052,15 @@ export async function openPr(
       opts.ledgerPath ?? defaultLedgerPath()
     );
   } catch (err) {
+    const capOutcome = capabilityOutcomeForError(err);
+    if (capOutcome) {
+      recordCapability(
+        `${owner}/${repo}`,
+        "pr_create",
+        capOutcome,
+        `PR creation failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     appendLedgerEntry(
       {
         kind: "pr",

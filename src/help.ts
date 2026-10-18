@@ -235,6 +235,34 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight portfolio"],
   },
   {
+    name: "shipcheck",
+    usage: "greenlight shipcheck <owner/repo> --version <x.y.z> [--npm <pkg>] [--mcp-name <name>] [--json]",
+    description: "Independently verify every link of a release chain: the git tag resolves, the commit object exists, package.json at the tag carries the version, the GitHub release exists, npm shows the version, and the MCP Registry shows it active. Reads only; exits non-zero naming the broken link.",
+    flags: [
+      "--version <x.y.z> (required; the tag is checked as v<x.y.z>)",
+      "--npm <pkg> (default: ./package.json name, then the API)",
+      "--mcp-name <name> (default: ./server.json name, then the API; without it the registry check is skipped)",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight shipcheck CloudCorpRecords/greenlight --version 0.10.1",
+    ],
+  },
+  {
+    name: "preflight",
+    usage: "greenlight preflight <owner/repo> [--base <sha>] [--files <a,b,...>] [--json]",
+    description: "Reads-only go/no-go before building a fix or opening a PR: the fork exists with the right parent, the capability ledger has no recorded block (KNOWN-BLOCKED stops here), the repo's policy gates, and upstream drift on the files the build would touch when --base and --files are given.",
+    flags: [
+      "--base <sha> (the base the fix was built against)",
+      "--files <a,b,...> (repo-relative paths to check for upstream drift)",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight preflight actualbudget/actual",
+      "greenlight preflight actualbudget/actual --base 8d59f30c --files packages/loot-core/src/server/accounts/app.ts",
+    ],
+  },
+  {
     name: "scout",
     usage: "greenlight scout --repos <o/r,...> --campaign <campaign.json> [--budget N] [--write] [--json]",
     description: "Campaign mode: scan repos, rank survivors by friction, merge history, freshness, and verdict strength, and append them to a campaign file as SCOUTED.",
@@ -313,6 +341,8 @@ export const NEEDS_TARGET: Record<string, string> = {
   "verify-comment": "an issue URL, e.g. greenlight verify-comment https://github.com/owner/repo/issues/123",
   evidence: "a PR URL, e.g. greenlight evidence https://github.com/owner/repo/pull/456",
   passport: "a GitHub login, e.g. greenlight passport CloudCorpRecords",
+  shipcheck: "a repo plus --version, e.g. greenlight shipcheck CloudCorpRecords/greenlight --version 0.10.1",
+  preflight: "a repo, e.g. greenlight preflight actualbudget/actual",
 };
 
 /** First-run overview: quickstart first, then the command list. */

@@ -32,6 +32,11 @@ import type { FrictionReport } from "./types.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { defaultPackageVersion } from "./doctor.js";
+import {
+  loadCapabilities,
+  prCreateBlockReason,
+  defaultCapabilitiesPath,
+} from "./capabilities.js";
 
 /* ------------------------------------------------------------------ */
 /* Campaign file                                                       */
@@ -194,6 +199,14 @@ export interface ScoutOptions {
   keepPerRepo?: number;
   deps?: ScoutDeps;
   now?: Date;
+  /**
+   * Capability ledger path. Repos whose latest recorded pr_create
+   * outcome is a structural block are excluded from scanning and
+   * listed as reposBlocked with the recorded reason (v0.10.1: the
+   * actual/ ts-sdk lesson — never pay to scout a repo the account
+   * cannot open PRs in).
+   */
+  capabilitiesPath?: string;
 }
 
 export interface ScoutResult {
@@ -209,6 +222,11 @@ export interface ScoutResult {
   reposProcessed: string[];
   /** Repos skipped because the cursor had passed them or the budget hit. */
   reposSkipped: string[];
+  /**
+   * Repos excluded before scanning because the capability ledger
+   * records a structural pr_create block for the account.
+   */
+  reposBlocked: Array<{ repo: string; reason: string }>;
   apiCallsUsed: number;
   markdown: string;
   json: Record<string, unknown>;
@@ -283,6 +301,10 @@ export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
   const appended: CampaignEntry[] = [];
   const reposProcessed: string[] = [];
   const reposSkipped: string[] = [];
+  const reposBlocked: Array<{ repo: string; reason: string }> = [];
+  // Read the capability ledger once: repos the account structurally
+  // cannot open PRs in are excluded before any API budget is spent.
+  const capabilities = loadCapabilities(opts.capabilitiesPath ?? defaultCapabilitiesPath());
   let budgetHit = false;
   let stoppedAt: number | null = null;
 
@@ -303,6 +325,11 @@ export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
       continue;
     }
     const repoTag = `${ref.owner}/${ref.repo}`;
+    const blockReason = prCreateBlockReason(capabilities, repoTag);
+    if (blockReason) {
+      reposBlocked.push({ repo: repoTag, reason: blockReason });
+      continue;
+    }
     const raw = await listIssues(ref.owner, ref.repo, scanLimit);
     const ranked: ScoutCandidate[] = [];
     // Fetch repo-level ranking inputs once per repo, in parallel with the
@@ -383,6 +410,11 @@ export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
     lines.push(`  ${c.url}`);
   }
   if (candidates.length === 0) lines.push("_None._");
+  if (reposBlocked.length > 0) {
+    lines.push("");
+    lines.push(`**Excluded by capability ledger (${reposBlocked.length}): the account structurally cannot open PRs here**`);
+    for (const b of reposBlocked) lines.push(`- **${b.repo}** — ${b.reason}`);
+  }
   lines.push("");
   lines.push(scoutFooter(budgetUsed(), opts.budget));
 
@@ -393,6 +425,7 @@ export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
     cursor,
     reposProcessed,
     reposSkipped,
+    reposBlocked,
     apiCallsUsed: budgetUsed(),
     markdown: lines.join("\n"),
     json: {
@@ -414,6 +447,7 @@ export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
       cursor,
       reposProcessed,
       reposSkipped,
+      reposBlocked,
       apiCallsUsed: budgetUsed(),
     },
   };

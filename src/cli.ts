@@ -78,6 +78,8 @@ import { verifyRepo } from "./verify.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
 import { runSync, formatSyncHuman, syncJson } from "./sync.js";
 import { runPortfolio, formatPortfolioHuman, portfolioJson } from "./portfolio.js";
+import { runShipcheck, formatShipcheckHuman } from "./shipcheck.js";
+import { runPreflight, formatPreflightHuman } from "./preflight.js";
 import { buildEvidencePack } from "./evidence.js";
 import { buildPassport } from "./passport.js";
 import { renderLabelsDryRun } from "./guard.js";
@@ -778,6 +780,75 @@ async function cmdPortfolio(args: string[]): Promise<void> {
 }
 
 /**
+ * `greenlight shipcheck owner/repo --version x.y.z`: independently verify
+ * every link of a release chain (tag, commit object, package.json at the
+ * tag, GitHub release, npm, MCP Registry). Reads only. Exits non-zero
+ * naming the broken link on any failure, so a CI gate can run it after
+ * every publish and a broken ship can never be reported as shipped.
+ */
+async function cmdShipcheck(target: string, args: string[]): Promise<void> {
+  let owner: string;
+  let repo: string;
+  try {
+    ({ owner, repo } = parseRepoRef(target));
+  } catch {
+    console.error(`Error: expected owner/repo, got: ${target}`);
+    process.exitCode = 1;
+    return;
+  }
+  const version = flagValue(args, "--version");
+  if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
+    console.error("Error: --version <x.y.z> is required.");
+    process.exitCode = 1;
+    return;
+  }
+  const result = await runShipcheck({
+    owner,
+    repo,
+    version,
+    npmPackage: flagValue(args, "--npm"),
+    mcpName: flagValue(args, "--mcp-name"),
+  });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(formatShipcheckHuman(result));
+  }
+  if (!result.pass) process.exitCode = 1;
+}
+
+/**
+ * `greenlight preflight owner/repo [--base sha] [--files a,b]`: reads-only
+ * go/no-go before building a fix or opening a PR. Checks the fork, the
+ * capability ledger (KNOWN-BLOCKED repos stop here), the repo's policy
+ * gates, and optional upstream drift on the files the build would touch.
+ */
+async function cmdPreflight(target: string, args: string[]): Promise<void> {
+  let owner: string;
+  let repo: string;
+  try {
+    ({ owner, repo } = parseRepoRef(target));
+  } catch {
+    console.error(`Error: expected owner/repo, got: ${target}`);
+    process.exitCode = 1;
+    return;
+  }
+  const filesRaw = flagValue(args, "--files");
+  const result = await runPreflight({
+    owner,
+    repo,
+    base: flagValue(args, "--base"),
+    files: filesRaw ? filesRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : undefined,
+  });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(formatPreflightHuman(result));
+  }
+  if (result.verdict === "NO-GO") process.exitCode = 1;
+}
+
+/**
  * Campaign scout mode (v0.9.0). Reads repos from --repos or --repos-file,
  * scans each with the check pipeline, dedupes against the campaign file,
  * ranks the survivors, and with --write appends them as SCOUTED.
@@ -1126,6 +1197,8 @@ async function main(): Promise<void> {
     if (command === "scout") return await cmdScout(args);
     if (command === "sync") return await cmdSync(args);
     if (command === "portfolio") return await cmdPortfolio(args);
+    if (command === "shipcheck" && target) return await cmdShipcheck(target, args);
+    if (command === "preflight" && target) return await cmdPreflight(target, args);
     if (command === "evidence" && target) return await cmdEvidence(target, args);
     if (command === "passport" && target) return await cmdPassport(target, args);
     if (command && NEEDS_TARGET[command]) {
