@@ -36,6 +36,11 @@ import {
   buildVerifiedComment,
   suggestsVerifiedComment,
 } from "./verify-comment.js";
+import {
+  mcpApiStatus,
+  mcpClaimViaApi,
+  mcpHeartbeatViaApi,
+} from "./claim-api.js";
 import { createRequire } from "node:module";
 
 // Same version fact the CLI footer prints: read from package.json so the
@@ -513,6 +518,50 @@ server.tool(
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
+  }
+);
+
+server.tool(
+  "api_status",
+  "The hosted Claim Protocol status payload for one issue, read live from the claim API: who holds it, until when, who is queued, and whether the repo honors the protocol. For agents that want the 60-second-fresh answer instead of the 15-minute static one. Read only; no token needed.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+    api_base: z.string().optional().describe("Override the hosted claim API base URL."),
+  },
+  async ({ issue_url, api_base }) => {
+    return text(await mcpApiStatus({ issue_url, api_base }));
+  }
+);
+
+server.tool(
+  "claim_via_api",
+  "Claim one issue through the hosted claim API. App-aware: when the Greenlight Claims app is installed on the repo the claim goes through the app backend; otherwise it posts as a plain protocol comment and says so. REPORT-MODE SAFE: dry run unless execute is true; executing needs a stored token (greenlight auth login) or the token argument.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+    execute: z.boolean().default(false).describe("Post the claim for real. Defaults to false: dry run returns the plan only."),
+    plan: z.string().optional().describe("Plan recorded in the protocol claim comment (plan: line)."),
+    eta_days: z.number().optional().describe("ETA in days recorded in the protocol claim comment (eta-days: line)."),
+    queue_ok: z.boolean().default(false).describe("Join the public queue when someone else holds the active claim."),
+    api_base: z.string().optional().describe("Override the hosted claim API base URL."),
+    token: z.string().optional().describe("API token passthrough; prefer the stored token from greenlight auth login."),
+  },
+  async ({ issue_url, execute, plan, eta_days, queue_ok, api_base, token }) => {
+    return text(await mcpClaimViaApi({ issue_url, execute, plan, eta_days, queue_ok, api_base, token }));
+  }
+);
+
+server.tool(
+  "heartbeat_via_api",
+  "Renew one active claim through the hosted claim API (extends the lease). App-aware like claim_via_api. REPORT-MODE SAFE: dry run unless execute is true; executing needs a stored token or the token argument.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+    execute: z.boolean().default(false).describe("Post the heartbeat for real. Defaults to false: dry run returns the plan only."),
+    mode: z.enum(["comment", "reaction"]).default("comment").describe("Renew with a comment or a reaction, where supported."),
+    api_base: z.string().optional().describe("Override the hosted claim API base URL."),
+    token: z.string().optional().describe("API token passthrough; prefer the stored token from greenlight auth login."),
+  },
+  async ({ issue_url, execute, mode, api_base, token }) => {
+    return text(await mcpHeartbeatViaApi({ issue_url, execute, mode, api_base, token }));
   }
 );
 

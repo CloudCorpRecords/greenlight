@@ -82,6 +82,17 @@ import { runSync, formatSyncHuman, syncJson } from "./sync.js";
 import { runPortfolio, formatPortfolioHuman, portfolioJson } from "./portfolio.js";
 import { runShipcheck, formatShipcheckHuman } from "./shipcheck.js";
 import { runPreflight, formatPreflightHuman } from "./preflight.js";
+import {
+  viaApiClaim,
+  viaApiRelease,
+  viaApiHeartbeat,
+  deviceFlowLogin,
+  browserLoginFlow,
+  defaultTokenStore,
+  resolveApiBase,
+  type ViaApiClaimResult,
+  type ViaApiWriteResult,
+} from "./claim-api.js";
 import { buildEvidencePack } from "./evidence.js";
 import { buildPassport } from "./passport.js";
 import { renderLabelsDryRun } from "./guard.js";
@@ -429,6 +440,13 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
     return;
   }
 
+  // --via-api: claim through the hosted claim API (app-aware path
+  // selection, TAKEN pre-flight, single re-auth on 401). Dry run unless
+  // --yes.
+  if (args.includes("--via-api")) {
+    return await cmdClaimViaApi(issueUrl, args);
+  }
+
   const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {});
   printVerdict(snapshot, merged, false);
   const minIntervalRaw = flagValue(args, "--min-interval");
@@ -498,6 +516,121 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
     const dryPacing = checkPacing(readLedger(), Date.now(), pacingConfigFromEnv());
     for (const line of pacingSummary(dryPacing)) console.log(`  ${line}`);
   }
+}
+
+/**
+ * `greenlight auth`: sign in to the hosted claim API.
+ *   login           GitHub device flow (Option 1); prints the user code.
+ *   login --browser browser OAuth grant, paste the session token (Option 2).
+ *   status          show what is stored and where.
+ *   logout          forget the stored token.
+ * Option 3 needs no login: --token or GREENLIGHT_API_TOKEN passthrough.
+ */
+async function cmdAuth(sub: string | undefined, args: string[]): Promise<void> {
+  const store = await defaultTokenStore();
+  if (sub === "login") {
+    if (args.includes("--browser")) {
+      await browserLoginFlow({
+        apiBase: flagValue(args, "--api-base"),
+        store,
+      });
+      console.log(`Signed in (browser session token stored in ${store.describe()}).`);
+    } else {
+      const result = await deviceFlowLogin({
+        clientId: flagValue(args, "--client-id"),
+        store,
+      });
+      console.log(
+        `Signed in as @${result.login ?? "unknown"} (GitHub token stored in ${store.describe()}).`
+      );
+    }
+    return;
+  }
+  if (sub === "status") {
+    const stored = await store.get();
+    if (!stored) {
+      console.log(`Not signed in. Run greenlight auth login, or pass --token / set GREENLIGHT_API_TOKEN.`);
+      console.log(`Token store: ${store.describe()}.`);
+      return;
+    }
+    console.log(`Signed in${stored.login ? ` as @${stored.login}` : ""} (${stored.kind} token, stored ${stored.storedAt.slice(0, 10)}).`);
+    console.log(`Token store: ${store.describe()}.`);
+    return;
+  }
+  if (sub === "logout") {
+    await store.clear();
+    console.log(`Signed out (stored token cleared).`);
+    return;
+  }
+  console.error("Usage: greenlight auth <login [--browser] | status | logout>");
+  process.exitCode = 1;
+}
+
+function viaApiExitCode(outcome: string): number {
+  return outcome === "claimed" || outcome === "queued" || outcome === "already-claimed" || outcome === "done" || outcome === "dry-run" ? 0 : 1;
+}
+
+/**
+ * `greenlight claim <issue-url> --via-api`: claim through the hosted
+ * claim API. The client checks the app installation first: installed ->
+ * the claim goes through the app backend (the server posts the protocol
+ * comment as the caller); not installed -> the current direct-API
+ * comment path with a printed one-line note. Dry run unless --yes.
+ */
+async function cmdClaimViaApi(issueUrl: string, args: string[]): Promise<void> {
+  const { owner, repo, number } = parseIssueUrl(issueUrl);
+  const asJson = args.includes("--json");
+  const printed: string[] = [];
+  const etaRaw = flagValue(args, "--eta-days");
+  const result: ViaApiClaimResult = await viaApiClaim(
+    { owner, repo, number, url: issueUrl },
+    {
+      plan: flagValue(args, "--plan"),
+      etaDays: etaRaw !== undefined ? Number(etaRaw) : undefined,
+      queueOk: args.includes("--queue-ok"),
+      tokenFlag: flagValue(args, "--token"),
+      apiBaseFlag: flagValue(args, "--api-base"),
+      yes: args.includes("--yes"),
+    },
+    { print: (line) => (asJson ? printed.push(line) : console.log(line)) }
+  );
+  if (asJson) {
+    console.log(JSON.stringify({ ...result, printed }, null, 2));
+  } else {
+    console.log(result.message);
+  }
+  process.exitCode = viaApiExitCode(result.outcome);
+}
+
+async function cmdViaApiMarker(
+  kind: "release" | "heartbeat",
+  issueUrl: string,
+  args: string[]
+): Promise<void> {
+  const { owner, repo, number } = parseIssueUrl(issueUrl);
+  const asJson = args.includes("--json");
+  const printed: string[] = [];
+  const opts = {
+    tokenFlag: flagValue(args, "--token"),
+    apiBaseFlag: flagValue(args, "--api-base"),
+    yes: args.includes("--yes"),
+  };
+  const run = kind === "release" ? viaApiRelease : viaApiHeartbeat;
+  const runOpts =
+    kind === "release"
+      ? opts
+      : { ...opts, mode: (args.includes("--reaction") ? "reaction" : "comment") as "comment" | "reaction" };
+  const result: ViaApiWriteResult = await run(
+    { owner, repo, number, url: issueUrl },
+    runOpts,
+    { print: (line) => (asJson ? printed.push(line) : console.log(line)) }
+  );
+  if (asJson) {
+    console.log(JSON.stringify({ ...result, printed }, null, 2));
+  } else {
+    console.log(result.message);
+  }
+  process.exitCode = viaApiExitCode(result.outcome);
 }
 
 async function cmdPrep(issueUrl: string, args: string[]): Promise<void> {
@@ -1184,12 +1317,12 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import", "--via-api", "--queue-ok", "--browser", "--reaction"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as" || a === "--ledger-user" || a === "--urls" || a === "--port" || a === "--concurrency") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as" || a === "--ledger-user" || a === "--urls" || a === "--port" || a === "--concurrency" || a === "--token" || a === "--api-base" || a === "--client-id") {
       i++; // skip the value with its flag
       continue;
     }
@@ -1231,6 +1364,9 @@ async function main(): Promise<void> {
     if (command === "guard" && target) return await cmdGuard(target, args);
     if (command === "digest" && target) return await cmdDigest(target, args);
     if (command === "claim" && (target || args.includes("--import"))) return await cmdClaim(target ?? "--import", args);
+    if (command === "release" && target) return await cmdViaApiMarker("release", target, args);
+    if (command === "heartbeat" && target) return await cmdViaApiMarker("heartbeat", target, args);
+    if (command === "auth") return await cmdAuth(target, args);
     if (command === "prep" && target) return await cmdPrep(target, args);
     if (command === "pr" && target) return await cmdPr(target, args);
     if (command === "verify-comment" && target) return await cmdVerifyComment(target, args);
