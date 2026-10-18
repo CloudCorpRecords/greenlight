@@ -19,6 +19,7 @@
  */
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -38,6 +39,12 @@ export type PostingOutcome = "confirmed" | "blocked" | "unconfirmed" | "supersed
 export interface PostingLedgerEntry {
   /** ISO timestamp of the attempt. */
   ts: string;
+  /**
+   * Unique entry id (v0.10.0). Two posts in the same millisecond share a
+   * ts, so finishPost matches on this, never on ts alone. Older entries
+   * may lack it; matching falls back to ts + targetUrl for those.
+   */
+  id?: string;
   kind: PostingKind;
   /** Canonical target, e.g. https://github.com/owner/repo/issues/123. */
   targetUrl: string;
@@ -225,6 +232,10 @@ export function reservePost(
       agent: agentId(),
       outcome: "unconfirmed",
       ...entry,
+      // Unique per reservation: two posts in the same millisecond must
+      // not share an identity (finishPost matches on this). The caller's
+      // partial never overrides it.
+      id: randomUUID(),
     };
     ledger.entries.push(full);
     writeLedger(path, ledger);
@@ -242,9 +253,14 @@ export function finishPost(
   try {
     withLedgerLock(path, () => {
       const ledger = readLedger(path);
-      const stored = ledger.entries.find(
-        (e) => e.ts === entry.ts && e.targetUrl === entry.targetUrl
-      );
+      // Match on the reservation id: ts + targetUrl is not unique when
+      // two posts land in the same millisecond. Entries written before
+      // ids existed fall back to ts + targetUrl.
+      const stored = entry.id
+        ? ledger.entries.find((e) => e.id === entry.id)
+        : ledger.entries.find(
+            (e) => e.ts === entry.ts && e.targetUrl === entry.targetUrl
+          );
       if (stored) {
         stored.outcome = outcome;
         if (note !== undefined) stored.note = note;

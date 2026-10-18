@@ -218,6 +218,28 @@ describe("multi-agent ledger (v0.10.0)", () => {
     assert.match(r3.reason ?? "", /daily claim cap reached/);
   });
 
+  it("finishPost hits the right entry when two posts share a millisecond", () => {
+    // Regression: finishPost used to match on ts + targetUrl, so two
+    // posts in the same millisecond (same target, e.g. a forced repost)
+    // made the second finish update the first entry. CI caught it.
+    const dir = mkdtempSync(join(tmpdir(), "gl-ledger-collide-"));
+    const path = join(dir, "posting-ledger.json");
+    const cfg = { minIntervalS: 0, jitterS: 0, dailyCap: 25 };
+    const target = "https://github.com/a/b/issues/1";
+    const r1 = reservePost(path, { kind: "claim", targetUrl: target }, cfg, T0);
+    const r2 = reservePost(path, { kind: "claim", targetUrl: target }, cfg, T0, { force: true });
+    assert.equal(r1.entry!.ts, r2.entry!.ts, "same millisecond, same ts");
+    assert.notEqual(r1.entry!.id, r2.entry!.id, "but distinct reservation ids");
+    finishPost(path, r1.entry!, "confirmed", "comment #1");
+    finishPost(path, r2.entry!, "confirmed", "comment #2 (pacing override: --force)");
+    const entries = readLedger(path).entries;
+    assert.equal(entries.length, 2);
+    assert.equal(entries[0].note, "comment #1");
+    assert.equal(entries[1].note, "comment #2 (pacing override: --force)");
+    assert.equal(entries[0].outcome, "confirmed");
+    assert.equal(entries[1].outcome, "confirmed");
+  });
+
   it("--force overrides pacing and the reservation is still ledgered", () => {
     const dir = mkdtempSync(join(tmpdir(), "gl-ledger-force-"));
     const path = join(dir, "posting-ledger.json");
