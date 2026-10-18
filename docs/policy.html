@@ -30,6 +30,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
 .weather{margin-top:16px;background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);
   padding:12px 18px;font-size:1rem;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .weather .wx{font-size:1.35rem}
+.bandstrip{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.bandlead{font-size:.8rem;color:var(--muted)}
+.bandchip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 13px;
+  font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.bandchip b{color:var(--ink)}
+.bandchip .gshare{color:var(--amber);font-weight:700}
 /* filter bar */
 .bar{position:sticky;top:0;z-index:50;background:rgba(255,253,246,.94);backdrop-filter:blur(8px);
   border-bottom:1px solid var(--line);padding:14px 0;margin:0 -20px;padding-left:20px;padding-right:20px}
@@ -131,6 +137,7 @@ footer .egg{cursor:default;opacity:.55}
     <div class="stat st-open"><div class="n" id="st-openpct">…</div><div class="l">welcome agent help outright</div></div>
   </div>
   <div class="weather" id="weather" aria-live="polite"><span class="wx">…</span><span>Loading the forecast…</span></div>
+  <div class="bandstrip" id="bandstrip" aria-live="polite"></div>
 </div></div>
 <div class="wrap">
   <div class="bar"><div class="wrap bar-inner" style="padding:0">
@@ -142,6 +149,7 @@ footer .egg{cursor:default;opacity:.55}
     <select id="sortsel" aria-label="Sort results">
       <option value="stars">Most stars</option>
       <option value="gates">Most gates first</option>
+      <option value="gfi">Most starter issues</option>
       <option value="az">A to Z</option>
       <option value="verified">Recently verified</option>
     </select>
@@ -199,7 +207,7 @@ var entries = [], classes = [], byId = {};
 var state = {q:"", cls:{}, lang:"", sort:"stars"};
 var filtered = [], rendered = 0, lastScore = {};
 var els = {};
-["search","langsel","sortsel","chiprow","countline","loading","grid","empty","clearbtn","morewrap","more","sentinel","weather","legend","builddate",
+["search","langsel","sortsel","chiprow","countline","loading","grid","empty","clearbtn","morewrap","more","sentinel","weather","bandstrip","legend","builddate",
 "st-total","st-gated","st-banned","st-openpct"].forEach(function(id){els[id]=document.getElementById(id);});
 
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -257,6 +265,7 @@ function baseCmp(a,b,s){
   if(s==="stars"){var x=(b.stars||0)-(a.stars||0);if(x)return x;return norm(a.repo)<norm(b.repo)?-1:1;}
   if(s==="gates"){var x=gateCount(b)-gateCount(a);if(x)return x;var y=(b.stars||0)-(a.stars||0);if(y)return y;return norm(a.repo)<norm(b.repo)?-1:1;}
   if(s==="verified"){var x=dateOf(b)<dateOf(a)?1:(dateOf(b)>dateOf(a)?-1:0);if(x)return x;return norm(a.repo)<norm(b.repo)?-1:1;}
+  if(s==="gfi"){var x=(b.good_first_issues||0)-(a.good_first_issues||0);if(x)return x;var y=(b.stars||0)-(a.stars||0);if(y)return y;return norm(a.repo)<norm(b.repo)?-1:1;}
   return norm(a.repo)<norm(b.repo)?-1:1;
 }
 function sortEntries(list,useScore){
@@ -379,6 +388,23 @@ function stats(){
   else{wx="&#9928;";line="Storm conditions: agents face gates in most indexed repos. The evidence on each card is your raincoat.";}
   els.weather.innerHTML='<span class="wx">'+wx+'</span><span><b>Gate weather report:</b> '+esc(line)+" "+banned+" ban agent contributions outright.</span>";
 }
+function bandStats(){
+  /* Gated share by repo size band, computed from the loaded dataset.
+     Keeps the headline honest as the sample mix shifts: the mix can move
+     without looking like the ecosystem changed. */
+  var bands=[["100k+",100000],["10k to 99k",10000],["1k to 9k",1000],["under 1k",0]];
+  var html='<span class="bandlead">Gated share by repo size:</span>';
+  for(var i=0;i<bands.length;i++){
+    var label=bands[i][0], min=bands[i][1], n=0, g=0;
+    for(var j=0;j<entries.length;j++){
+      var s=entries[j].stars||0;
+      if(s>=min&&(i===0||s<bands[i-1][1])){n++;if(gateCount(entries[j])>0)g++;}
+    }
+    var pct=n?Math.round(g/n*100):0;
+    html+='<span class="bandchip" title="'+n+' repos in this band">'+esc(label)+': <b>'+n+'</b> repos, <span class="gshare">'+pct+'%</span> gated</span>';
+  }
+  els.bandstrip.innerHTML=html;
+}
 function clearAll(){
   state.q="";state.cls={};state.lang="";
   els.search.value="";els.langsel.value="";
@@ -390,7 +416,7 @@ function boot(){
     entries=d.entries||[];classes=d.classes||[];
     byId={};classes.forEach(function(c){byId[c.id]=c;});
     els.loading.style.display="none";
-    buildChips();buildLangs();buildLegend();stats();apply();
+    buildChips();buildLangs();buildLegend();stats();bandStats();apply();
   }).catch(function(err){
     els.loading.style.display="none";
     els.grid.innerHTML='<div class="err">The index could not be loaded ('+esc(err.message)+'). Check that policy.json sits next to this page.</div>';
