@@ -26,9 +26,6 @@ import {
   parseIssueUrl,
   buildIssueSnapshot,
   scanCandidates,
-  fetchContributing,
-  countStarterIssues,
-  detectRepoPolicy,
   RateLimitError,
   fetchComments,
 } from "./github.js";
@@ -42,10 +39,10 @@ import {
   readLedger,
 } from "./posting-ledger.js";
 import { scoreIssue } from "./verdict.js";
-import { parseGates, parseGatefileJson } from "./gates.js";
+import { parseGatefileJson } from "./gates.js";
 import type { Gate } from "./types.js";
 import { existsSync, readFileSync } from "node:fs";
-import { scoreFriction } from "./friction.js";
+import { fetchFrictionSummary } from "./friction.js";
 import {
   createRestClient,
   claimIssue,
@@ -57,7 +54,7 @@ import {
   type PrResult,
 } from "./automate.js";
 import type { VerdictResult } from "./types.js";
-import { fetchMergeVelocity, describeMergeVelocity } from "./merge-velocity.js";
+import { describeMergeVelocity } from "./merge-velocity.js";
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
@@ -354,30 +351,10 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
 
 async function cmdFriction(repoRef: string, asJson: boolean): Promise<void> {
   const { owner, repo } = parseRepoRef(repoRef);
-  const [contributing, policy, starterCount] = await Promise.all([
-    fetchContributing(owner, repo),
-    detectRepoPolicy(owner, repo),
-    countStarterIssues(owner, repo),
-  ]);
-  const gates = parseGates(contributing, { collaboratorsOnlyPolicy: policy.collaboratorsOnly });
-  const report = scoreFriction({
-    owner,
-    repo,
-    gates,
-    externalPRMergeRate: null,
-    medianFirstReviewHours: null,
-    maintainerIssueResponseHours: null,
-    openGoodFirstIssueCount: starterCount,
-    note: "live",
-  });
-
-  // Merge velocity is a signal, never a score input. Best-effort: one
-  // /pulls call, silent when it fails.
-  try {
-    report.mergeVelocity = await fetchMergeVelocity(owner, repo);
-  } catch {
-    report.mergeVelocity = null;
-  }
+  // v0.9.3: one shared pipeline (fetchFrictionSummary) for the CLI, the
+  // MCP repo_friction tool, and preflight, so gates come from the full
+  // policy source set everywhere instead of a single CONTRIBUTING read.
+  const report = await fetchFrictionSummary(owner, repo);
 
   if (asJson) {
     console.log(JSON.stringify(report, null, 2));
@@ -386,6 +363,7 @@ async function cmdFriction(repoRef: string, asJson: boolean): Promise<void> {
   console.log(`Friction for ${owner}/${repo}: ${report.score}/100 (100 = easiest)`);
   for (const reason of report.reasons) console.log(`  - ${reason}`);
   if (report.reasons.length === 0) console.log("  - no gates or penalties detected");
+  const starterCount = report.signals.openGoodFirstIssueCount ?? null;
   if (starterCount !== null) console.log(`  open starter issues: ${starterCount}`);
   if (report.mergeVelocity) console.log(`  merge velocity: ${describeMergeVelocity(report.mergeVelocity)}`);
 }

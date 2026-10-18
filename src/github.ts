@@ -40,6 +40,11 @@ const TTL_MS: Record<string, number> = {
   issue: 6 * 60 * 60 * 1000,
   search: 60 * 60 * 1000,
   contributing: 24 * 60 * 60 * 1000,
+  // v0.9.3: house-rules and org-ai-policy had no TTL entry, which made
+  // `> undefined` false forever: a cached read never expired, so a repo
+  // whose policy files were once unreadable stayed "no policy" forever.
+  "house-rules": 60 * 60 * 1000,
+  "org-ai-policy": 24 * 60 * 60 * 1000,
   // LLM claim classifications: comment bodies are immutable, so a long TTL
   // means repeat checks cost nothing after the first classification.
   llm: 30 * 24 * 60 * 60 * 1000,
@@ -399,19 +404,102 @@ export interface MentionedPRDeps {
  */
 export const HOUSE_RULE_FILES = [
   "CONTRIBUTING.md",
-  "contributing.md",
   ".github/CONTRIBUTING.md",
+  "docs/CONTRIBUTING.md",
+  "contributing.md",
   "docs/development/contributing.mdx",
   "docs/development/contributing.md",
   "AGENTS.md",
-  "CLAUDE.md",
   ".github/AGENTS.md",
+  "docs/AGENTS.md",
+  "CLAUDE.md",
   ".github/CLAUDE.md",
+  "docs/CLAUDE.md",
+  "AI_POLICY.md",
+  ".github/AI_POLICY.md",
+  "docs/AI_POLICY.md",
 ] as const;
 
 export interface HouseRuleDeps {
   /** Test seam: fetch a repo-root file's raw text, or undefined when absent. */
   fetchRaw?: (file: string) => Promise<string | undefined>;
+  /** Test seam: fetch the org's AI_POLICY.md text, or undefined when absent. */
+  fetchOrgPolicy?: (owner: string) => Promise<string | undefined>;
+}
+
+/**
+ * v0.9.3: org-level AI policy. Binding agent rules sometimes live in the
+ * org's `.github` repo rather than the project repo (astral-sh's
+ * AI_POLICY.md bans autonomous agents for ruff and uv; mastodon's
+ * CONTRIBUTING only links to mastodon/.github's AI_POLICY.md). Probed
+ * once per org and cached under its own key so a sweep over N repos from
+ * one org costs one fetch, not N.
+ */
+export async function fetchOrgAiPolicy(
+  owner: string,
+  deps: HouseRuleDeps = {}
+): Promise<string | undefined> {
+  if (!deps.fetchOrgPolicy) {
+    const cached = cacheGet("org-ai-policy", [owner.toLowerCase()]) as string | undefined;
+    if (cached !== undefined) return cached || undefined;
+  }
+  const headers: Record<string, string> = { "User-Agent": "greenlight-cli" };
+  const token = githubToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const fetchOrgPolicy =
+    deps.fetchOrgPolicy ??
+    ((o: string): Promise<string | undefined> => fetchRawFile(o, ".github", "AI_POLICY.md", headers));
+  const text = await fetchOrgPolicy(owner);
+  if (!deps.fetchOrgPolicy) cacheSet("org-ai-policy", [owner.toLowerCase()], text ?? "");
+  return text;
+}
+
+/**
+ * v0.9.3: the full policy source set for gate detection: house-rules
+ * files (first hit per filename across root, .github/, docs/) plus the
+ * org-level AI_POLICY.md when the org publishes one.
+ */
+export async function fetchPolicySources(
+  owner: string,
+  repo: string,
+  deps: HouseRuleDeps = {}
+): Promise<{ file: string; text: string }[]> {
+  const rules = await fetchHouseRules(owner, repo, deps);
+  const orgPolicy = await fetchOrgAiPolicy(owner, deps);
+  if (orgPolicy) rules.push({ file: `AI_POLICY.md (org ${owner})`, text: orgPolicy });
+  return rules;
+}
+
+/**
+ * v0.9.3: fetch one policy file's raw text, honoring the API base
+ * override. In proxy mode (GREENLIGHT_GITHUB_BASE_URL set) the raw host
+ * is unreachable with the surrogate credential, so policy files are read
+ * through the contents API instead; otherwise the raw host is used as
+ * before. Returns undefined when the file does not exist.
+ */
+async function fetchRawFile(
+  owner: string,
+  repo: string,
+  file: string,
+  headers: Record<string, string>
+): Promise<string | undefined> {
+  if (githubApiBase() !== DEFAULT_API) {
+    try {
+      const data = (await apiGet(`/repos/${owner}/${repo}/contents/${file}`)) as {
+        content?: unknown;
+        encoding?: unknown;
+      };
+      if (typeof data.content === "string" && data.encoding === "base64") {
+        return Buffer.from(data.content, "base64").toString("utf8");
+      }
+    } catch { /* absent */ }
+    return undefined;
+  }
+  try {
+    const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/${file}`, { headers });
+    if (res.ok) return await res.text();
+  } catch { /* try next */ }
+  return undefined;
 }
 
 /** Fetch all existing house-rules files for a repo (best-effort, cached). */
@@ -432,18 +520,23 @@ export async function fetchHouseRules(
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const fetchRaw =
     deps.fetchRaw ??
-    (async (file: string): Promise<string | undefined> => {
-      try {
-        const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/${file}`, { headers });
-        if (res.ok) return await res.text();
-      } catch { /* try next */ }
-      return undefined;
-    });
+    ((file: string): Promise<string | undefined> => fetchRawFile(owner, repo, file, headers));
 
+  // v0.9.3: stop at the first hit per filename (root, then .github/, then
+  // docs/), so a repo with CONTRIBUTING.md at the root does not pay for
+  // two more 404s, and a repo with it only in docs/ is still found (the
+  // AFFiNE shape the 5k scan caught: root-only probing called it
+  // "no policy" while docs/CONTRIBUTING.md existed).
+  const seenBasenames = new Set<string>();
   const out: { file: string; text: string }[] = [];
   for (const file of HOUSE_RULE_FILES) {
+    const base = file.split("/").pop()!.toLowerCase();
+    if (seenBasenames.has(base)) continue;
     const text = await fetchRaw(file);
-    if (text) out.push({ file, text });
+    if (text) {
+      out.push({ file, text });
+      seenBasenames.add(base);
+    }
   }
   if (!deps.fetchRaw) cacheSet("house-rules", [owner, repo], out);
   return out;
@@ -922,7 +1015,10 @@ export async function buildIssueSnapshot(owner: string, repo: string, number: nu
   const [comments, linkedPRs, houseRules, workflowGates] = await Promise.all([
     fetchComments(owner, repo, number),
     fetchLinkedPRs(owner, repo, number),
-    fetchHouseRules(owner, repo),
+    // v0.9.3: the full policy source set, including the org-level
+    // AI_POLICY.md, so the verdict engine sees the same bans the
+    // Agent Policy Index field work found.
+    fetchPolicySources(owner, repo),
     scanWorkflowGates(owner, repo),
   ]);
 

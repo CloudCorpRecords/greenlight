@@ -193,6 +193,12 @@ export interface RepoSignals {
   repo: string;
   gates: Gate[];
   externalPRMergeRate?: number | null; // 0..1 share of recent external PRs merged
+  /**
+   * v0.9.3: the same share as a 0..100 number. Ratio fields in JSON output
+   * always ship both units now (fraction + _pct) so consumers never have
+   * to guess: the fraction keeps its meaning, the _pct is unambiguous.
+   */
+  externalPRMergeRate_pct?: number | null;
   medianFirstReviewHours?: number | null;
   maintainerIssueResponseHours?: number | null;
   openGoodFirstIssueCount?: number | null;
@@ -264,4 +270,13 @@ export interface FrictionReport {
    * median days to merge. Absent when it could not be computed.
    */
   mergeVelocity?: import("./merge-velocity.js").MergeVelocityStats | null;
+  /**
+   * v0.9.3: outsider merge share with an explicit unit contract, because
+   * an implicit fraction was once rendered as a percent downstream.
+   * `outsider_merge_share` is the 0..1 fraction (same meaning as
+   * mergeVelocity.externalShare); `outsider_merge_share_pct` is the same
+   * number on a 0..100 scale, rounded. Both are null when uncomputable.
+   */
+  outsider_merge_share?: number | null;
+  outsider_merge_share_pct?: number | null;
 }
