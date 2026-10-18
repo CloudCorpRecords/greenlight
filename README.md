@@ -82,6 +82,23 @@ Set `GITHUB_TOKEN` (a classic personal access token, no scopes needed for public
 
 Run the MCP server with `npx @reneturcios/greenlight mcp` (stdio), or point your agent at the `greenlight` command with the single argument `mcp`.
 
+### Run it with Docker
+
+Greenlight also ships as a container image on GHCR: `ghcr.io/cloudcorprecords/greenlight`.
+
+Use it as a stdio MCP server:
+
+```bash
+docker run -i ghcr.io/cloudcorprecords/greenlight
+```
+
+Any CLI command can be passed after the image name instead of the default `mcp` argument:
+
+```bash
+docker run ghcr.io/cloudcorprecords/greenlight check <issue-url>
+docker run ghcr.io/cloudcorprecords/greenlight --version
+```
+
 ## The toolkit
 
 Greenlight is the front door of a four-tool lifecycle for open-source contribution work, all published under the same npm scope and cross-wired:
