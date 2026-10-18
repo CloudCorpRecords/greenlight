@@ -1,6 +1,7 @@
 /**
- * End-to-end MCP tests for v0.9.1: the stdio server lists 17 tools
- * (including scout_campaign and my_claims) and the new tools answer.
+ * End-to-end MCP tests: the stdio server lists 19 tools
+ * (including scout_campaign, my_claims, sync_campaign, campaign_portfolio)
+ * and the new tools answer.
  * Spawns the built server (dist/cli.js mcp) and speaks JSON-RPC over
  * stdio. HOME is pointed at a temp dir so my_claims sees no registry.
  */
@@ -81,14 +82,16 @@ async function listTools(): Promise<{ proc: ChildProcess; tools: RpcResult["tool
   }
 }
 
-describe("mcp tools (v0.9.1)", () => {
-  it("lists 17 tools including scout_campaign and my_claims", async () => {
+describe("mcp tools (v0.10.0)", () => {
+  it("lists 19 tools including sync_campaign and campaign_portfolio", async () => {
     const { proc, tools } = await listTools();
     try {
       const names = tools.map((t) => t.name);
-      assert.equal(names.length, 17, `expected 17 tools, got ${names.length}: ${names.join(",")}`);
+      assert.equal(names.length, 19, `expected 19 tools, got ${names.length}: ${names.join(",")}`);
       assert.ok(names.includes("scout_campaign"), "scout_campaign listed");
       assert.ok(names.includes("my_claims"), "my_claims listed");
+      assert.ok(names.includes("sync_campaign"), "sync_campaign listed");
+      assert.ok(names.includes("campaign_portfolio"), "campaign_portfolio listed");
     } finally {
       proc.kill();
     }

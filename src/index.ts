@@ -24,8 +24,10 @@ import {
 import { triagePr } from "./ci-triage.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
-import { babysit, defaultStatePath } from "./babysit.js";
+import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
 import { scoutCampaign, SCOUT_DEFAULT_BUDGET } from "./scout.js";
+import { runSync, syncJson } from "./sync.js";
+import { runPortfolio, portfolioJson } from "./portfolio.js";
 import { defaultRegistryPath } from "./claims-registry.js";
 import { buildEvidencePack } from "./evidence.js";
 import { digestRepo } from "./digest.js";
@@ -45,7 +47,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.9.3" });
+const server = new McpServer({ name: "greenlight", version: "0.10.0" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -444,6 +446,48 @@ server.tool(
     try {
       const run = await babysit({ claimsOnly: true, claimsRegistryPath: claims_registry_path ?? defaultRegistryPath() });
       return text(run.json);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "sync_campaign",
+  "Reconcile local tracking with the API census: PRs the registry does not know (another agent opened them), state mismatches vs API truth, and stale claims with no PR. Reads only. For multi-agent campaigns where several agents open PRs in parallel.",
+  {
+    author: z.string().optional().describe("GitHub login; default GREENLIGHT_GITHUB_USER or CloudCorpRecords"),
+    write: z.boolean().default(false).describe("Upsert the registry's known-PRs section from the census"),
+    stale_days: z.number().default(7).describe("Claims without a PR older than this are stale"),
+  },
+  async ({ author, write, stale_days }) => {
+    try {
+      const { drift, wrote } = await runSync({
+        author: author ?? defaultAccountAuthor(),
+        staleDays: stale_days ?? 7,
+        write,
+      });
+      return text({ ...syncJson(drift, author ?? defaultAccountAuthor()), wrote });
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "campaign_portfolio",
+  "One-screen campaign summary: census counts (open/merged/closed), claims by state, the pending posting queue, and the sync drift count. Reads only. For multi-agent campaigns.",
+  {
+    author: z.string().optional().describe("GitHub login; default GREENLIGHT_GITHUB_USER or CloudCorpRecords"),
+    stale_days: z.number().default(7).describe("Claims without a PR older than this are stale"),
+  },
+  async ({ author, stale_days }) => {
+    try {
+      const p = await runPortfolio({
+        author: author ?? defaultAccountAuthor(),
+        staleDays: stale_days ?? 7,
+      });
+      return text(portfolioJson(p));
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

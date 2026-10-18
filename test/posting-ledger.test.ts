@@ -12,15 +12,18 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  agentId,
   appendLedgerEntry,
   checkPacing,
   emptyLedger,
+  finishPost,
   outcomeForError,
   pacingConfigFromEnv,
   pacingSummary,
   pendingEntryFor,
   readLedger,
   reconcileEntry,
+  reservePost,
   type PostingLedger,
   type PostingLedgerEntry,
 } from "../src/posting-ledger.js";
@@ -158,5 +161,71 @@ describe("posting ledger", () => {
     const ledger: PostingLedger = { v: 1, entries: [entryAt(10, "pr")] };
     const d = checkPacing(ledger, T0, { minIntervalS: 90, jitterS: 0, dailyCap: 25 });
     assert.equal(d.allowed, true);
+  });
+});
+
+describe("multi-agent ledger (v0.10.0)", () => {
+  it("stamps entries with the agent id", () => {
+    assert.equal(agentId({ GREENLIGHT_AGENT_ID: "worker-a" } as NodeJS.ProcessEnv), "worker-a");
+    assert.equal(agentId({ GREENLIGHT_AGENT_ID: "  " } as NodeJS.ProcessEnv).includes(":"), true, "blank falls back to hostname:pid");
+    const fallback = agentId({} as NodeJS.ProcessEnv);
+    assert.match(fallback, /^\S+:\d+$/, `expected hostname:pid, got ${fallback}`);
+  });
+
+  it("appendLedgerEntry records the agent from the environment", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gl-ledger-agent-"));
+    const path = join(dir, "posting-ledger.json");
+    process.env.GREENLIGHT_AGENT_ID = "worker-7";
+    try {
+      appendLedgerEntry({ kind: "claim", targetUrl: "https://github.com/a/b/issues/1", outcome: "confirmed" }, path);
+    } finally {
+      delete process.env.GREENLIGHT_AGENT_ID;
+    }
+    assert.equal(readLedger(path).entries[0].agent, "worker-7");
+  });
+
+  it("reservePost is atomic: check and write happen under one lock", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gl-ledger-reserve-"));
+    const path = join(dir, "posting-ledger.json");
+    const cfg = { minIntervalS: 90, jitterS: 0, dailyCap: 25 };
+    const r1 = reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/1" }, cfg, T0);
+    assert.equal(r1.allowed, true);
+    assert.ok(r1.entry, "reservation entry returned");
+    assert.equal(r1.entry!.outcome, "unconfirmed", "reservation lands as unconfirmed");
+    // The reservation itself counts toward cadence: a second immediate
+    // claim refuses, exactly as if two agents had raced.
+    const r2 = reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/2" }, cfg, T0 + 1000);
+    assert.equal(r2.allowed, false);
+    assert.match(r2.reason ?? "", /pacing/);
+    assert.equal(r2.entry, null);
+    // finishPost reconciles the reservation to confirmed.
+    finishPost(path, r1.entry!, "confirmed", "comment #123");
+    const stored = readLedger(path).entries[0];
+    assert.equal(stored.outcome, "confirmed");
+    assert.equal(stored.note, "comment #123");
+  });
+
+  it("reservePost enforces the daily cap against the combined ledger", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gl-ledger-cap-"));
+    const path = join(dir, "posting-ledger.json");
+    const cfg = { minIntervalS: 0, jitterS: 0, dailyCap: 2 };
+    const r1 = reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/1" }, cfg, T0);
+    const r2 = reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/2" }, cfg, T0 + 1000);
+    assert.equal(r1.allowed, true);
+    assert.equal(r2.allowed, true);
+    const r3 = reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/3" }, cfg, T0 + 2000);
+    assert.equal(r3.allowed, false);
+    assert.match(r3.reason ?? "", /daily claim cap reached/);
+  });
+
+  it("--force overrides pacing and the reservation is still ledgered", () => {
+    const dir = mkdtempSync(join(tmpdir(), "gl-ledger-force-"));
+    const path = join(dir, "posting-ledger.json");
+    const cfg = { minIntervalS: 90, jitterS: 0, dailyCap: 25 };
+    reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/1" }, cfg, T0);
+    const r = reservePost(path, { kind: "claim", targetUrl: "https://github.com/a/b/issues/2" }, cfg, T0 + 1000, { force: true });
+    assert.equal(r.allowed, true);
+    assert.ok(r.entry, "forced reservation is ledgered");
+    assert.equal(readLedger(path).entries.length, 2);
   });
 });

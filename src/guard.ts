@@ -70,8 +70,7 @@ import { titleSlug } from "./automate.js";
 import { parseGates } from "./gates.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
 import { fetchProtocolState, type ProtocolFetchResult } from "./protocol-fetch.js";
-
-export const GUARD_VERSION = "0.9.1";
+import { defaultPackageVersion } from "./doctor.js";
 
 /** The hidden marker the GitHub Action uses to find its own comment and update it. */
 export const GUARD_COMMENT_MARKER = "<!-- greenlight-guard -->";
@@ -623,7 +622,7 @@ export function renderGuardMarkdown(result: Omit<GuardResult, "markdown">): stri
 
   lines.push("---");
   lines.push(
-    `_Checked with [Greenlight guard](https://github.com/CloudCorpRecords/greenlight) v${GUARD_VERSION}; findings are signals, verify before acting._`
+    `_Checked with [Greenlight guard](https://github.com/CloudCorpRecords/greenlight) v${defaultPackageVersion()}; findings are signals, verify before acting._`
   );
   return lines.join("\n");
 }

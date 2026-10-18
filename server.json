@@ -6,13 +6,13 @@
     "url": "https://github.com/CloudCorpRecords/greenlight",
     "source": "github"
   },
-  "version": "0.9.3",
+  "version": "0.10.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@reneturcios/greenlight",
-      "version": "0.9.3",
+      "version": "0.10.0",
       "runtimeHint": "npx",
       "packageArguments": [
         {

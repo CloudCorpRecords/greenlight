@@ -34,9 +34,31 @@ export interface MyClaim {
   prUrl?: string;
 }
 
+/** One PR the account is known to have authored, keyed by PR URL (v0.10.0). */
+export interface KnownPr {
+  prUrl: string;
+  owner: string;
+  repo: string;
+  number: number;
+  state: "open" | "closed";
+  merged: boolean;
+  title: string;
+  /** ISO: first census that saw it. */
+  firstSeen: string;
+  /** ISO: most recent census that saw it. */
+  lastSeen: string;
+  source: "census";
+}
+
 export interface ClaimsRegistryFile {
   version: 1;
   claims: MyClaim[];
+  /**
+   * PRs the account is known to have authored. Populated by
+   * `greenlight sync --write` from the API census. Lets other agents'
+   * PRs show up in local tracking without anyone hand editing the file.
+   */
+  prs?: KnownPr[];
 }
 
 /** Override path for tests and scratch registries. */
@@ -48,7 +70,12 @@ export function loadRegistry(path: string): ClaimsRegistryFile {
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<ClaimsRegistryFile>;
     if (parsed && typeof parsed === "object" && Array.isArray(parsed.claims)) {
-      return { version: 1, claims: parsed.claims as MyClaim[] };
+      const prs = Array.isArray(parsed.prs) ? (parsed.prs as KnownPr[]) : undefined;
+      return {
+        version: 1,
+        claims: parsed.claims as MyClaim[],
+        ...(prs ? { prs } : {}),
+      };
     }
   } catch {
     // Missing or broken registry: start empty rather than crash the

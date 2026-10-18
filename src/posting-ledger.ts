@@ -17,9 +17,18 @@
  * All time-dependent decisions take an explicit `nowMs`, so the tests
  * drive them with an injected clock.
  */
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { join } from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  openSync,
+  closeSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 
 /** Surfaces that post through this ledger. */
 export type PostingKind = "claim" | "release" | "heartbeat" | "pr" | "comment";
@@ -35,6 +44,24 @@ export interface PostingLedgerEntry {
   outcome: PostingOutcome;
   /** Short human note, e.g. "comment #6238115199" or "403 Blocked". */
   note?: string;
+  /**
+   * Which agent recorded the entry (v0.10.0). GREENLIGHT_AGENT_ID when set,
+   * otherwise "<hostname>:<pid>" captured at write time. Older entries may
+   * lack it; pacing counts every entry regardless.
+   */
+  agent?: string;
+}
+
+/**
+ * The identity stamped on each ledger entry. Operators running several
+ * agents (or machines) in parallel set GREENLIGHT_AGENT_ID per agent
+ * (e.g. "worker-a", "cron-scan") so the ledger shows who posted what.
+ * Unset, the tool falls back to "<hostname>:<pid>".
+ */
+export function agentId(env: NodeJS.ProcessEnv = process.env): string {
+  const fromEnv = (env.GREENLIGHT_AGENT_ID ?? "").trim();
+  if (fromEnv.length > 0) return fromEnv;
+  return `${hostname()}:${process.pid}`;
 }
 
 export interface PostingLedger {
@@ -69,20 +96,164 @@ export function readLedger(path: string = defaultLedgerPath()): PostingLedger {
   return emptyLedger();
 }
 
+/** Lock-file path for the atomic ledger operations below. */
+function ledgerLockPath(path: string): string {
+  return `${path}.lock`;
+}
+
+const LOCK_STALE_MS = 30_000;
+const LOCK_POLL_MS = 25;
+const LOCK_TIMEOUT_MS = 10_000;
+
+function sleepMs(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Exclusive lock around read-modify-write, so concurrent agents cannot
+ * both read an empty-looking ledger and race past the daily cap or the
+ * claim cadence. Implemented with an exclusive-create lock file and a
+ * staleness rule (a lock older than 30s is a crashed holder and is
+ * stolen), so a dead process can never wedge the ledger forever.
+ */
+export function withLedgerLock<T>(path: string, fn: () => T): T {
+  const lp = ledgerLockPath(path);
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      const fd = openSync(lp, "wx");
+      try {
+        writeFileSync(fd, `${process.pid}`);
+      } catch {
+        // Best effort: the lock's existence is the signal, not its content.
+      }
+      closeSync(fd);
+      break;
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException)?.code !== "EEXIST") throw err;
+      try {
+        const st = statSync(lp);
+        if (Date.now() - st.mtimeMs > LOCK_STALE_MS) {
+          try {
+            unlinkSync(lp);
+          } catch {
+            // Lost the race to steal it; loop back and re-check.
+          }
+          continue;
+        }
+      } catch {
+        // Lock vanished between checks; loop back and re-create it.
+        continue;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`timed out acquiring posting-ledger lock for ${path}`);
+      }
+      sleepMs(LOCK_POLL_MS);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      unlinkSync(lp);
+    } catch {
+      // Another process already stole and released it; nothing to do.
+    }
+  }
+}
+
+function writeLedger(path: string, ledger: PostingLedger): void {
+  mkdirSync(join(path, ".."), { recursive: true });
+  writeFileSync(path, JSON.stringify(ledger, null, 2));
+}
+
 export function appendLedgerEntry(
-  entry: Omit<PostingLedgerEntry, "ts"> & { ts?: string },
+  entry: Omit<PostingLedgerEntry, "ts" | "agent"> & { ts?: string; agent?: string },
   path: string = defaultLedgerPath()
 ): PostingLedgerEntry {
-  const full: PostingLedgerEntry = { ts: new Date().toISOString(), ...entry };
-  const ledger = readLedger(path);
-  ledger.entries.push(full);
+  const full: PostingLedgerEntry = {
+    ts: new Date().toISOString(),
+    agent: agentId(),
+    ...entry,
+  };
   try {
-    mkdirSync(join(path, ".."), { recursive: true });
-    writeFileSync(path, JSON.stringify(ledger, null, 2));
+    withLedgerLock(path, () => {
+      const ledger = readLedger(path);
+      ledger.entries.push(full);
+      writeLedger(path, ledger);
+    });
   } catch {
-    // The ledger is advisory: a write failure must never break posting.
+    // The ledger is advisory: a lock or write failure must never break posting.
+    // Fall through and still return the entry we meant to record.
   }
   return full;
+}
+
+/**
+ * Result of reserving a post under the lock: the pacing check and the
+ * ledger write happen in one critical section, so two agents cannot both
+ * observe an allowed window and both post. The reservation is recorded
+ * immediately with outcome "unconfirmed"; finishPost updates it once the
+ * post resolves.
+ */
+export interface ReserveResult {
+  allowed: boolean;
+  reason: string | null;
+  /** The reserved entry (matched by ts + targetUrl in finishPost), or null. */
+  entry: PostingLedgerEntry | null;
+  decision: PacingDecision;
+}
+
+export function reservePost(
+  path: string,
+  entry: Omit<PostingLedgerEntry, "ts" | "agent" | "outcome"> & {
+    outcome?: PostingOutcome;
+    agent?: string;
+  },
+  config: PacingConfig,
+  nowMs: number,
+  opts: { force?: boolean } = {}
+): ReserveResult {
+  return withLedgerLock(path, () => {
+    const ledger = readLedger(path);
+    const decision = checkPacing(ledger, nowMs, config);
+    if (!decision.allowed && !opts.force) {
+      return { allowed: false, reason: decision.reason, entry: null, decision };
+    }
+    const full: PostingLedgerEntry = {
+      ts: new Date(nowMs).toISOString(),
+      agent: agentId(),
+      outcome: "unconfirmed",
+      ...entry,
+    };
+    ledger.entries.push(full);
+    writeLedger(path, ledger);
+    return { allowed: true, reason: null, entry: full, decision };
+  });
+}
+
+/** Update a reserved entry's outcome under the lock (matched by ts + targetUrl). */
+export function finishPost(
+  path: string,
+  entry: PostingLedgerEntry,
+  outcome: PostingOutcome,
+  note?: string
+): void {
+  try {
+    withLedgerLock(path, () => {
+      const ledger = readLedger(path);
+      const stored = ledger.entries.find(
+        (e) => e.ts === entry.ts && e.targetUrl === entry.targetUrl
+      );
+      if (stored) {
+        stored.outcome = outcome;
+        if (note !== undefined) stored.note = note;
+        writeLedger(path, ledger);
+      }
+    });
+  } catch {
+    // Advisory, like every ledger write.
+  }
 }
 
 /** Comment-class writes (the surface GitHub's anti-spam flag watches). */

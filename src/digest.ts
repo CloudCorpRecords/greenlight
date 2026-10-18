@@ -19,8 +19,7 @@ import { parseGates } from "./gates.js";
 import { detectClaims, isBotAuthor } from "./claims.js";
 import { extractLinkedIssueNumbers, extractCrossRepoIssues, splitIssueClaims, type GuardClaim } from "./guard.js";
 import type { CommentSignal, LinkedPR } from "./types.js";
-
-export const DIGEST_VERSION = "0.9.0";
+import { defaultPackageVersion } from "./doctor.js";
 
 /** Default cap for list fetches; --limit overrides. The true total is always reported. */
 export const DEFAULT_DIGEST_LIMIT = 50;
@@ -465,7 +464,7 @@ export function renderDigestMarkdown(result: DigestResult): string {
 
   lines.push("---");
   lines.push(
-    `_Generated with [Greenlight digest](https://github.com/CloudCorpRecords/greenlight) v${DIGEST_VERSION}; findings are signals, verify before acting._`
+    `_Generated with [Greenlight digest](https://github.com/CloudCorpRecords/greenlight) v${defaultPackageVersion()}; findings are signals, verify before acting._`
   );
   return lines.join("\n");
 }

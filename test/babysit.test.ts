@@ -17,6 +17,7 @@ import {
   watermarkKey,
   watermarkFromReport,
   defaultStatePath,
+  defaultAccountAuthor,
   MINE_DISCOVERY_CAP,
   STUCK_CHECK_MINUTES,
   type BabysitPull,
@@ -377,6 +378,35 @@ describe("--mine discovery", () => {
       }),
     });
     assert.equal(run.prsChecked, MINE_DISCOVERY_CAP);
+  });
+});
+
+describe("--account discovery (v0.10.0)", () => {
+  it("account mode discovers PRs account-wide and marks the run", async () => {
+    const urls = [
+      "https://github.com/acme/widgets/pull/201",
+      "https://github.com/other/gadgets/pull/202",
+    ];
+    const run = await babysit({
+      account: true,
+      statePath,
+      now: NOW,
+      deps: deps({
+        discoverPrs: async () => urls,
+        fetchPr: async (o, r, n) => pull({ owner: o, repo: r, number: n, url: `https://github.com/${o}/${r}/pull/${n}` }),
+        triageCi: async (u) => ci({ pr: u }),
+        triageReview: async (u) => review({ pr: u }),
+        guard: async (u) => guardRes({ pr: u }),
+      }),
+    });
+    assert.equal(run.prsChecked, 2);
+    assert.equal(run.accountMode, true);
+    assert.match(run.markdown, /account-wide/);
+  });
+
+  it("defaultAccountAuthor honors GREENLIGHT_GITHUB_USER", () => {
+    assert.equal(defaultAccountAuthor({ GREENLIGHT_GITHUB_USER: "someone" } as NodeJS.ProcessEnv), "someone");
+    assert.equal(defaultAccountAuthor({} as NodeJS.ProcessEnv), "CloudCorpRecords");
   });
 });
 

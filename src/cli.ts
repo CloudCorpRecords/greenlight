@@ -13,6 +13,9 @@
  *   greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]
  *   greenlight verify-comment <issue-url> [--json] [--from-file notes.md]
  *   greenlight verify [--base <ref>] [--cmd "<test command>"] [--parser node:test|pytest] [--allow-dirty] [--json]
+ *   greenlight babysit [--prs urls] [--mine --repos o/r] [--account] [--claims-only] [--json]
+ *   greenlight sync [--author login] [--tracker csv|json] [--stale-days N] [--write] [--json]
+ *   greenlight portfolio [--author login] [--json]
  *   greenlight init [--agent <tool>...] [--dry-run] [--force]
  *   greenlight doctor [--json]
  *   greenlight help [command]   (or <command> --help)
@@ -72,7 +75,9 @@ import {
   type VerifiedCommentInput,
 } from "./verify-comment.js";
 import { verifyRepo } from "./verify.js";
-import { babysit, defaultStatePath } from "./babysit.js";
+import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
+import { runSync, formatSyncHuman, syncJson } from "./sync.js";
+import { runPortfolio, formatPortfolioHuman, portfolioJson } from "./portfolio.js";
 import { buildEvidencePack } from "./evidence.js";
 import { buildPassport } from "./passport.js";
 import { renderLabelsDryRun } from "./guard.js";
@@ -696,7 +701,9 @@ async function cmdGuard(prUrl: string, args: string[]): Promise<void> {
 async function cmdBabysit(args: string[]): Promise<void> {
   const prsRaw = flagValue(args, "--prs");
   const mine = args.includes("--mine");
+  const account = args.includes("--account");
   const claimsOnly = args.includes("--claims-only");
+  const author = flagValue(args, "--author");
   const reposRaw = flagValue(args, "--repos");
   const statePath = flagValue(args, "--state") ?? defaultStatePath();
   const prs = prsRaw ? prsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
@@ -711,18 +718,63 @@ async function cmdBabysit(args: string[]): Promise<void> {
       return;
     }
   }
-  if (prs.length === 0 && !mine && !claimsOnly) {
-    console.error("Error: give --prs <url,...>, --mine --repos <owner/repo,...>, or --claims-only (e.g. greenlight babysit --mine --repos acme/widgets)");
+  if (prs.length === 0 && !mine && !account && !claimsOnly) {
+    console.error("Error: give --prs <url,...>, --mine --repos <owner/repo,...>, --account, or --claims-only (e.g. greenlight babysit --account)");
     process.exitCode = 1;
     return;
   }
-  const run = await babysit({ prs, mine, repos, statePath, claimsOnly, concurrency });
+  const run = await babysit({ prs, mine, account, author, repos, statePath, claimsOnly, concurrency });
   if (args.includes("--json")) {
     console.log(JSON.stringify(run.json, null, 2));
   } else {
     console.log(run.markdown);
   }
   if (args.includes("--fail-on-action") && run.needsYouNow.length > 0) process.exitCode = 3;
+}
+
+/**
+ * Multi-agent sync (v0.10.0): reconcile the local claims registry with
+ * the authoritative API census. Reads only; --write updates the
+ * registry's known-PRs section, never GitHub.
+ */
+async function cmdSync(args: string[]): Promise<void> {
+  const author = flagValue(args, "--author") ?? defaultAccountAuthor();
+  const trackerPath = flagValue(args, "--tracker");
+  const staleRaw = flagValue(args, "--stale-days");
+  const staleDays = staleRaw !== undefined ? Number(staleRaw) : 7;
+  if (!Number.isFinite(staleDays) || staleDays < 0) {
+    console.error("Error: --stale-days must be a non-negative number.");
+    process.exitCode = 1;
+    return;
+  }
+  const { drift, wrote } = await runSync({ author, trackerPath, staleDays, write: args.includes("--write") });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify({ ...syncJson(drift, author), wrote }, null, 2));
+  } else {
+    console.log(formatSyncHuman(drift, author));
+    if (wrote) console.log(`\nregistry updated: ${wrote.added} new PRs recorded, ${wrote.updated} refreshed.`);
+  }
+}
+
+/**
+ * Multi-agent portfolio view (v0.10.0): one-screen campaign summary
+ * from the API census, the claims registry, and the posting ledger.
+ */
+async function cmdPortfolio(args: string[]): Promise<void> {
+  const author = flagValue(args, "--author") ?? defaultAccountAuthor();
+  const staleRaw = flagValue(args, "--stale-days");
+  const staleDays = staleRaw !== undefined ? Number(staleRaw) : 7;
+  if (!Number.isFinite(staleDays) || staleDays < 0) {
+    console.error("Error: --stale-days must be a non-negative number.");
+    process.exitCode = 1;
+    return;
+  }
+  const p = await runPortfolio({ author, staleDays });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(portfolioJson(p), null, 2));
+  } else {
+    console.log(formatPortfolioHuman(p));
+  }
 }
 
 /**
@@ -1072,6 +1124,8 @@ async function main(): Promise<void> {
     if (command === "verify") return await cmdVerify(args);
     if (command === "babysit") return await cmdBabysit(args);
     if (command === "scout") return await cmdScout(args);
+    if (command === "sync") return await cmdSync(args);
+    if (command === "portfolio") return await cmdPortfolio(args);
     if (command === "evidence" && target) return await cmdEvidence(target, args);
     if (command === "passport" && target) return await cmdPassport(target, args);
     if (command && NEEDS_TARGET[command]) {

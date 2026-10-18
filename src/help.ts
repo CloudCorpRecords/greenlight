@@ -189,11 +189,13 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "babysit",
-    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--claims-only] [--concurrency N] [--json] [--fail-on-action]",
+    usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--account] [--claims-only] [--concurrency N] [--json] [--fail-on-action]",
     description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet). Also watches your my-claims registry (linked, linked-dead, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost).",
     flags: [
       "--prs <url,...> (watch these PR URLs)",
       "--mine --repos <o/r,...> (discover your open PRs across repos)",
+      "--account (discover ALL your open PRs account-wide, including ones opened by other agents)",
+      "--author <login> (account for --account/--mine; default GREENLIGHT_GITHUB_USER or CloudCorpRecords)",
       "--claims-only (skip the PR scan; show only the claims section)",
       "--concurrency <N> (parallel PR fetches; default 5)",
       "--fail-on-action (exit 3 when the needs-you-now list is non-empty)",
@@ -201,8 +203,36 @@ export const COMMANDS: CommandHelp[] = [
     ],
     examples: [
       "greenlight babysit --mine --repos acme/widgets",
+      "greenlight babysit --account",
       "greenlight babysit --claims-only",
     ],
+  },
+  {
+    name: "sync",
+    usage: "greenlight sync [--author <login>] [--tracker <csv|json>] [--stale-days N] [--write] [--json]",
+    description: "Reconcile local tracking with the API census: PRs the registry does not know (another agent opened them), state mismatches vs API truth, and stale claims with no PR. Reads only; --write upserts the registry's known-PRs section.",
+    flags: [
+      "--author <login> (default GREENLIGHT_GITHUB_USER or CloudCorpRecords)",
+      "--tracker <path> (CSV or JSON tracker with repo/issue/pr_url/status columns to diff)",
+      "--stale-days <N> (claims without a PR older than this are stale; default 7)",
+      "--write (update the registry's known-PRs section from the census)",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight sync",
+      "greenlight sync --tracker tracker.csv --write",
+    ],
+  },
+  {
+    name: "portfolio",
+    usage: "greenlight portfolio [--author <login>] [--stale-days N] [--json]",
+    description: "One-screen campaign summary: census counts (open/merged/closed), claims by state, the pending posting queue, and the sync drift count.",
+    flags: [
+      "--author <login> (default GREENLIGHT_GITHUB_USER or CloudCorpRecords)",
+      "--stale-days <N> (default 7)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight portfolio"],
   },
   {
     name: "scout",

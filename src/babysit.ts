@@ -29,11 +29,10 @@ import {
   type MyClaim,
 } from "./claims-registry.js";
 import { bucketClaim, type ClaimBucket } from "./claim-health.js";
+import { defaultPackageVersion } from "./doctor.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-
-export const BABYSIT_VERSION = "0.9.2";
 
 /** Checks pending longer than this are reported as stuck, not just running. */
 export const STUCK_CHECK_MINUTES = 120;
@@ -189,6 +188,24 @@ async function defaultFetchCheckRuns(
     if (runs.length < 100) break;
   }
   return mergeActionRequiredRuns(out, await fetchActionRequiredWorkflowRuns(owner, repo, headSha));
+}
+
+/**
+ * Account-wide discovery (v0.10.0): every open PR authored by the
+ * account, regardless of who or what opened it. Multi-agent campaigns
+ * need this; per-repo --mine discovery misses other agents' PRs.
+ */
+async function defaultDiscoverAccountPrs(author: string, _repos: string[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (let page = 1; page <= 2 && urls.length < MINE_DISCOVERY_CAP; page++) {
+    const q = encodeURIComponent(`author:${author} type:pr state:open`);
+    const data = (await apiGet(`/search/issues?q=${q}&per_page=100&page=${page}`)) as SearchApiItem;
+    for (const item of data?.items ?? []) {
+      if (typeof item.html_url === "string" && urls.length < MINE_DISCOVERY_CAP) urls.push(item.html_url);
+    }
+    if ((data?.items ?? []).length < 100) break;
+  }
+  return urls;
 }
 
 async function defaultDiscoverPrs(author: string, repos: string[]): Promise<string[]> {
@@ -579,11 +596,23 @@ export function watermarkFromReport(report: BabysitPrReport, review: ReviewTriag
 /* Run                                                                 */
 /* ------------------------------------------------------------------ */
 
+/** Default account for census-style discovery. Honors GREENLIGHT_GITHUB_USER. */
+export function defaultAccountAuthor(env: NodeJS.ProcessEnv = process.env): string {
+  const fromEnv = (env.GREENLIGHT_GITHUB_USER ?? "").trim();
+  return fromEnv.length > 0 ? fromEnv : "CloudCorpRecords";
+}
+
 export interface BabysitRunOptions {
   /** Comma-joined or array PR URLs. */
   prs?: string[];
   /** Discover this author's open PRs across these repos (search API). */
   mine?: boolean;
+  /**
+   * Account mode (v0.10.0): use the author census (all open PRs by the
+   * author, account-wide) as the portfolio, so PRs opened by other
+   * agents or machines are babysat too. Repos are ignored in this mode.
+   */
+  account?: boolean;
   repos?: string[];
   author?: string;
   statePath?: string;
@@ -634,6 +663,8 @@ export interface BabysitRun {
   claimsRegistryMissing: boolean;
   /** True when this run skipped the PR scan (--claims-only). */
   claimsOnly: boolean;
+  /** True when the portfolio came from the account census (--account). */
+  accountMode: boolean;
   markdown: string;
   json: Record<string, unknown>;
 }
@@ -644,7 +675,8 @@ function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markd
     lines.push(`**Claims babysitter: ${run.claims.length} active claims** (${run.retiredClaims.length} retired this run)`);
   } else {
     const unchecked = run.transientFailures.length > 0 ? `, ${run.transientFailures.length} could not check` : "";
-    lines.push(`**PR babysitter: ${run.needsYouNow.length} need you now, ${run.waitingOnThem.length} waiting, ${run.quiet.length} quiet${unchecked}** (${run.prsChecked} PRs checked)`);
+    const scope = run.accountMode ? " (account-wide)" : "";
+    lines.push(`**PR babysitter${scope}: ${run.needsYouNow.length} need you now, ${run.waitingOnThem.length} waiting, ${run.quiet.length} quiet${unchecked}** (${run.prsChecked} PRs checked)`);
   }
   if (run.firstRun) lines.push("_First run: no watermarks yet, so this is the full picture. Reruns report what changed since the last check._");
   lines.push("");
@@ -712,7 +744,7 @@ function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markd
   for (const r of reports) {
     if (r.headChanged) lines.push(`_${r.pr}: new head ${r.headSha.slice(0, 7)} since the last check._`);
   }
-  lines.push(`_Checked with Greenlight babysit v${BABYSIT_VERSION}._`);
+  lines.push(`_Checked with Greenlight babysit v${defaultPackageVersion()}._`);
   return lines.join("\n");
 }
 
@@ -730,10 +762,11 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
   const firstRun = Object.keys(state.watermarks).length === 0;
 
   let prUrls = [...(opts.prs ?? [])];
-  if (opts.mine) {
-    const author = opts.author ?? "CloudCorpRecords";
+  if (opts.account || opts.mine) {
+    const author = opts.author ?? defaultAccountAuthor();
     const repos = opts.repos ?? [];
-    const discover = deps.discoverPrs ?? defaultDiscoverPrs;
+    const discover =
+      deps.discoverPrs ?? (opts.account ? defaultDiscoverAccountPrs : defaultDiscoverPrs);
     try {
       const found = await discover(author, repos);
       prUrls = found.slice(0, MINE_DISCOVERY_CAP);
@@ -753,6 +786,7 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
         retiredClaims: [],
         claimsRegistryMissing: true,
         claimsOnly: false,
+        accountMode: opts.account ?? false,
         markdown: `**PR babysitter: could not discover PRs** — ${err instanceof Error ? err.message : String(err)}`,
         json: { error: err instanceof Error ? err.message : String(err) },
       };
@@ -898,10 +932,12 @@ export async function babysit(opts: BabysitRunOptions): Promise<BabysitRun> {
     transientFailures, repoNotes,
     firstRun, prsChecked: reports.length + transientFailures.length,
     claims, retiredClaims, claimsRegistryMissing, claimsOnly: opts.claimsOnly ?? false,
+    accountMode: opts.account ?? false,
   };
   const markdown = renderMarkdown(reports, partial);
   const json = {
     prsChecked: partial.prsChecked,
+    accountMode: partial.accountMode,
     firstRun,
     needsYouNow: needsYouNow.map((a) => ({ pr: a.pr, text: a.text, next: a.next })),
     waitingOnThem: waitingOnThem.map((a) => ({ pr: a.pr, text: a.text, next: a.next })),

@@ -31,6 +31,8 @@ import {
   pendingEntryFor,
   readLedger,
   reconcileEntry,
+  reservePost,
+  finishPost,
   defaultLedgerPath,
   type PostingLedgerEntry,
 } from "./posting-ledger.js";
@@ -480,36 +482,40 @@ export async function claimIssue(
   if (opts.minIntervalS !== undefined && opts.minIntervalS >= 0) {
     pacingCfg.minIntervalS = opts.minIntervalS;
   }
-  const pacing = checkPacing(readLedger(ledgerPath), Date.now(), pacingCfg);
-  if (!pacing.allowed && !opts.force) {
-    throw new AutomationRefusal(`refusing to claim ${ref}: ${pacing.reason}`);
+  // v0.10.0: the pacing check and the ledger write are one atomic
+  // reservation, so parallel agents cannot both see an allowed window
+  // and both post. The reservation lands as "unconfirmed" and is
+  // reconciled once the post resolves.
+  const reservation = reservePost(
+    ledgerPath,
+    { kind: "claim", targetUrl },
+    pacingCfg,
+    Date.now(),
+    { force: opts.force }
+  );
+  if (!reservation.allowed) {
+    throw new AutomationRefusal(`refusing to claim ${ref}: ${reservation.reason}`);
   }
-  const forcedPacing = !pacing.allowed && opts.force;
+  const forcedPacing = !reservation.decision.allowed && opts.force;
 
   let commentUrl: string;
   try {
     commentUrl = await client.postIssueComment(snapshot.owner, snapshot.repo, snapshot.number, commentBody);
   } catch (err) {
     const outcome = outcomeForError(err);
-    appendLedgerEntry(
-      {
-        kind: "claim",
-        targetUrl,
-        outcome,
-        note: (err instanceof Error ? err.message : String(err)).slice(0, 140),
-      },
-      ledgerPath
+    finishPost(
+      ledgerPath,
+      reservation.entry!,
+      outcome,
+      (err instanceof Error ? err.message : String(err)).slice(0, 140)
     );
     throw err;
   }
-  appendLedgerEntry(
-    {
-      kind: "claim",
-      targetUrl,
-      outcome: "confirmed",
-      note: forcedPacing ? `${commentUrl} (pacing override: --force)` : commentUrl,
-    },
-    ledgerPath
+  finishPost(
+    ledgerPath,
+    reservation.entry!,
+    "confirmed",
+    forcedPacing ? `${commentUrl} (pacing override: --force)` : commentUrl
   );
   return { verdict: result, commentBody, commentUrl, executed: true, viewer };
 }

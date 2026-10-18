@@ -31,6 +31,7 @@ import { fetchMergeVelocity, type MergeVelocityStats } from "./merge-velocity.js
 import type { FrictionReport } from "./types.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { defaultPackageVersion } from "./doctor.js";
 
 /* ------------------------------------------------------------------ */
 /* Campaign file                                                       */
@@ -256,6 +257,14 @@ export const SCOUT_DEFAULT_BUDGET = 300;
 export const SCOUT_DEFAULT_SCAN_LIMIT = 10;
 export const SCOUT_DEFAULT_KEEP_PER_REPO = 5;
 
+/**
+ * The scout report footer. Derived from the package version so a version
+ * bump can never leave a stale "Scout vX" behind (v0.10.0 regression fix).
+ */
+export function scoutFooter(callsUsed: number, budget: number): string {
+  return `_Scout v${defaultPackageVersion()}; budget ${callsUsed} calls used of ${budget}._`;
+}
+
 export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
   const deps = opts.deps ?? {};
   const now = opts.now ?? new Date();
@@ -375,7 +384,7 @@ export async function scoutCampaign(opts: ScoutOptions): Promise<ScoutResult> {
   }
   if (candidates.length === 0) lines.push("_None._");
   lines.push("");
-  lines.push(`_Scout v0.9.0; budget ${budgetUsed()} calls used of ${opts.budget}._`);
+  lines.push(scoutFooter(budgetUsed(), opts.budget));
 
   return {
     candidates,
