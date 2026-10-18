@@ -282,3 +282,114 @@ describe("pick-up family and work-availability (firecrawl#839)", () => {
     }
   });
 });
+
+describe("field misses 2026-10-17 (Product Signals row 38)", () => {
+  it("catches bare 'Working on this.' (ollama/ollama#19078)", () => {
+    // Gitcoder12's whole comment was "Working on this." The morning eval
+    // caught it through the AI layer; with the layer down, the patterns
+    // missed it. The pattern layer must catch it too.
+    const claims = detectClaims("reporter", [comment("Gitcoder12", "Working on this.")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].phrase, "bare-working-on");
+    assert.equal(claims[0].strength, "soft");
+  });
+
+  it("does not misread negations of working on this", () => {
+    for (const body of [
+      "I'm not working on this, just commenting.",
+      "Nobody is working on this right now.",
+      "I am not currently working on this one.",
+    ]) {
+      const claims = detectClaims("reporter", [comment("dev", body)], NOW);
+      assert.equal(claims.length, 0, body);
+    }
+  });
+
+  it("catches a packaged-fix claim (dubinc/dub#4659)", () => {
+    // dezzy-music: "I've packaged a clean, production-verified fix for
+    // this ... ready for cherry-picking". A concrete fix-ready claim.
+    const claims = detectClaims(
+      "reporter",
+      [comment("dezzy-music", "Following up: I've packaged a clean, production-verified fix for this (along with the partner payout retry recovery) ready for cherry-picking.")],
+      NOW
+    );
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].phrase, "fix-packaged");
+  });
+
+  it("catches 'I also prepared and tested a fix' (formbricks/formbricks#9504, second claimant)", () => {
+    const claims = detectClaims(
+      "reporter",
+      [comment("Rakshaad-Kolhe", "Hi! I also prepared and tested a fix for this issue before #9570 was closed as a duplicate. My branch is ready.")],
+      NOW
+    );
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+  });
+
+  it("catches contracted \"I'd like to work on this\" (formbricks/formbricks#9504, first claimant)", () => {
+    const claims = detectClaims(
+      "reporter",
+      [comment("PalakshiVerma", "Hi! I'd like to work on this issue. I noticed there is currently no assignee or linked PR, and I'd be happy to implement the proposed fix. If that's okay, I'll work on it and open a PR. Thanks!")],
+      NOW
+    );
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+  });
+
+  it("catches a maintainer's 'It's yours @user' as an assignment claim (batrapulkit/squidbrake#79)", () => {
+    const claims = detectClaims(
+      "issueauthor",
+      [comment("batrapulkit", "It's yours @08abhinav, thanks! A couple of tips: on Windows, USERPROFILE decides where Path.home() points.")],
+      NOW
+    );
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].phrase, "its-yours");
+  });
+});
+
+describe("its-yours self-carve-out (squidbrake#79 shape)", () => {
+  it("an issue author's 'It's yours @user' still counts as an assignment", () => {
+    const claims = detectClaims(
+      "batrapulkit",
+      [comment("batrapulkit", "It's yours @08abhinav, thanks!")],
+      NOW
+    );
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].phrase, "its-yours");
+  });
+
+  it("an issue author's other intent language is still skipped", () => {
+    const claims = detectClaims(
+      "batrapulkit",
+      [comment("batrapulkit", "I'm working on this myself.")],
+      NOW
+    );
+    assert.equal(claims.length, 0);
+  });
+});
+
+describe("curly apostrophes (field case dubinc/dub#4659)", () => {
+  it("fix-packaged matches the curly-apostrophe phrasing verbatim from the API", () => {
+    // The real comment reads "I\u2019ve packaged ...", not "I've". A
+    // straight-apostrophe-only pattern missed the live issue even after
+    // fix-packaged existed.
+    const claims = detectClaims(
+      "reporter",
+      [comment("dezzy-music", "Following up: I\u2019ve packaged a clean, production-verified fix for this ready for cherry-picking.")],
+      NOW
+    );
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].strength, "strong");
+    assert.equal(claims[0].phrase, "fix-packaged");
+  });
+
+  it("its-yours matches a curly-apostrophe assignment", () => {
+    const claims = detectClaims("someone", [comment("maint", "It\u2019s yours @contributor, thanks!")], NOW);
+    assert.equal(claims.length, 1);
+    assert.equal(claims[0].phrase, "its-yours");
+  });
+});

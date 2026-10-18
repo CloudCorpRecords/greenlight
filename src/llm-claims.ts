@@ -18,9 +18,17 @@
  *   file cache, so repeat checks do not re-bill.
  */
 import { createHash } from "node:crypto";
-import type { CommentSignal, IssueSnapshot, LLMClaimFlag, VerdictResult } from "./types.js";
+import type {
+  CommentSignal,
+  IssueSnapshot,
+  LLMClaimFlag,
+  LlmLayerStatus,
+  VerdictResult,
+} from "./types.js";
 import { isBotAuthor, strongClaimants } from "./claims.js";
 import { cacheGet, cacheSet } from "./github.js";
+
+export type { LlmLayerStatus };
 
 /** Default model, verified live against the Fireworks catalog on 2026-10-16. */
 export const DEFAULT_LLM_MODEL = "accounts/fireworks/models/glm-5p3-flash";
@@ -174,11 +182,30 @@ export interface ClassifyOptions {
  * flags; any failure (timeout, non-200, unparseable reply) yields [] and
  * never throws.
  */
+export interface ClassifyDetail {
+  flags: LLMClaimFlag[];
+  /**
+   * True when a classification round completed (or there was nothing to
+   * classify). False when the round never finished (transport failure,
+   * non-200, unparseable reply): the caller must not mistake it for "no
+   * claims". Nothing is cached in that case.
+   */
+  roundCompleted: boolean;
+}
+
 export async function classifyIssueClaims(
   issueAuthor: string,
   comments: CommentSignal[],
   opts: ClassifyOptions
 ): Promise<LLMClaimFlag[]> {
+  return (await classifyIssueClaimsDetailed(issueAuthor, comments, opts)).flags;
+}
+
+export async function classifyIssueClaimsDetailed(
+  issueAuthor: string,
+  comments: CommentSignal[],
+  opts: ClassifyOptions
+): Promise<ClassifyDetail> {
   const model = opts.model ?? DEFAULT_LLM_MODEL;
   const baseUrl = (opts.baseUrl ?? DEFAULT_LLM_BASE_URL).replace(/\/+$/, "");
   const fetchImpl: FetchImpl = opts.fetchImpl ?? fetch;
@@ -187,7 +214,7 @@ export async function classifyIssueClaims(
   const eligible = comments.filter(
     (c) => !isBotAuthor(c.author) && c.author !== issueAuthor && c.body.trim().length > 0
   );
-  if (eligible.length === 0) return [];
+  if (eligible.length === 0) return { flags: [], roundCompleted: true };
 
   // Newest first: claim intent matters most in recent comments.
   const ordered = [...eligible].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -204,6 +231,7 @@ export async function classifyIssueClaims(
     }
   }
 
+  let roundCompleted = true;
   if (toClassify.length > 0) {
     const raw = await callFireworks(buildPrompt(toClassify), {
       apiKey: opts.apiKey,
@@ -212,6 +240,7 @@ export async function classifyIssueClaims(
       fetchImpl,
       timeoutMs,
     });
+    roundCompleted = raw !== null;
     // raw === null means the round never completed (transport failure,
     // non-200, unparseable reply). Cache NOTHING in that case: a cached
     // null would blind this comment for the full 30-day TTL, so the next
@@ -256,7 +285,7 @@ export async function classifyIssueClaims(
     const f = cached.get(c);
     if (f) flags.push(f);
   }
-  return flags;
+  return { flags, roundCompleted };
 }
 
 interface CallOptions {
@@ -349,17 +378,63 @@ export async function applyLlmClaims(
   opts: ApplyLlmOptions = {}
 ): Promise<VerdictResult> {
   const env = opts.env ?? process.env;
-  if (!llmEnabled(env)) return legacy;
-  if (legacy.verdict !== "GO" && legacy.verdict !== "RISKY") return legacy;
-  if (strongClaimants(legacy.claims).length > 0) return legacy;
+  const model = llmModelId(env);
 
-  const flags = await classifyIssueClaims(snapshot.author ?? "", snapshot.comments, {
-    apiKey: env.FIREWORKS_API_KEY as string,
-    model: llmModelId(env),
-    baseUrl: llmBaseUrl(env),
-    fetchImpl: opts.fetchImpl,
-  });
-  if (flags.length === 0) return legacy;
+  // v0.9.2: every path reports the layer's status, so a dead layer can
+  // never hide behind patterns-only output (the 2026-10-17 field misses).
+  if (!llmEnabled(env)) {
+    return {
+      ...legacy,
+      llm_status: {
+        ran: false,
+        reason: "FIREWORKS_API_KEY not set; the AI claim layer is off by default",
+      },
+    };
+  }
+  if (legacy.verdict !== "GO" && legacy.verdict !== "RISKY") {
+    return {
+      ...legacy,
+      llm_status: {
+        ran: false,
+        model,
+        reason: `the AI claim layer runs only on GO/RISKY verdicts (this issue scored ${legacy.verdict})`,
+      },
+    };
+  }
+  if (strongClaimants(legacy.claims).length > 0) {
+    return {
+      ...legacy,
+      llm_status: {
+        ran: false,
+        model,
+        reason: "the pattern layer already found a strong claim; the AI layer was skipped",
+      },
+    };
+  }
+
+  const { flags, roundCompleted } = await classifyIssueClaimsDetailed(
+    snapshot.author ?? "",
+    snapshot.comments,
+    {
+      apiKey: env.FIREWORKS_API_KEY as string,
+      model,
+      baseUrl: llmBaseUrl(env),
+      fetchImpl: opts.fetchImpl,
+    }
+  );
+  if (!roundCompleted) {
+    return {
+      ...legacy,
+      llm_status: {
+        ran: false,
+        model,
+        reason:
+          "the AI claim round did not complete (transport failure, non-200, or unparseable reply); nothing was cached and no flags were added",
+      },
+    };
+  }
+  const llm_status: LlmLayerStatus = { ran: true, model };
+  if (flags.length === 0) return { ...legacy, llm_status };
 
   const reasons = [...legacy.reasons];
   for (const f of flags) {
@@ -373,5 +448,6 @@ export async function applyLlmClaims(
     reasons,
     flags: [...legacy.flags, "llm-claim"],
     llm_claims: flags,
+    llm_status,
   };
 }

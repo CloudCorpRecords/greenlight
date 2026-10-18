@@ -208,6 +208,25 @@ export interface VerdictResult {
   flags: string[]; // e.g. "claimed", "stale_claim"
   /** AI claim-intent flags (optional layer, off by default). Absent when the layer is disabled. */
   llm_claims?: LLMClaimFlag[];
+  /**
+   * v0.9.2: whether the AI claim layer ran for this verdict, and why not.
+   * check/scan render this so a silently-dead layer can never again hide
+   * behind patterns-only output (the 2026-10-17 field misses).
+   */
+  llm_status?: LlmLayerStatus;
+}
+
+/**
+ * Transparency for the optional AI claim layer (v0.9.2). `ran: true`
+ * means a classification round completed (flags may still be empty);
+ * `ran: false` always carries a human reason.
+ */
+export interface LlmLayerStatus {
+  ran: boolean;
+  /** Model id when the layer ran (or would have run). */
+  model?: string;
+  /** Human reason when the layer did not run or the round failed. */
+  reason?: string;
 }
 
 /**

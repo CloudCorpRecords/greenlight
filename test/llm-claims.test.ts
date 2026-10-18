@@ -254,14 +254,57 @@ describe("classifyIssueClaims", () => {
 });
 
 describe("applyLlmClaims", () => {
-  it("is disabled by default: output identical to the deterministic engine", async () => {
+  it("is disabled by default: verdict unchanged, but the off status is reported", async () => {
     const snapshot = baseSnapshot({
       comments: [comment("sahyl", "I'm looking into contributing a fix here.", "2026-10-14T10:00:00Z", 121)],
     });
     const legacy = scoreIssue(snapshot, NOW);
     const out = await applyLlmClaims(snapshot, legacy, { env: {} as NodeJS.ProcessEnv });
-    assert.strictEqual(out, legacy, "same object, no llm_claims field added");
-    assert.deepEqual(out, scoreIssue(snapshot, NOW));
+    // v0.9.2: the verdict/reasons/flags stay byte-identical, but the
+    // output now says the layer did not run (a dead layer must never
+    // hide behind patterns-only output again).
+    assert.equal(out.verdict, legacy.verdict);
+    assert.deepEqual(out.reasons, legacy.reasons);
+    assert.deepEqual(out.flags, legacy.flags);
+    assert.equal(out.llm_claims, undefined);
+    assert.equal(out.llm_status?.ran, false);
+    assert.ok(out.llm_status?.reason?.includes("FIREWORKS_API_KEY"), out.llm_status?.reason);
+  });
+
+  it("reports ran:true with the model when a round completes with no flags", async () => {
+    const snapshot = baseSnapshot({
+      comments: [comment("sahyl", "Just a drive-by thought, no intent.", "2026-10-14T10:00:00Z", 122)],
+    });
+    const legacy = scoreIssue(snapshot, NOW);
+    assert.equal(legacy.verdict, "GO");
+    const { impl } = stubFetch(llmJson([]));
+    const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
+    assert.equal(out.verdict, "GO");
+    assert.equal(out.llm_status?.ran, true);
+    assert.ok(out.llm_status?.model?.length, "model named");
+    assert.equal(out.llm_claims, undefined);
+  });
+
+  it("reports a failed round (transport down) instead of silent no-signal", async () => {
+    const snapshot = baseSnapshot({
+      comments: [comment("sahyl", "Working on this.", "2026-10-14T10:00:00Z", 123)],
+    });
+    const legacy = scoreIssue(snapshot, NOW);
+    const failing: typeof fetch = async () => {
+      throw new Error("connect ECONNREFUSED");
+    };
+    const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: failing });
+    assert.equal(out.llm_status?.ran, false);
+    assert.ok(out.llm_status?.reason?.includes("did not complete"), out.llm_status?.reason);
+    assert.equal(out.flags.includes("llm-claim"), false);
+  });
+
+  it("skips the layer on non-eligible verdicts with the reason named", async () => {
+    const legacy = legacyResult({ verdict: "TAKEN", reasons: ["claimed by x"], flags: ["claimed"] });
+    const snapshot = baseSnapshot({ comments: [] });
+    const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV });
+    assert.equal(out.llm_status?.ran, false);
+    assert.ok(out.llm_status?.reason?.includes("TAKEN"), out.llm_status?.reason);
   });
 
   it("a flag downgrades GO to RISKY with the quote as evidence, never TAKEN", async () => {
@@ -299,7 +342,11 @@ describe("applyLlmClaims", () => {
     const legacy = legacyResult({ verdict: "GATED", reasons: ["repo gate blocks outside PRs"] });
     const { impl, calls } = stubFetch(llmJson([{ index: 0, claim: true, quote: "I'm looking into contributing a fix here" }]));
     const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
-    assert.strictEqual(out, legacy);
+    assert.strictEqual(out.verdict, legacy.verdict);
+    assert.deepEqual(out.reasons, legacy.reasons);
+    assert.deepEqual(out.flags, legacy.flags);
+    assert.equal(out.llm_status?.ran, false);
+    assert.ok(out.llm_status?.reason?.includes("GATED"), out.llm_status?.reason);
     assert.equal(calls.length, 0);
   });
 
@@ -311,7 +358,9 @@ describe("applyLlmClaims", () => {
     assert.ok(legacy.claims.some((c) => c.strength === "strong"), "fixture must produce a strong pattern claim");
     const { impl, calls } = stubFetch(llmJson([{ index: 0, claim: true, quote: "other" }]));
     const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
-    assert.strictEqual(out, legacy);
+    assert.strictEqual(out.verdict, legacy.verdict);
+    assert.equal(out.llm_status?.ran, false);
+    assert.ok(out.llm_status?.reason?.includes("strong claim"), out.llm_status?.reason);
     assert.equal(calls.length, 0);
   });
 
@@ -322,7 +371,10 @@ describe("applyLlmClaims", () => {
     const legacy = scoreIssue(snapshot, NOW);
     const { impl } = stubFetch(llmJson([{ index: 0, claim: false }]));
     const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
-    assert.strictEqual(out, legacy);
+    assert.strictEqual(out.verdict, legacy.verdict);
+    assert.deepEqual(out.reasons, legacy.reasons);
+    assert.equal(out.llm_status?.ran, true);
+    assert.ok(out.llm_status?.model, "model named when the round completed");
   });
 });
 
@@ -417,26 +469,50 @@ describe("regression: the two 2026-10-17 misses (v0.9.0)", () => {
     },
   ];
 
-  for (const m of misses) {
-    it(`${m.repo}#${m.number} (${m.author}): deterministic gains nothing, LLM caps at RISKY`, async () => {
-      const snapshot = baseSnapshot({
-        sourceUrl: `https://github.com/${m.repo}/issues/${m.number}`,
-        number: m.number,
-        comments: [comment(m.author, m.body, "2026-10-17T08:00:00Z", m.number * 1000)],
-      });
-      const legacy = scoreIssue(snapshot);
-      assert.equal(legacy.verdict, "GO", `deterministic layer must gain nothing on ${m.repo}#${m.number}`);
-      assert.equal(legacy.claims.length, 0);
-
-      // The layer's test double: the model replies that the comment is a claim.
-      const { impl } = stubFetch(llmJson([{ index: 0, claim: true, quote: m.quote, confidence: 0.9, reason: "States intent to do the work." }]));
-      const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
-      assert.equal(out.verdict, "RISKY");
-      assert.ok(out.flags.includes("llm-claim"), out.flags.join(","));
-      assert.equal(out.llm_claims?.length, 1);
-      assert.equal(out.llm_claims?.[0].author, m.author);
-      assert.ok(snapshot.comments[0].body.includes(out.llm_claims?.[0].quote ?? "x"), "quote must be an exact substring");
-      assert.ok(!out.reasons.some((r) => r.includes("TAKEN")), "never TAKEN from an LLM flag");
+  it("ollama/ollama#19078 (Gitcoder12): pattern layer now catches it as soft; LLM still caps at RISKY", async () => {
+    // v0.9.2: the bare-working-on pattern catches "Working on this." as a
+    // SOFT signal. Soft never caps the verdict, so the issue still scores
+    // GO and the AI layer still adds the RISKY evidence.
+    const m = misses[0];
+    const snapshot = baseSnapshot({
+      sourceUrl: `https://github.com/${m.repo}/issues/${m.number}`,
+      number: m.number,
+      comments: [comment(m.author, m.body, "2026-10-17T08:00:00Z", m.number * 1000)],
     });
-  }
+    const legacy = scoreIssue(snapshot);
+    assert.equal(legacy.verdict, "GO");
+    assert.equal(legacy.claims.length, 1);
+    assert.equal(legacy.claims[0].strength, "soft");
+
+    const { impl } = stubFetch(llmJson([{ index: 0, claim: true, quote: m.quote, confidence: 0.9, reason: "States intent to do the work." }]));
+    const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
+    assert.equal(out.verdict, "RISKY");
+    assert.ok(out.flags.includes("llm-claim"), out.flags.join(","));
+    assert.equal(out.llm_claims?.length, 1);
+    assert.equal(out.llm_claims?.[0].author, m.author);
+    assert.ok(snapshot.comments[0].body.includes(out.llm_claims?.[0].quote ?? "x"), "quote must be an exact substring");
+    assert.ok(!out.reasons.some((r) => r.includes("TAKEN")), "never TAKEN from an LLM flag");
+  });
+
+  it("vitejs/vite#23757 (mikamikasuki): deterministic gains nothing, LLM caps at RISKY", async () => {
+    const m = misses[1];
+    const snapshot = baseSnapshot({
+      sourceUrl: `https://github.com/${m.repo}/issues/${m.number}`,
+      number: m.number,
+      comments: [comment(m.author, m.body, "2026-10-17T08:00:00Z", m.number * 1000)],
+    });
+    const legacy = scoreIssue(snapshot);
+    assert.equal(legacy.verdict, "GO", `deterministic layer must gain nothing on ${m.repo}#${m.number}`);
+    assert.equal(legacy.claims.length, 0);
+
+    // The layer's test double: the model replies that the comment is a claim.
+    const { impl } = stubFetch(llmJson([{ index: 0, claim: true, quote: m.quote, confidence: 0.9, reason: "States intent to do the work." }]));
+    const out = await applyLlmClaims(snapshot, legacy, { env: KEY_ENV, fetchImpl: impl });
+    assert.equal(out.verdict, "RISKY");
+    assert.ok(out.flags.includes("llm-claim"), out.flags.join(","));
+    assert.equal(out.llm_claims?.length, 1);
+    assert.equal(out.llm_claims?.[0].author, m.author);
+    assert.ok(snapshot.comments[0].body.includes(out.llm_claims?.[0].quote ?? "x"), "quote must be an exact substring");
+    assert.ok(!out.reasons.some((r) => r.includes("TAKEN")), "never TAKEN from an LLM flag");
+  });
 });

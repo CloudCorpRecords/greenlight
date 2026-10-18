@@ -13,27 +13,51 @@ interface ClaimPattern {
   name: string;
   regex: RegExp;
   strength: "strong" | "soft";
+  /**
+   * Extra check on a regex match (v0.9.2): return false to reject the
+   * match. Used where a pure regex cannot see negation or the actor in
+   * the same clause ("I'm not working on this", "Are you working on
+   * this?"). `match.index` is where the regex matched.
+   */
+  guard?: (body: string, match: RegExpExecArray) => boolean;
 }
 
 // Strong: explicit claim of work or a concrete "I am doing it" statement.
 const STRONG_PATTERNS: ClaimPattern[] = [
-  { name: "explicit-claim", regex: /i would like to (work on|take|handle) this/i, strength: "strong" },
+  // "I'd like to work on this issue" — formbricks/formbricks#9504
+  // (2026-10-17): the contracted form missed the old "i would like".
+  // The trailing guard keeps "take this opportunity to ..." out, the
+  // same idiom the like-to-take pattern below protects.
+  { name: "explicit-claim", regex: /\bi(['’]d| would) like to (work on|take|handle) (this|it)\b(?! (opportunity|moment|time) to)/i, strength: "strong" },
   { name: "please-assign", regex: /please assign (this|it|me)/i, strength: "strong" },
   { name: "assign-to-me", regex: /\bassign (it |this )?to me\b/i, strength: "strong" },
   { name: "assign-request", regex: /\bassign me\b/i, strength: "strong" },
-  { name: "will-take", regex: /i (will|shall) (take|work on|handle) this/i, strength: "strong" },
-  { name: "working-on", regex: /i('| a)m (currently |now )?working on this/i, strength: "strong" },
+  // "If that's okay, I'll work on it and open a PR." — the same
+  // formbricks thread: "it" is as much a claim as "this". The lookahead
+  // keeps "take it into account / offline / under / as" from matching.
+  { name: "will-take", regex: /\bi (will|shall) (take|work on|handle) (this|it)\b(?!\s+(?:into|offline|under|as|for granted)\b)/i, strength: "strong" },
+  // "It's yours @08abhinav, thanks!" — batrapulkit/squidbrake#79
+  // (2026-10-17): a maintainer handing the issue to a contributor is an
+  // assignment, the strongest taken-signal there is.
+  { name: "its-yours", regex: /\bit(?:['’]s| is)(?: all)? yours\b/i, strength: "strong" },
+  // "I've packaged a clean, production-verified fix for this" —
+  // dubinc/dub#4659 (2026-10-17), and "I also prepared and tested a fix
+  // for this issue" — formbricks#9504's second claimant. A concrete
+  // fix-in-hand claim. The not/n't guard keeps "I have not prepared a
+  // fix" from matching.
+  { name: "fix-packaged", regex: /\bi(?:['’]ve| have| also| just)?\s+(?!(?:not|n['’]t)\s)(?:packaged|prepared|completed|finished)\s+(?:(?:a|the|my|this)\s+)?(?:[\w.,-]+\s+){0,6}fix\b/i, strength: "strong" },
+  { name: "working-on", regex: /i(['’]| a)m (currently |now )?working on this/i, strength: "strong" },
   { name: "taking-it", regex: /\btak(e|ing) this (on|up)\b/i, strength: "strong" },
-  { name: "pr-opened", regex: /i('ve| have) opened (a |the )?pr\b/i, strength: "strong" },
+  { name: "pr-opened", regex: /i(['’]ve| have) opened (a |the )?pr\b/i, strength: "strong" },
   { name: "fix-ready", regex: /\bfix (is )?ready\b/i, strength: "strong" },
   { name: "fix-in-progress", regex: /\bfix is in progress\b/i, strength: "strong" },
   { name: "pr-incoming", regex: /\bpr (is |will be |to be )?(incoming|coming|ready|prepared)\b/i, strength: "strong" },
-  { name: "started-work", regex: /\bi('ve| have) started (working )?on this/i, strength: "strong" },
-  { name: "want-to-work", regex: /i('d| would) like to (take|pick) (this|it) (on|up)/i, strength: "strong" },
+  { name: "started-work", regex: /\bi(['’]ve| have) started (working )?on this/i, strength: "strong" },
+  { name: "want-to-work", regex: /i(['’]d| would) like to (take|pick) (this|it) (on|up)/i, strength: "strong" },
   // "Hi, I'd like to take this. Plan: ..." — the fastmcp #5743 claim (2026-10-14) that scan
   // missed because want-to-work above demands a trailing "on"/"up". The negative lookahead
   // keeps "I'd like to take this opportunity to thank ..." from counting as a claim.
-  { name: "like-to-take", regex: /\bi('d| would) like to take (this|it)\b(?! (opportunity|moment|time) to)/i, strength: "strong" },
+  { name: "like-to-take", regex: /\bi(['’]d| would) like to take (this|it)\b(?! (opportunity|moment|time) to)/i, strength: "strong" },
   // "/attempt #1234" (or "/claim #1234") — bot-style commands some contributors post to
   // announce they are taking the issue. tscircuit/tscircuit#5563 (2026-10-15) carried five
   // of these from one contributor before anyone linked the actual fix PRs; without this
@@ -53,14 +77,36 @@ const STRONG_PATTERNS: ClaimPattern[] = [
   // with a grain of salt".
   {
     name: "bare-take",
-    regex: /\b(?:i(?:'ll| will) take|let me take|i take|taking) (?:this|it)(?: one)?\b(?!\s+(?:[a-z][\w-]*\s+){0,2}(?:into|off(?:line)?|opportunity|opportunities|moment|time|with|under|as)\b)/i,
+    regex: /\b(?:i(?:['’]ll| will) take|let me take|i take|taking) (?:this|it)(?: one)?\b(?!\s+(?:[a-z][\w-]*\s+){0,2}(?:into|off(?:line)?|opportunity|opportunities|moment|time|with|under|as)\b)/i,
     strength: "soft",
   },
 ];
 
 // Soft: interest or an offer, not a claim. Used only to soften confidence, not to mark TAKEN.
 const SOFT_PATTERNS: ClaimPattern[] = [
-  { name: "soft-offer", regex: /happy to (fix|work|help|take)/i, strength: "soft" },
+  // "I'd be happy to implement the proposed fix" — formbricks#9504
+  // (2026-10-17): the happy-to family missed the implementation verbs.
+  { name: "soft-offer", regex: /\bhappy to (fix|work|help|take|implement|submit|contribute|open|review)\b/i, strength: "soft" },
+  // Bare "Working on this." — ollama/ollama#19078 (2026-10-17): the
+  // whole comment was three words. The morning eval caught it through
+  // the AI layer; with the layer down, the patterns missed it. Soft,
+  // not strong: no plan, no assignment ask. The guard rejects negations
+  // ("I'm not working on this"), non-actors ("Nobody is working on
+  // this"), and questions addressed at someone else ("Are you working
+  // on this?"). The strong working-on pattern above owns "I'm working
+  // on this" and runs first, so this never downgrades it.
+  {
+    name: "bare-working-on",
+    regex: /\bworking on (?:this|it|a fix|the fix)\b/i,
+    strength: "soft",
+    guard: (body, match) => {
+      const clause = (body.slice(0, match.index).split(/[.!?\n]/).pop() ?? "").toLowerCase();
+      if (/\b(not|n't|never|nobody|no one|none)\b/.test(clause)) return false;
+      if (/\bi(?:['’]m| am)\b/.test(clause)) return false;
+      if (/\b(you|u)\b/.test(clause)) return false;
+      return true;
+    },
+  },
   { name: "can-take", regex: /i can take this/i, strength: "soft" },
   { name: "interested", regex: /\binterested in (working on|taking|this)\b/i, strength: "soft" },
   { name: "looking-into", regex: /\blooking into this\b/i, strength: "soft" },
@@ -79,7 +125,7 @@ const SOFT_PATTERNS: ClaimPattern[] = [
   // of place.
   {
     name: "pick-up-offer",
-    regex: /\b(?:i can|i(?:'ll| will)|let me|(?:can|could) i) pick (?:this|it) up\b(?!\s+(?:from|at|in|on|off|out)\b)/i,
+    regex: /\b(?:i can|i(?:['’]ll| will)|let me|(?:can|could) i) pick (?:this|it) up\b(?!\s+(?:from|at|in|on|off|out)\b)/i,
     strength: "soft",
   },
   // "Can i still work on this, is this open." — the same firecrawl thread:
@@ -97,7 +143,7 @@ const PARTIAL_PATTERNS: ClaimPattern[] = [
   { name: "partial-taking", regex: /taking (the|this|on)\b.{0,40}?\b(ask|part|half|piece|fallback|remaining)\b/i, strength: "strong" },
   { name: "partial-claiming", regex: /claiming (the|this)\b.{0,30}?\b(part|half|ask)\b/i, strength: "strong" },
   { name: "partial-working-on", regex: /working on (the|this)\b.{0,30}?\b(part|half|piece)\b/i, strength: "strong" },
-  { name: "partial-will-take", regex: /i('ll| will) take (the|this)\b.{0,30}?\b(part|half|ask|fallback)\b/i, strength: "strong" },
+  { name: "partial-will-take", regex: /i(['’]ll| will) take (the|this)\b.{0,30}?\b(part|half|ask|fallback)\b/i, strength: "strong" },
 ];
 
 const ALL_PATTERNS = [...PARTIAL_PATTERNS, ...STRONG_PATTERNS, ...SOFT_PATTERNS];
@@ -142,19 +188,30 @@ export function detectClaims(
     let scopeWord: string | undefined;
     for (const pattern of ALL_PATTERNS) {
       const m = pattern.regex.exec(comment.body);
-      if (m) {
-        matched = pattern;
-        if (pattern.name.startsWith("partial-")) {
-          // Partial patterns carry the scope word in the second capture group.
-          scopeWord = (m[2] ?? "").toLowerCase() || undefined;
-        }
-        break; // partial and strong patterns come first, so first match wins
+      if (!m) continue;
+      // v0.9.2: a guard can reject a regex match the pattern alone
+      // cannot judge (negation, the actor). Rejected matches fall
+      // through to the next pattern, not out of detection.
+      if (pattern.guard && !pattern.guard(comment.body, m)) continue;
+      matched = pattern;
+      if (pattern.name.startsWith("partial-")) {
+        // Partial patterns carry the scope word in the second capture group.
+        scopeWord = (m[2] ?? "").toLowerCase() || undefined;
       }
+      break; // partial and strong patterns come first, so first match wins
     }
     if (!matched) continue;
 
-    // Skip the issue author unless they announce real work in progress.
-    if (author === issueAuthor && matched.name !== "fix-ready" && matched.name !== "fix-in-progress" && matched.name !== "pr-opened") {
+    // Skip the issue author unless they announce real work in progress,
+    // or assign the issue to someone else (v0.9.2: "It's yours @x" is an
+    // assignment, not a self-claim — batrapulkit/squidbrake#79).
+    if (
+      author === issueAuthor &&
+      matched.name !== "fix-ready" &&
+      matched.name !== "fix-in-progress" &&
+      matched.name !== "pr-opened" &&
+      matched.name !== "its-yours"
+    ) {
       continue;
     }
 

@@ -45,7 +45,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.9.1" });
+const server = new McpServer({ name: "greenlight", version: "0.9.2" });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -63,7 +63,7 @@ server.tool(
       // Merged verdict: the protocol claim state overrides legacy claim
       // inference, but never gates or cross-referenced PR evidence.
       const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number);
-      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol, llm_claims: merged.llm_claims ?? [], suggests_verified_comment: suggestsVerifiedComment(merged.gates) });
+      return text({ issue: snapshot.sourceUrl, title: snapshot.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags, claims: merged.claims, gates: merged.gates, duplicateOf: snapshot.duplicateOf ?? [], protocol: merged.protocol, llm_claims: merged.llm_claims ?? [], llm_status: merged.llm_status ?? null, suggests_verified_comment: suggestsVerifiedComment(merged.gates) });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -436,7 +436,7 @@ server.tool(
 
 server.tool(
   "my_claims",
-  "The claims babysitter's claim half: bucket every claim in your my-claims registry (~/.greenlight/my-claims.json) by its live Claim Protocol status — linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost — and retire claims that completed or released. Pair with babysit_prs for the full portfolio picture.",
+  "The claims babysitter's claim half: bucket every claim in your my-claims registry (~/.greenlight/my-claims.json) by its live Claim Protocol status — linked, linked-dead, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost — and retire claims that completed or released. Pair with babysit_prs for the full portfolio picture.",
   {
     claims_registry_path: z.string().optional().describe("Override path for the my-claims registry. Defaults to ~/.greenlight/my-claims.json."),
   },
