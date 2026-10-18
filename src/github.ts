@@ -145,16 +145,27 @@ export function resetApiCalls(): void {
 /**
  * One GitHub request with the per-request timeout applied. A timeout
  * throws RequestTimeoutError (transient); anything else propagates.
+ *
+ * Uses an explicit AbortController + ref'd setTimeout rather than
+ * AbortSignal.timeout(): the latter's timer does not keep the event
+ * loop alive on Node 20, so a hung request would never abort there
+ * (CI caught this: the timeout tests were cancelled on Node 20 while
+ * passing on Node 24). The timer is always cleared, so a fast success
+ * never leaves a 30s handle behind.
  */
 async function timedFetch(url: string, init: RequestInit, path: string): Promise<Response> {
   const timeoutMs = requestTimeoutMs();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await activeFetch()(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    return await activeFetch()(url, { ...init, signal: controller.signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new RequestTimeoutError(path, timeoutMs / 1000);
     }
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
