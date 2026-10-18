@@ -30,7 +30,17 @@ import {
   countStarterIssues,
   detectRepoPolicy,
   RateLimitError,
+  fetchComments,
 } from "./github.js";
+import { CLAIM_MARKER } from "./protocol.js";
+import { llmEnabled, llmModelId } from "./llm-claims.js";
+import type { LlmLayerStatus } from "./types.js";
+import {
+  checkPacing,
+  pacingConfigFromEnv,
+  pacingSummary,
+  readLedger,
+} from "./posting-ledger.js";
 import { scoreIssue } from "./verdict.js";
 import { parseGates, parseGatefileJson } from "./gates.js";
 import type { Gate } from "./types.js";
@@ -125,6 +135,16 @@ function printVerdict(snapshot: { sourceUrl: string; title: string; owner: strin
       `  ai claim signals: ${llmClaims.map((f) => `@${f.author} (${f.confidence.toFixed(2)}): "${f.quote}"`).join("; ")}`
     );
   }
+  // v0.9.2: the AI claim layer always says whether it ran, so a dead
+  // layer can never hide behind patterns-only output again.
+  const llmStatus = result.llm_status;
+  if (llmStatus) {
+    console.log(
+      llmStatus.ran
+        ? `  ai claim layer: on (${llmStatus.model ?? "unknown model"})`
+        : `  ai claim layer: off (${llmStatus.reason ?? "unknown reason"})`
+    );
+  }
   const detected = result.gates.filter((g) => g.detected);
   if (detected.length > 0) {
     console.log(`  gates: ${detected.map((g) => g.kind).join(", ")}`);
@@ -170,6 +190,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
     claims: merged.claims,
     gates: merged.gates,
     llm_claims: merged.llm_claims,
+    llm_status: merged.llm_status,
   };
   // Maintainer-only repos (inspector, servers) close outside PRs on sight;
   // the contribution that lands is a verified issue comment. Say so right
@@ -191,6 +212,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
           duplicateOf: snapshot.duplicateOf ?? [],
           protocol: merged.protocol,
           llm_claims: merged.llm_claims ?? [],
+          llm_status: merged.llm_status ?? null,
           suggestion,
         },
         null,
@@ -246,6 +268,12 @@ async function cmdStatus(issueUrl: string, asJson: boolean): Promise<void> {
   console.log(
     `  checked at ${status.checked_at} (fresh for ${Math.round(status.stale_after_seconds / 3600)}h)`
   );
+  // Pacing (v0.9.2): the local posting ledger keeps claim cadence visible
+  // so the tool never trips GitHub's anti-spam flag the way the 2026-10-17
+  // campaign pace did.
+  for (const line of pacingSummary(checkPacing(readLedger(), Date.now(), pacingConfigFromEnv()))) {
+    console.log(`  ${line}`);
+  }
 }
 
 async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promise<void> {
@@ -260,7 +288,14 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     return;
   }
   const externalGates = loadExternalGates(args);
-  const results: Array<{ url: string; title: string; verdict: string; reasons: string[]; flags: string[] }> = [];
+  const results: Array<{
+    url: string;
+    title: string;
+    verdict: string;
+    reasons: string[];
+    flags: string[];
+    llm_status: LlmLayerStatus | null;
+  }> = [];
   // Scan runs the same per-issue pipeline as check (v0.9.0): legacy
   // verdict, optional AI claim layer, merged with the Claim Protocol.
   // Field lesson 2026-10-17: a scan that ran the deterministic verdict
@@ -272,9 +307,23 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   for (const issue of issues) {
     try {
       const { merged } = await checkIssueWithProtocol(owner, repo, issue.number, { externalGates });
-      results.push({ url: issue.url, title: issue.title, verdict: merged.verdict, reasons: merged.reasons, flags: merged.flags });
+      results.push({
+        url: issue.url,
+        title: issue.title,
+        verdict: merged.verdict,
+        reasons: merged.reasons,
+        flags: merged.flags,
+        llm_status: merged.llm_status ?? null,
+      });
     } catch (err) {
-      results.push({ url: issue.url, title: issue.title, verdict: "ERROR", reasons: [err instanceof Error ? err.message : String(err)], flags: [] });
+      results.push({
+        url: issue.url,
+        title: issue.title,
+        verdict: "ERROR",
+        reasons: [err instanceof Error ? err.message : String(err)],
+        flags: [],
+        llm_status: null,
+      });
     }
   }
   const rank: Record<string, number> = { GO: 0, RISKY: 1, GATED: 2, STALE: 3, TAKEN: 4, ERROR: 5 };
@@ -285,6 +334,13 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     return;
   }
   console.log(`Scan of ${owner}/${repo}: ${results.length} candidate issues, GO first`);
+  // v0.9.2: say whether the AI claim layer ran on this scan. Per-issue
+  // statuses ride in the JSON; the human line states the environment.
+  console.log(
+    llmEnabled()
+      ? `  ai claim layer: on (${llmModelId()}); per-issue layer status in --json`
+      : `  ai claim layer: off (FIREWORKS_API_KEY not set); verdicts are patterns-only`
+  );
   if (fallbackUsed) {
     console.log(`(fallback pass: no label-tagged starter issues found, showing the most recent open unassigned issues)`);
   }
@@ -388,11 +444,34 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
 
   const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {});
   printVerdict(snapshot, merged, false);
-  const plan: ClaimResult = await claimIssue(createRestClient(), snapshot, {
+  const minIntervalRaw = flagValue(args, "--min-interval");
+  // Pacing (v0.9.2) reconciliation: an unconfirmed earlier claim attempt is
+  // re-checked against the issue's comments before any repost. The live
+  // client lists comments; a claim comment carrying the protocol marker
+  // from the current viewer (or any author) means the post landed.
+  const restClient = createRestClient();
+  const plan: ClaimResult = await claimIssue(restClient, snapshot, {
     yes: args.includes("--yes"),
     force: args.includes("--force"),
     plan: flagValue(args, "--plan"),
     etaDays,
+    minIntervalS: minIntervalRaw !== undefined ? Number(minIntervalRaw) : undefined,
+    confirmPost: async () => {
+      try {
+        const comments = await fetchComments(owner, repo, number);
+        let viewer: string | undefined;
+        try {
+          viewer = await restClient.getViewer();
+        } catch {
+          viewer = undefined;
+        }
+        return comments.some(
+          (c) => c.body.includes(CLAIM_MARKER) && (!viewer || c.author === viewer)
+        );
+      } catch {
+        return false;
+      }
+    },
   });
   if (args.includes("--json")) {
     console.log(
@@ -428,6 +507,9 @@ async function cmdClaim(issueUrl: string, args: string[]): Promise<void> {
     console.log(plan.commentBody);
     console.log(`---`);
     console.log(`Re-run with --yes (and GITHUB_TOKEN set) to post it.`);
+    // Pacing posture (v0.9.2): informational in dry runs; enforced on post.
+    const dryPacing = checkPacing(readLedger(), Date.now(), pacingConfigFromEnv());
+    for (const line of pacingSummary(dryPacing)) console.log(`  ${line}`);
   }
 }
 
@@ -541,6 +623,13 @@ async function cmdPr(issueUrl: string, args: string[]): Promise<void> {
   }
 }
 
+/** v0.9.2: name the actual outcome when every failing check is an external blocker. */
+function ciVerdictLine(verdict: string): string {
+  return verdict === "NO CODE FAILURES"
+    ? "Verdict: NO CODE FAILURES (all blockers external)"
+    : `Verdict: ${verdict}`;
+}
+
 async function cmdCi(prUrl: string, asJson: boolean): Promise<void> {
   const result = await triagePr(prUrl);
   if (asJson) {
@@ -552,7 +641,7 @@ async function cmdCi(prUrl: string, asJson: boolean): Promise<void> {
   console.log(`  head ${result.headSha.slice(0, 7)} <- base ${result.baseRef}`);
   if (result.checks.length === 0) {
     console.log(`  No failing checks on the PR head.`);
-    console.log(`Verdict: ${result.verdict}`);
+    console.log(ciVerdictLine(result.verdict));
     return;
   }
   for (const c of result.checks) {
@@ -562,7 +651,7 @@ async function cmdCi(prUrl: string, asJson: boolean): Promise<void> {
     if (c.detailsUrl) console.log(`    ${c.detailsUrl}`);
     if (c.failureLines) for (const line of c.failureLines) console.log(`    > ${line}`);
   }
-  console.log(`Verdict: ${result.verdict}`);
+  console.log(ciVerdictLine(result.verdict));
 }
 
 async function cmdReview(prUrl: string, asJson: boolean): Promise<void> {

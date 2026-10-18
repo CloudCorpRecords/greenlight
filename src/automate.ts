@@ -23,6 +23,18 @@ import {
   type PrepDetail,
 } from "./prep-detail.js";
 import type { IssueSnapshot, VerdictResult, Gate, RepoConventions } from "./types.js";
+import {
+  appendLedgerEntry,
+  checkPacing,
+  outcomeForError,
+  pacingConfigFromEnv,
+  pendingEntryFor,
+  readLedger,
+  reconcileEntry,
+  defaultLedgerPath,
+  type PostingLedgerEntry,
+} from "./posting-ledger.js";
+import { CLAIM_MARKER } from "./protocol.js";
 
 /** Thrown when an automation command refuses to proceed. CLI exits 1 on this. */
 export class AutomationRefusal extends Error {
@@ -366,6 +378,23 @@ export interface ClaimOptions {
   plan?: string;
   /** Optional ETA in days recorded in the protocol claim comment (eta-days: line). */
   etaDays?: number;
+  /**
+   * Pacing (v0.9.2): override the minimum interval between claim posts
+   * (seconds). Defaults to GREENLIGHT_CLAIM_MIN_INTERVAL_S (90).
+   */
+  minIntervalS?: number;
+  /**
+   * Pacing: where the posting ledger lives. Defaults to
+   * ~/.greenlight/posting-ledger.json; the tests inject a temp path.
+   */
+  ledgerPath?: string;
+  /**
+   * Pacing reconciliation (v0.9.2): given an unconfirmed ledger entry for
+   * this target, return true when the post actually landed (checked
+   * against the API). The CLI supplies a comment-listing implementation;
+   * the default assumes it did not land.
+   */
+  confirmPost?: (entry: PostingLedgerEntry) => Promise<boolean>;
 }
 
 export interface ClaimResult {
@@ -422,7 +451,66 @@ export async function claimIssue(
     return { verdict: result, commentBody, commentUrl: null, executed: false, viewer };
   }
   requireWriteToken();
-  const commentUrl = await client.postIssueComment(snapshot.owner, snapshot.repo, snapshot.number, commentBody);
+  const ledgerPath = opts.ledgerPath ?? defaultLedgerPath();
+  const targetUrl = `https://github.com/${snapshot.owner}/${snapshot.repo}/issues/${snapshot.number}`;
+
+  // Pacing (v0.9.2): never blind-retry an unconfirmed post. Re-read the
+  // target first; if the earlier attempt landed, do not repost.
+  const pending = pendingEntryFor(readLedger(ledgerPath), targetUrl);
+  if (pending) {
+    const confirm = opts.confirmPost ?? (async () => false);
+    const outcome = await reconcileEntry(ledgerPath, pending, confirm);
+    if (outcome === "confirmed") {
+      throw new AutomationRefusal(
+        `refusing to claim ${ref}: an earlier claim attempt on this issue is now confirmed on the issue (reconciled against the API). Not reposting.`
+      );
+    }
+    if (outcome === "unknown" && !opts.force) {
+      throw new AutomationRefusal(
+        `refusing to claim ${ref}: the earlier claim attempt could not be verified against the API, so a repost might duplicate it. Pass --force to post anyway (the override is ledgered).`
+      );
+    }
+    // "not-landed": the earlier attempt provably did not land; this is a
+    // fresh attempt, and the stale entry is now superseded.
+  }
+
+  // Cadence + daily soft cap for claim posts (the surface GitHub's
+  // anti-spam flag watches). --force overrides; the override is ledgered.
+  const pacingCfg = pacingConfigFromEnv();
+  if (opts.minIntervalS !== undefined && opts.minIntervalS >= 0) {
+    pacingCfg.minIntervalS = opts.minIntervalS;
+  }
+  const pacing = checkPacing(readLedger(ledgerPath), Date.now(), pacingCfg);
+  if (!pacing.allowed && !opts.force) {
+    throw new AutomationRefusal(`refusing to claim ${ref}: ${pacing.reason}`);
+  }
+  const forcedPacing = !pacing.allowed && opts.force;
+
+  let commentUrl: string;
+  try {
+    commentUrl = await client.postIssueComment(snapshot.owner, snapshot.repo, snapshot.number, commentBody);
+  } catch (err) {
+    const outcome = outcomeForError(err);
+    appendLedgerEntry(
+      {
+        kind: "claim",
+        targetUrl,
+        outcome,
+        note: (err instanceof Error ? err.message : String(err)).slice(0, 140),
+      },
+      ledgerPath
+    );
+    throw err;
+  }
+  appendLedgerEntry(
+    {
+      kind: "claim",
+      targetUrl,
+      outcome: "confirmed",
+      note: forcedPacing ? `${commentUrl} (pacing override: --force)` : commentUrl,
+    },
+    ledgerPath
+  );
   return { verdict: result, commentBody, commentUrl, executed: true, viewer };
 }
 
@@ -809,6 +897,8 @@ export interface PrOptions {
   branch: string;
   title?: string;
   yes: boolean;
+  /** Override the posting-ledger path (tests use a scratch file). */
+  ledgerPath?: string;
 }
 
 export interface PrResult {
@@ -911,12 +1001,37 @@ export async function openPr(
     };
   }
   requireWriteToken();
-  const prUrl = await client.createPullRequest(owner, repo, {
-    title,
-    body,
-    head,
-    base: defaultBranch,
-  });
+  // v0.9.2: PR openings are posts too — ledger the outcome so pacing
+  // visibility covers the full posting footprint.
+  let prUrl: string;
+  try {
+    prUrl = await client.createPullRequest(owner, repo, {
+      title,
+      body,
+      head,
+      base: defaultBranch,
+    });
+    appendLedgerEntry(
+      {
+        kind: "pr",
+        targetUrl: prUrl,
+        outcome: "confirmed",
+        note: `branch ${opts.branch} on ${owner}/${repo}`,
+      },
+      opts.ledgerPath ?? defaultLedgerPath()
+    );
+  } catch (err) {
+    appendLedgerEntry(
+      {
+        kind: "pr",
+        targetUrl: `https://github.com/${owner}/${repo} (branch ${opts.branch})`,
+        outcome: outcomeForError(err),
+        note: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+      },
+      opts.ledgerPath ?? defaultLedgerPath()
+    );
+    throw err;
+  }
   return {
     verdict: result,
     branch: opts.branch,

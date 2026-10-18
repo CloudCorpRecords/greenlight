@@ -89,10 +89,11 @@ export const COMMANDS: CommandHelp[] = [
   {
     name: "claim",
     usage: "greenlight claim <issue-url> [--yes] [--force] [--plan text] [--eta-days N] [--json] | claim --register <issue-url> [--eta-days N] [--as login] | claim --import --ledger-user <login> | claim --import --urls <issue-url,...>",
-    description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN). Posted claims join the my-claims registry automatically; --import backfills it from the public Claim Ledger or a URL list.",
+    description: "Draft the claim comment the repo's gates want. Dry run unless --yes (needs GITHUB_TOKEN). Posted claims join the my-claims registry automatically; --import backfills it from the public Claim Ledger or a URL list. Claim posts are paced (min interval + daily cap, ledgered at ~/.greenlight/posting-ledger.json; GREENLIGHT_CLAIM_MIN_INTERVAL_S / GREENLIGHT_CLAIM_DAILY_CAP); greenlight status shows the pacing posture.",
     flags: [
       "--yes (actually post the comment)",
-      "--force (post even on a bad verdict)",
+      "--force (post even on a bad verdict or pacing refusal; the override is ledgered)",
+      "--min-interval <s> (override the minimum seconds between claim posts; default from GREENLIGHT_CLAIM_MIN_INTERVAL_S, 90)",
       "--plan <text> (record a plan: line in the protocol claim)",
       "--eta-days <N> (record an eta-days: line in the protocol claim)",
       "--register (record a claim posted by other means, without touching the API)",
@@ -189,7 +190,7 @@ export const COMMANDS: CommandHelp[] = [
   {
     name: "babysit",
     usage: "greenlight babysit [--prs url1,url2] [--mine --repos o/r,...] [--claims-only] [--concurrency N] [--json] [--fail-on-action]",
-    description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet). Also watches your my-claims registry (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost).",
+    description: "Watch your open PRs: one prioritized action list (needs you now, waiting on them, quiet). Also watches your my-claims registry (linked, linked-dead, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost).",
     flags: [
       "--prs <url,...> (watch these PR URLs)",
       "--mine --repos <o/r,...> (discover your open PRs across repos)",

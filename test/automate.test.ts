@@ -20,6 +20,7 @@ import {
 } from "../src/automate.js";
 import { parseGates } from "../src/gates.js";
 import type { IssueSnapshot, LinkedPR } from "../src/types.js";
+import type { PostingLedgerEntry } from "../src/posting-ledger.js";
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 
@@ -281,8 +282,9 @@ describe("claimIssue", () => {
 
   it("executes with yes=true (needs a token)", async () => {
     process.env.GITHUB_TOKEN = "fake-test-token";
+    const ledgerPath = join(mkdtempSync(join(tmpdir(), "gl-claim-")), "posting-ledger.json");
     try {
-      const plan = await claimIssue(client, makeSnapshot(), { yes: true, force: false });
+      const plan = await claimIssue(client, makeSnapshot(), { yes: true, force: false, ledgerPath });
       assert.equal(plan.executed, true);
       assert.equal(plan.commentUrl, client.commentUrl);
       assert.deepEqual(client.writes, ["postIssueComment"]);
@@ -642,5 +644,87 @@ describe("gatherRepoConventions", () => {
     assert.ok(doc.includes("AGENTS.md"));
     assert.ok(doc.includes("pnpm verify"));
     assert.ok(doc.includes(".changes"));
+  });
+});
+
+describe("claimIssue pacing (v0.9.2)", () => {
+  let client: FakeClient;
+  let ledgerPath: string;
+  const withToken = async (fn: () => Promise<void>) => {
+    process.env.GITHUB_TOKEN = "tok";
+    try {
+      await fn();
+    } finally {
+      delete process.env.GITHUB_TOKEN;
+    }
+  };
+  beforeEach(() => {
+    client = new FakeClient();
+    ledgerPath = join(mkdtempSync(join(tmpdir(), "gl-pacing-")), "posting-ledger.json");
+  });
+
+  it("ledgers a confirmed post and enforces cadence on the next attempt", async () => {
+    await withToken(async () => {
+      await claimIssue(client, makeSnapshot(), { yes: true, force: false, ledgerPath });
+      const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+      assert.equal(ledger.entries.length, 1);
+      assert.equal(ledger.entries[0].outcome, "confirmed");
+      assert.equal(ledger.entries[0].kind, "claim");
+      // 90s cadence: the immediate second post refuses.
+      await assert.rejects(
+        claimIssue(client, makeSnapshot(), { yes: true, force: false, ledgerPath }),
+        (err: unknown) => err instanceof AutomationRefusal && /pacing/.test(err.message)
+      );
+      assert.equal(client.writes.length, 1, "refused post never reached the client");
+    });
+  });
+
+  it("--force overrides pacing and the override is ledgered", async () => {
+    await withToken(async () => {
+      await claimIssue(client, makeSnapshot(), { yes: true, force: false, ledgerPath });
+      await claimIssue(client, makeSnapshot(), { yes: true, force: true, ledgerPath });
+      const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+      assert.equal(ledger.entries.length, 2);
+      assert.ok(ledger.entries[1].note?.includes("pacing override"), ledger.entries[1].note);
+      assert.equal(client.writes.length, 2);
+    });
+  });
+
+  it("ledgers a blocked failure with the blocked outcome", async () => {
+    await withToken(async () => {
+      client.postIssueComment = async () => {
+        throw new Error('GitHub blocked this write (403 anti-spam): {"message":"Blocked"}');
+      };
+      await assert.rejects(
+        claimIssue(client, makeSnapshot(), { yes: true, force: false, ledgerPath, minIntervalS: 0 })
+      );
+      const ledger = JSON.parse(readFileSync(ledgerPath, "utf8"));
+      assert.equal(ledger.entries.length, 1);
+      assert.equal(ledger.entries[0].outcome, "blocked");
+    });
+  });
+
+  it("refuses to repost when reconciliation finds the earlier post landed", async () => {
+    await withToken(async () => {
+      const unconfirmed: PostingLedgerEntry = {
+        ts: new Date().toISOString(),
+        kind: "claim",
+        targetUrl: "https://github.com/shadcn-labs/pdfcn/issues/65",
+        outcome: "unconfirmed",
+      };
+      const { appendLedgerEntry } = await import("../src/posting-ledger.js");
+      appendLedgerEntry(unconfirmed, ledgerPath);
+      await assert.rejects(
+        claimIssue(client, makeSnapshot(), {
+          yes: true,
+          force: false,
+          ledgerPath,
+          minIntervalS: 0,
+          confirmPost: async () => true, // the re-read found the claim comment
+        }),
+        (err: unknown) => err instanceof AutomationRefusal && /Not reposting/.test(err.message)
+      );
+      assert.equal(client.writes.length, 0);
+    });
   });
 });
