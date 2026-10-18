@@ -2,7 +2,7 @@
 
 Greenlight checks a GitHub issue before you spend hours on it, and tells you in plain words whether your pull request is likely to land.
 
-**New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data. The companion [Agent Policy Index](https://cloudcorprecords.github.io/greenlight/policy.html) maps how 45 of them treat AI agent contributors: who bans agents outright, who requires disclosure, and which gates (assignment, vouch, CLA, DCO) you will hit, with evidence from real submissions in October 2026.
+**New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data.
 
 ## Watch it work
 
@@ -138,8 +138,23 @@ npx @reneturcios/greenlight review https://github.com/n8n-io/n8n/pull/41235
 # Campaign scout: rank repo targets, dedupe against the campaign file, append as SCOUTED
 npx @reneturcios/greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write
 
-# Babysit your registered claims: linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost
+# Babysit your registered claims: linked, linked-dead, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost
 npx @reneturcios/greenlight babysit --claims-only
+# A claim whose linked PR closed unmerged reads linked-dead, with a release
+# prompt: the issue is free, but the stale marker needs an explicit release.
+
+# Pacing: claim posts never trip GitHub's anti-spam flag
+# Every post attempt is ledgered at ~/.greenlight/posting-ledger.json
+# (timestamp, kind, target, outcome). Claim posts enforce a minimum
+# interval (default 90s, jittered; GREENLIGHT_CLAIM_MIN_INTERVAL_S, or
+# --min-interval) and a daily soft cap (default 25 per rolling day;
+# GREENLIGHT_CLAIM_DAILY_CAP, 0 disables). A post that fails with a block
+# or an uncertain network error is marked UNCONFIRMED; the tool re-reads
+# the target against the API before ever posting to it again, so a
+# "failed" post that actually landed is marked confirmed and never
+# reposted. --force overrides any pacing refusal, and the override is
+# ledgered. greenlight status shows your pacing posture.
+npx @reneturcios/greenlight status https://github.com/owner/repo/issues/123
 
 # [likely-real] interpolation drops `__proto__` (packages/bruno-cli/src/runner/interpolate-vars.js:42)
 #   why: anchor matches: the comment's quoted token Object.assign({}, params) is present in the anchored hunk

@@ -1,6 +1,18 @@
 # Changelog
 
 
+## 0.9.2 (2026-10-17)
+
+The pacing patch: the campaign's claim-posting pace tripped GitHub's account-level anti-spam flag (403 "Blocked" on comment creation), freezing all posting for hours. The tool now paces itself, and the linked-dead claim state exists.
+
+- **Claim pacing.** Every post attempt is ledgered at `~/.greenlight/posting-ledger.json` (timestamp, kind, target, outcome). Claim posts enforce a minimum interval (default 90s, jittered; `GREENLIGHT_CLAIM_MIN_INTERVAL_S`, `--min-interval` to override per run) and a daily soft cap (default 25 per rolling day; `GREENLIGHT_CLAIM_DAILY_CAP`, `0` disables). When a post is too soon or the cap is hit, the command refuses with the earliest allowed time; `--force` overrides and the override is ledgered. A post that fails with a 403/blocked or an uncertain network error is marked UNCONFIRMED; before any later post to the same target, the tool re-reads the target against the API and reconciles (a "failed" post that actually landed is marked confirmed and never reposted; one verified absent is superseded). `greenlight status` gains a pacing section: posts today, cap, next allowed time, unconfirmed count.
+- **Linked-dead claims.** A protocol claim that is LINKED but whose linked PR closed unmerged now derives as LINKED-DEAD in the CLI (check, status, babysit claims), with a plain-language reason and a release prompt. The issue reads free (verdict GO); the stale marker still needs an explicit release. The hosted API's own derivation is out of scope; the engine itself keeps the claim "linked" so the lease never quietly resumes.
+- **AI claim-layer transparency.** `check` and `scan` (human and `--json`) now state whether the AI claim layer ran: `ai claim layer: on (model)` or `off (reason: no key, non-eligible verdict, strong claim already found, round did not complete)`. This is the direct fix for the 2026-10-17 field misses, where a dead layer hid behind patterns-only output. The pattern layer also learned the four missed phrasings: bare "Working on this." (soft), "I've packaged a ... fix" / "I also prepared and tested a fix" (strong), contracted "I'd like to work on this" (strong), and a maintainer's "It's yours @user" (strong, an assignment).
+- **Request timeouts.** The GitHub fetch layer has a per-request timeout (default 30s, `GREENLIGHT_REQUEST_TIMEOUT_S`): slow or dropped connections fail fast into babysit's transient bucket instead of hanging. Byte-identical when requests complete normally. A 403 whose body says "Blocked" now throws a dedicated `WriteBlockedError` instead of masquerading as a rate limit.
+- **CI summary wording.** When every failing check is an external blocker (zero pre-existing, zero code failures), the verdict is `NO CODE FAILURES` and the line reads `Verdict: NO CODE FAILURES (all blockers external)` instead of the misleading "ALL PRE-EXISTING" (the bruno#9561 shape).
+
+Babysit version marker is 0.9.2 (new linked-dead claims bucket).
+
 ## 0.9.1 (2026-10-17)
 
 The trust patch: a day of dogfooding at portfolio scale (43 open PRs) surfaced five fidelity problems, all fixed here.
