@@ -208,6 +208,24 @@ export const COMMANDS: CommandHelp[] = [
     ],
   },
   {
+    name: "autopilot",
+    usage: "greenlight autopilot [--author <login>] [--prs url1,url2] [--max-prs N] [--apply] [--max-fixes N] [--json]",
+    description: "PR feedback that fixes itself: collects reviews, comments, and check results per open PR, verifies bot findings against the code at head, triages CI (introduced vs pre-existing), and fixes the mechanical items. Report-only by default; --apply pushes DCO fixes, mechanical merges, and formatting-only changes to your fork branches. Never posts comments; replies are drafted and queued.",
+    flags: [
+      "--author <login> (default GREENLIGHT_GITHUB_USER or CloudCorpRecords)",
+      "--prs <url,...> (run on these PR URLs instead of discovering)",
+      "--max-prs <N> (cap discovered PRs; default 50)",
+      "--apply (perform fixes; default is report-only)",
+      "--max-fixes <N> (cap fixes per run; default 5)",
+      "--state <path> (watermark file; default ~/.greenlight/autopilot.json)",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight autopilot --author CloudCorpRecords",
+      "greenlight autopilot --prs https://github.com/o/r/pull/1 --apply",
+    ],
+  },
+  {
     name: "sync",
     usage: "greenlight sync [--author <login>] [--tracker <csv|json>] [--stale-days N] [--write] [--json]",
     description: "Reconcile local tracking with the API census: PRs the registry does not know (another agent opened them), state mismatches vs API truth, and stale claims with no PR. Reads only; --write upserts the registry's known-PRs section.",

@@ -82,16 +82,17 @@ async function listTools(): Promise<{ proc: ChildProcess; tools: RpcResult["tool
   }
 }
 
-describe("mcp tools (v0.10.0)", () => {
-  it("lists 19 tools including sync_campaign and campaign_portfolio", async () => {
+describe("mcp tools (v0.11.0)", () => {
+  it("lists 20 tools including autopilot_report", async () => {
     const { proc, tools } = await listTools();
     try {
       const names = tools.map((t) => t.name);
-      assert.equal(names.length, 19, `expected 19 tools, got ${names.length}: ${names.join(",")}`);
+      assert.equal(names.length, 20, `expected 20 tools, got ${names.length}: ${names.join(",")}`);
       assert.ok(names.includes("scout_campaign"), "scout_campaign listed");
       assert.ok(names.includes("my_claims"), "my_claims listed");
       assert.ok(names.includes("sync_campaign"), "sync_campaign listed");
       assert.ok(names.includes("campaign_portfolio"), "campaign_portfolio listed");
+      assert.ok(names.includes("autopilot_report"), "autopilot_report listed");
     } finally {
       proc.kill();
     }

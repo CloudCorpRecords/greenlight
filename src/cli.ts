@@ -14,6 +14,7 @@
  *   greenlight verify-comment <issue-url> [--json] [--from-file notes.md]
  *   greenlight verify [--base <ref>] [--cmd "<test command>"] [--parser node:test|pytest] [--allow-dirty] [--json]
  *   greenlight babysit [--prs urls] [--mine --repos o/r] [--account] [--claims-only] [--json]
+ *   greenlight autopilot [--author login] [--prs urls] [--max-prs N] [--apply] [--max-fixes N] [--json]
  *   greenlight sync [--author login] [--tracker csv|json] [--stale-days N] [--write] [--json]
  *   greenlight portfolio [--author login] [--json]
  *   greenlight init [--agent <tool>...] [--dry-run] [--force]
@@ -76,6 +77,7 @@ import {
 } from "./verify-comment.js";
 import { verifyRepo } from "./verify.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
+import { runAutopilot, defaultAutopilotStatePath } from "./autopilot.js";
 import { runSync, formatSyncHuman, syncJson } from "./sync.js";
 import { runPortfolio, formatPortfolioHuman, portfolioJson } from "./portfolio.js";
 import { runShipcheck, formatShipcheckHuman } from "./shipcheck.js";
@@ -735,6 +737,46 @@ async function cmdBabysit(args: string[]): Promise<void> {
 }
 
 /**
+ * `greenlight autopilot`: PR feedback that fixes itself. Report-only by
+ * default; --apply performs mechanical fixes (DCO surgery, mechanical
+ * merges, formatting) with a cap. Never posts comments: replies are
+ * drafted and queued behind the account's comment block.
+ */
+async function cmdAutopilot(args: string[]): Promise<void> {
+  const prsRaw = flagValue(args, "--prs");
+  const author = flagValue(args, "--author");
+  const maxPrsRaw = flagValue(args, "--max-prs");
+  const maxFixesRaw = flagValue(args, "--max-fixes");
+  const statePath = flagValue(args, "--state") ?? defaultAutopilotStatePath();
+  const prs = prsRaw ? prsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : [];
+  let maxPrs: number | undefined;
+  let maxFixes: number | undefined;
+  if (maxPrsRaw !== undefined) {
+    maxPrs = Number(maxPrsRaw);
+    if (!Number.isFinite(maxPrs) || maxPrs < 1) {
+      console.error("Error: --max-prs must be a positive number.");
+      process.exitCode = 1;
+      return;
+    }
+  }
+  if (maxFixesRaw !== undefined) {
+    maxFixes = Number(maxFixesRaw);
+    if (!Number.isFinite(maxFixes) || maxFixes < 0) {
+      console.error("Error: --max-fixes must be a non-negative number.");
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const apply = args.includes("--apply");
+  const run = await runAutopilot({ author, prs, maxPrs, apply, maxFixes, statePath });
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(run.json, null, 2));
+  } else {
+    console.log(run.markdown);
+  }
+}
+
+/**
  * Multi-agent sync (v0.10.0): reconcile the local claims registry with
  * the authoritative API census. Reads only; --write updates the
  * registry's known-PRs section, never GitHub.
@@ -1194,6 +1236,7 @@ async function main(): Promise<void> {
     if (command === "verify-comment" && target) return await cmdVerifyComment(target, args);
     if (command === "verify") return await cmdVerify(args);
     if (command === "babysit") return await cmdBabysit(args);
+    if (command === "autopilot") return await cmdAutopilot(args);
     if (command === "scout") return await cmdScout(args);
     if (command === "sync") return await cmdSync(args);
     if (command === "portfolio") return await cmdPortfolio(args);

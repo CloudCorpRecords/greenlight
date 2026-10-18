@@ -28,6 +28,7 @@ import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
 import { scoutCampaign, SCOUT_DEFAULT_BUDGET } from "./scout.js";
 import { runSync, syncJson } from "./sync.js";
 import { runPortfolio, portfolioJson } from "./portfolio.js";
+import { runAutopilot } from "./autopilot.js";
 import { defaultRegistryPath } from "./claims-registry.js";
 import { buildEvidencePack } from "./evidence.js";
 import { digestRepo } from "./digest.js";
@@ -47,7 +48,7 @@ const GREENLIGHT_VERSION: string = (() => {
   }
 })();
 
-const server = new McpServer({ name: "greenlight", version: "0.10.1" });
+const server = new McpServer({ name: "greenlight", version: GREENLIGHT_VERSION });
 
 const text = (obj: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(obj, null, 2) }],
@@ -488,6 +489,27 @@ server.tool(
         staleDays: stale_days ?? 7,
       });
       return text(portfolioJson(p));
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "autopilot_report",
+  "Autopilot in report mode: collects reviews, comments, and check results across your open PRs, verifies bot findings against the code at head, triages CI (introduced vs pre-existing), and returns per-PR items, fix plans, and queued reply drafts. Reads only; never applies fixes or posts comments.",
+  {
+    author: z.string().optional().describe("GitHub login; default GREENLIGHT_GITHUB_USER or CloudCorpRecords"),
+    max_prs: z.number().default(50).describe("Cap discovered PRs"),
+  },
+  async ({ author, max_prs }) => {
+    try {
+      const run = await runAutopilot({
+        author: author ?? defaultAccountAuthor(),
+        maxPrs: max_prs ?? 50,
+        apply: false,
+      });
+      return text(run.json);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

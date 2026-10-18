@@ -87,4 +87,18 @@ describe("version footers track package.json", () => {
     assert.ok(footer.includes(`v${PKG_VERSION}`), `expected v${PKG_VERSION}, got: ${footer}`);
     assert.ok(footer.includes("12 calls used of 300"), "budget figures still render");
   });
+
+  it("autopilot footer carries the package version", async () => {
+    const { runAutopilot } = await import("../src/autopilot.js");
+    const dir = mkdtempSync(join(tmpdir(), "gl-version-"));
+    const run = await runAutopilot({
+      statePath: join(dir, "autopilot.json"),
+      repliesPath: join(dir, "replies.json"),
+      capabilitiesPath: join(dir, "caps.json"),
+      deps: { discoverPrs: async () => [] },
+    });
+    const footer = run.markdown.split("\n").find((l) => l.includes("Greenlight autopilot"));
+    assert.ok(footer, "autopilot footer present");
+    assert.ok(footer.includes(`v${PKG_VERSION}`), `expected v${PKG_VERSION}, got: ${footer}`);
+  });
 });
