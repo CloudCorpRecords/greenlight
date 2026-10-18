@@ -1,0 +1,635 @@
+{
+  "meta": {
+    "name": "Agent Policy Index",
+    "publisher": "Greenlight",
+    "publisher_url": "https://github.com/CloudCorpRecords/greenlight",
+    "updated": "2026-10-17",
+    "repos": 45,
+    "method": "Every entry comes from a real contribution campaign run in October 2026: issues claimed, PRs opened, bots and policies met face to face, plus Greenlight friction measurements. Policy classes marked 'detected' were found by automated scans; classes marked 'verified' were confirmed by a policy file read or by direct campaign contact.",
+    "license": "CC-BY-4.0"
+  },
+  "classes": [
+    {
+      "id": "agents-banned",
+      "label": "Agent contributions banned",
+      "meaning": "The repo's agent policy forbids autonomous agent contributions and AI-drafted PR text. Do not submit there with an agent."
+    },
+    {
+      "id": "agents-disclosure",
+      "label": "AI disclosure required",
+      "meaning": "Agents may contribute, but the repo requires AI involvement to be disclosed in titles, bodies, and release notes."
+    },
+    {
+      "id": "assignment-gated",
+      "label": "Assignment required",
+      "meaning": "You must be assigned the issue by a maintainer before work counts. Unassigned PRs may be auto-closed."
+    },
+    {
+      "id": "claim-first",
+      "label": "Claim first",
+      "meaning": "Comment on the issue to claim it before you start. Silent starts lose races."
+    },
+    {
+      "id": "triage-hold",
+      "label": "Triage hold",
+      "meaning": "Issues in triage are not ready to build on. Wait until the triage labels clear."
+    },
+    {
+      "id": "paused",
+      "label": "Outside PRs paused",
+      "meaning": "The repo has structurally paused or auto-closes external pull requests. Do not target it."
+    },
+    {
+      "id": "maintainer-only",
+      "label": "Maintainer-only PRs",
+      "meaning": "External PRs are not accepted. The contribution is a detailed, verified issue comment."
+    },
+    {
+      "id": "collaborators-only",
+      "label": "Collaborators-only PRs",
+      "meaning": "Only collaborators can open PRs. Outside fork-based PRs are rejected or never land."
+    },
+    {
+      "id": "vouch-gated",
+      "label": "Vouch required",
+      "meaning": "A maintainer must vouch for you (or you must join a contributor list) before your PR survives."
+    },
+    {
+      "id": "cla-required",
+      "label": "CLA required",
+      "meaning": "A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos."
+    },
+    {
+      "id": "dco-required",
+      "label": "DCO sign-off required",
+      "meaning": "Every commit needs a Signed-off-by trailer. Unsigned commits fail the gate."
+    },
+    {
+      "id": "discussion-first",
+      "label": "Discussion first",
+      "meaning": "Open an issue or discussion and get agreement before you build, especially for new features."
+    },
+    {
+      "id": "bot-gated-intake",
+      "label": "Bot-gated intake",
+      "meaning": "A bot triages incoming work with labels like needs-product-decision. Claims are fine; PRs wait for a human signal."
+    },
+    {
+      "id": "open",
+      "label": "Open to agent-assisted PRs",
+      "meaning": "No structural gate found against agent-assisted contributions. Standard contribution rules still apply."
+    }
+  ],
+  "entries": [
+    {
+      "repo": "nuxt/nuxt",
+      "url": "https://github.com/nuxt/nuxt",
+      "policy_classes": [
+        "agents-banned",
+        "triage-hold"
+      ],
+      "headline": "Autonomous agents may not contribute, and AI may not draft PR text.",
+      "what_to_do": "Read their AGENTS.md on main before anything. If you are a human who understands the fix, you may open the PR yourself with a disclosure; an agent must not post the PR, its text, or any comment.",
+      "evidence": "AGENTS.md verified on main (2026-10-17): contributions may only be submitted by a human who understands them; agents may not draft or post PR titles, descriptions, issues, or comments. Our agent-posted protocol claim comment on issue #36626 was deleted the same day once the policy was found; the one-line fix was built and pushed to a fork and is awaiting a manual open by the contributor.",
+      "our_record": "Fix built and pushed to a fork branch; PR not opened by us per the ban",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "astral-sh/uv",
+      "url": "https://github.com/astral-sh/uv",
+      "policy_classes": [
+        "agents-banned"
+      ],
+      "headline": "Autonomous agent contributions are not allowed, and AI-generated maintainer comments may be hidden.",
+      "what_to_do": "You may use AI as a coding tool, but a human must own the work, write the comments in their own words, and disclose any AI context in quote blocks. Do not submit anything an agent produced on its own.",
+      "evidence": "astral-sh/.github/AI_POLICY.md (read 2026-10-17): AI should not be used to generate comments when communicating with maintainers; we do not allow autonomous agents to be used for contributing; pull requests believed autonomous will be closed. Never targeted by the campaign; added as an exclusion after the policy read.",
+      "our_record": "Never targeted: agent ban found before any claim",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "activepieces/activepieces",
+      "url": "https://github.com/activepieces/activepieces",
+      "policy_classes": [
+        "paused"
+      ],
+      "headline": "Unsolicited outside PRs are paused and a workflow closes them within about a minute.",
+      "what_to_do": "Do not claim, build, or open. The policy names AI-generated PR volume as the cause.",
+      "evidence": "CONTRIBUTING.md states pull requests from outside the core team are paused; the 'Close external PRs' workflow auto-closed both of our PRs (#16580, #16581) despite clean claims and passing builds. Friction Index detection quotes the pause language. Learned the campaign's standing vetting rule: read CONTRIBUTING and the workflow list before claiming.",
+      "our_record": "2 PRs closed unmerged (#16580, #16581)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "gradio-app/gradio",
+      "url": "https://github.com/gradio-app/gradio",
+      "policy_classes": [
+        "paused"
+      ],
+      "headline": "External PRs are paused, explicitly citing AI coding agent PR volume.",
+      "what_to_do": "Do not target. Same structural class as activepieces; the pause is the gate, not any single issue.",
+      "evidence": "CONTRIBUTING states pull requests from outside the maintainer team are paused. Found by scout B on 2026-10-17 before any claim was posted; never targeted.",
+      "our_record": "Never targeted: pause found before any claim",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "modelcontextprotocol/inspector",
+      "url": "https://github.com/modelcontextprotocol/inspector",
+      "policy_classes": [
+        "maintainer-only"
+      ],
+      "headline": "Issues are welcome; pull requests are not accepted from outside.",
+      "what_to_do": "Do not open a PR. The contribution is a detailed issue comment: reproduction, root cause, and a fix sketch.",
+      "evidence": "Repo policy: 'We accept issues, not pull requests. Design and implementation are done by the maintainers.' We posted a verified comment (repro plus fix sketch) on issue #2723 on 2026-10-15; no reply yet. Friction Index detection quotes the policy language.",
+      "our_record": "1 verified issue comment (#2723)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "modelcontextprotocol/servers",
+      "url": "https://github.com/modelcontextprotocol/servers",
+      "policy_classes": [
+        "maintainer-only"
+      ],
+      "headline": "Issues are welcome; pull requests are not accepted from outside.",
+      "what_to_do": "Same class as inspector: contribute via detailed issue comments. The policy even asks for the prompt behind a local fix.",
+      "evidence": "Repo policy mirrors inspector ('We accept issues, not pull requests'). We posted a verified comment on issue #5153 on 2026-10-15; no reply yet. Friction Index detection quotes the policy language.",
+      "our_record": "1 verified issue comment (#5153)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "dubinc/dub",
+      "url": "https://github.com/dubinc/dub",
+      "policy_classes": [
+        "collaborators-only"
+      ],
+      "headline": "PR creation rejects non-collaborators; outside fork-based PRs effectively do not exist.",
+      "what_to_do": "Do not claim or build. Two of our claims (#4576, #4707) are dead ends here; PR creation 404s for outsiders.",
+      "evidence": "Scale-wave discovery (2026-10-17): PR creation 404s for non-collaborators and zero fork-based PRs appeared in the last 100 closed PRs. Note: the repo-intel row previously recorded 'maintainers merge externals'; the newer, stronger evidence is that outsiders cannot open PRs at all. Claims #4576 and #4707 were posted before this was found and are queued for release.",
+      "our_record": "2 claims posted (#4576, #4707); both dead on the gate",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "mem0ai/mem0",
+      "url": "https://github.com/mem0ai/mem0",
+      "policy_classes": [
+        "vouch-gated",
+        "cla-required",
+        "discussion-first"
+      ],
+      "headline": "You must be on the .github/VOUCHED.td contributor list, and an accepted-label is required before your PR.",
+      "what_to_do": "Skip unless a maintainer vouches for you. Not on the vouch list means no PR, structurally. Note: our repo-intel row recorded no CLA, but the policy docs describe a CLA signing step, so verify the exact signing path at PR time.",
+      "evidence": "Policy docs: unvouched authors get a comment that nothing is built from outside; docs also describe a CLA signature step and an open-an-issue-first rule (Friction Index detection quotes all three). Never targeted after the gate was found.",
+      "our_record": "0 (passed: vouch gate)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "triggerdotdev/trigger.dev",
+      "url": "https://github.com/triggerdotdev/trigger.dev",
+      "policy_classes": [
+        "vouch-gated"
+      ],
+      "headline": "A maintainer vouch is required before your first PR; unvouched PRs are auto-closed.",
+      "what_to_do": "Do not open a PR. The vouch is requested via a dedicated discussion/issue flow (discussion #5010).",
+      "evidence": "Scale-wave discovery (2026-10-17): vouch-check-pr.yml auto-closes PRs from authors without a maintainer vouch; discussion #5010 documents the vouch request path. Friction Index detection (hand-verified 2026-10-13) records the same gate. Never targeted after the gate was found.",
+      "our_record": "0 (ineligible until vouched)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "PrefectHQ/fastmcp",
+      "url": "https://github.com/PrefectHQ/fastmcp",
+      "policy_classes": [
+        "assignment-gated"
+      ],
+      "headline": "You must be assigned the issue before your work counts; the issue-link check fails until then.",
+      "what_to_do": "Comment to request assignment and wait. Do not apply labels manually, and follow the strict PR body format (prose plus a code example).",
+      "evidence": "Our PR #5757 (2026-10-15) sat waiting on assignment; it is now maintainer-approved and awaiting merge. The repo's check-issue-link bot enforces the link.",
+      "our_record": "1 PR open (#5757, maintainer-approved)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "modelcontextprotocol/python-sdk",
+      "url": "https://github.com/modelcontextprotocol/python-sdk",
+      "policy_classes": [
+        "assignment-gated"
+      ],
+      "headline": "PRs not linked to a maintainer-assigned issue are closed automatically.",
+      "what_to_do": "Do not post a PR unless a maintainer assigned the linked issue to you. 'Do not have an agent post them' is the practical rule.",
+      "evidence": "Scale-wave discovery (2026-10-17): PRs not linked to maintainer-assigned issues are auto-closed. Friction Index detection (hand-verified 2026-10-13) records the assignment culture across the MCP SDKs. Ineligible until assigned.",
+      "our_record": "0 (ineligible until assigned)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "OphirPay/OphirPay",
+      "url": "https://github.com/OphirPay/OphirPay",
+      "policy_classes": [
+        "assignment-gated"
+      ],
+      "headline": "You comment to claim and wait for a maintainer to assign you; the claim alone is not enough.",
+      "what_to_do": "Comment and wait; do not build until the assignment lands. Note the payout amounts in its Stellar Wave bounty program are undocumented (terms page 404).",
+      "evidence": "Repo uses an orderly claim queue (three claimants on day one, no assignments yet on 2026-10-15). Our assignment request on #1361 is still pending. Conventional Commits required; npm run ci must be green.",
+      "our_record": "Assignment requested on #1361, still pending",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "shadcn-labs/pdfcn",
+      "url": "https://github.com/shadcn-labs/pdfcn",
+      "policy_classes": [
+        "claim-first",
+        "dco-required"
+      ],
+      "headline": "Comment to claim before you start, and sign every commit with DCO.",
+      "what_to_do": "Claim in the same pass you spot the issue; races here are fast. Every commit needs the Signed-off-by trailer.",
+      "evidence": "Repo policy: 'Do not claim an issue silently. Comment before starting work, and check the thread first' plus the DCO requirement (Friction Index detection quotes both). Claims land within hours in this repo.",
+      "our_record": "6 PRs open; human reviews pending",
+      "verified_on": "2026-10-13"
+    },
+    {
+      "repo": "reticlehq/reticle",
+      "url": "https://github.com/reticlehq/reticle",
+      "policy_classes": [
+        "claim-first",
+        "dco-required"
+      ],
+      "headline": "Claim first, sign every commit, and ship one .changes file per PR.",
+      "what_to_do": "Read AGENTS.md before building; pnpm verify is the real gate. Never edit CHANGELOG yourself; red-test-first proof belongs in the PR.",
+      "evidence": "House rules live in AGENTS.md; CI flakes on the Windows install gate are not your bug. Our PR #1726 merged 85 minutes after opening on 2026-10-17 (maintainer divshekhar engages on PR questions).",
+      "our_record": "6 PRs opened, 1 merged (#1726)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "batrapulkit/squidbrake",
+      "url": "https://github.com/batrapulkit/squidbrake",
+      "policy_classes": [
+        "claim-first",
+        "open"
+      ],
+      "headline": "The maintainer asks you to comment to claim before starting; otherwise the repo is open.",
+      "what_to_do": "Claim first, then build. Small maintainer repos merge fast, so keep the PR tight.",
+      "evidence": "Hand-verified 2026-10-14: maintainer asks contributors to comment to claim before starting (Friction Index detection records it). Our PR #91 merged.",
+      "our_record": "1 PR merged (#91)",
+      "verified_on": "2026-10-13"
+    },
+    {
+      "repo": "actualbudget/actual",
+      "url": "https://github.com/actualbudget/actual",
+      "policy_classes": [
+        "agents-disclosure",
+        "open"
+      ],
+      "headline": "Agents are welcome, with full AI disclosure: [AI] prefixes, disclosure in the PR body, and a plain-language release note.",
+      "what_to_do": "Prefix agent PR titles and commits with [AI], disclose AI use in the PR description, and add a release note file under upcoming-release-notes/ written for non-technical humans (enforced in review). Expect 2 approving reviews.",
+      "evidence": "AGENTS.md policy read 2026-10-17: open to anyone, no CLA, no assignment gate; disclosure and release-note rules were enforced on our PR #9240 in review. Friction: 57 percent outside merge share, 1.5 day median. Two of our PRs were closed unmerged on 2026-10-17 (#9240 by matt-fidd after full review rounds, #9250 silently by a maintainer).",
+      "our_record": "2 PRs opened (#9240, #9250), both closed unmerged",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "mastra-ai/mastra",
+      "url": "https://github.com/mastra-ai/mastra",
+      "policy_classes": [
+        "triage-hold"
+      ],
+      "headline": "The open pool is feature requests stuck in status: needs triage. Do not build until triage clears.",
+      "what_to_do": "Watch, do not build. Re-scan in a week; triage-held issues are the class Greenlight's triage-hold gate was built for.",
+      "evidence": "Scouted 2026-10-15: open pool was feature requests marked needs-triage with no good-first-issues; skipped this round. Merges outsiders normally once issues clear.",
+      "our_record": "0 (skipped: triage pool)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "n8n-io/n8n",
+      "url": "https://github.com/n8n-io/n8n",
+      "policy_classes": [
+        "cla-required"
+      ],
+      "headline": "A real CLA signature is required, through n8n's own CLA bot, and a comment signature alone does not satisfy it.",
+      "what_to_do": "Sign at the bot's link (cla-bot-prod.users.n8n.cloud via GitHub OAuth), then post /cla-check on the PR. Also: every issue is mirrored to Linear, so check duplicates before building.",
+      "evidence": "Our PR #41235 went through the custom CLA path (cla-signed label, 2026-10-16); comment-only signatures fail here. n8n-assistant bot and cubic-dev-ai review actively.",
+      "our_record": "1 PR open (#41235, CLA signed)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "marimo-team/marimo",
+      "url": "https://github.com/marimo-team/marimo",
+      "policy_classes": [
+        "cla-required"
+      ],
+      "headline": "Marimo's own CLA must be signed at PR time; PRs fail until you sign.",
+      "what_to_do": "Sign at marimo.io/cla when you open. For substantial UI changes, get maintainer approval before building (approval-gated by policy).",
+      "evidence": "Policy: all new PRs fail until the CLA is signed by leaving a comment. Our draft PR #11270 and closed-unmerged #11271 (maintainer closed the underlying issue) are in flight; an approval ask on #11244 is pending.",
+      "our_record": "1 draft PR (#11270), 1 closed unmerged (#11271), approval ask pending",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "langfuse/langfuse",
+      "url": "https://github.com/langfuse/langfuse",
+      "policy_classes": [
+        "cla-required"
+      ],
+      "headline": "CLA agreement via cla-assistant is required before merge.",
+      "what_to_do": "Sign through cla-assistant when the bot asks. Note that soft claims age out here, so an old claim with no PR may be re-claimable (carefully).",
+      "evidence": "cla-assistant.io/langfuse/langfuse is the signing path (Friction Index detection quotes it). Our backup target #18053 had a soft claim from 2026-09-30 with no PR by 2026-10-15.",
+      "our_record": "0 (backup target identified)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "openclaw/openclaw",
+      "url": "https://github.com/openclaw/openclaw",
+      "policy_classes": [
+        "bot-gated-intake"
+      ],
+      "headline": "ClawSweeper labels incoming work: no-new-fix-pr, needs-maintainer-review, needs-product-decision.",
+      "what_to_do": "Claiming is fine, but build locally and park the PR until a maintainer gives scope confirmation.",
+      "evidence": "Claim posted 2026-10-14 with no maintainer reply since; the build sits verified on a fork (1 commit) behind a no-new-fix-pr style gate. Claim-and-wait is the pattern here.",
+      "our_record": "Build parked on fork; PR opens on maintainer signal",
+      "verified_on": "2026-10-14"
+    },
+    {
+      "repo": "firecrawl/firecrawl",
+      "url": "https://github.com/firecrawl/firecrawl",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "Reproduce first, then build. Review is fast and high quality.",
+      "what_to_do": "Check for competing PRs before you start; first claim wins socially here. Vercel deploy authorization on previews is maintainer-side, not your failure.",
+      "evidence": "cubic-dev-ai reviewed within hours on our PRs (2026-10-14). Two of our PRs are open (#5141 cubic-approved, #5164).",
+      "our_record": "2 PRs open (#5141, #5164)",
+      "verified_on": "2026-10-14"
+    },
+    {
+      "repo": "payloadcms/payload",
+      "url": "https://github.com/payloadcms/payload",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; the trap is needs-repro issues that do not reproduce on current source.",
+      "what_to_do": "Reproduce on the current release before building. Issue #18708 existed only in the published 3.90.2 tarball, not in source or 3.91.0, so no honest fix was possible there.",
+      "evidence": "Two of our PRs are open on main (#18820, #18821), both survived CodeRabbit rounds. One claim was withdrawn honestly after the needs-repro check failed.",
+      "our_record": "2 PRs open (#18820, #18821)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "usebruno/bruno",
+      "url": "https://github.com/usebruno/bruno",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; the race trap is maintainer-assigned issues with open PRs you cannot see from list views.",
+      "what_to_do": "Read the issue's comments before claiming. Inherited collection params and runner merge behavior are known-hard areas that pay off.",
+      "evidence": "Our candidate #9511 turned out maintainer-assigned with an open PR (2026-10-15). Three of our PRs are open (#9556, #9561, #9562), all surviving CodeRabbit review rounds.",
+      "our_record": "3 PRs open (#9556, #9561, #9562)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "convex/convex-js",
+      "url": "https://github.com/convex/convex-js",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; issues are precise and file-named. Note the repo was renamed from get-convex/convex-js.",
+      "what_to_do": "Claim and build. Hiring signal: Convex is hiring in SF on strong revenue growth, so the repo rewards fast, clean PRs.",
+      "evidence": "Three of our PRs are open (#203, #204, #205), including two from the 2026-10-17 wave. GitHub search still 422s on the old get-convex owner; REST redirects.",
+      "our_record": "3 PRs open (#203, #204, #205)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "vitejs/vite",
+      "url": "https://github.com/vitejs/vite",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "Title lint is the only automation: PR titles must be conventional commits. Otherwise open, but races are same-day.",
+      "what_to_do": "Move fast and claim in the same pass you spot the issue. Soft claims can sit invisible for days (we missed #23757), so timeline cross-references are mandatory.",
+      "evidence": "Our PR #23808 is open (one-line EISDIR fix, red-test-first). Friction: 47 percent outside merge share, 1.7 day median. Same-day races are the norm.",
+      "our_record": "1 PR open (#23808)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "sveltejs/kit",
+      "url": "https://github.com/sveltejs/kit",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "Open, but the org triage bot races you: it opens draft fix PRs on fresh issues.",
+      "what_to_do": "Claim the moment an issue passes vetting. Include a changeset; the changeset bot confirms it.",
+      "evidence": "Our PR #17489 is open (one-line trailing-slash fix plus changeset). The svelte-triage-bot opened a draft fix PR on neighboring issue #17466 while we worked. Friction: 83 percent outside merge share.",
+      "our_record": "1 PR open (#17489)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "mealie-recipes/mealie",
+      "url": "https://github.com/mealie-recipes/mealie",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; long-lived feature requests are a claim graveyard of serial claims that never land.",
+      "what_to_do": "Pick tightly-scoped bugs over feature requests. Action-required workflow conclusions mean 'waiting on maintainer approval', not a failure.",
+      "evidence": "Our PR #8757 is open (ingredient duplication fix, head verified); #8753 was closed unmerged silently by the repo owner on 2026-10-17. Friction: 83 percent outside merge share, 6.6 day median.",
+      "our_record": "1 PR open (#8757), 1 closed unmerged (#8753)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "ghostfolio/ghostfolio",
+      "url": "https://github.com/ghostfolio/ghostfolio",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; assignment asks can sit unanswered for over a year, so just build.",
+      "what_to_do": "Do not wait for assignment; open the PR. The weak-pr-mention flag earned its keep here (an issue that mentions a fix without making one).",
+      "evidence": "Two of our PRs are open (#8218, #8219) from the 2026-10-17 wave. Friction: 7 percent outside merge share, 0.5 day median.",
+      "our_record": "2 PRs open (#8218, #8219)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "contextforge-org/contextforge-web-ui",
+      "url": "https://github.com/contextforge-org/contextforge-web-ui",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; merges outside work readily and steadily.",
+      "what_to_do": "A reliable steady-progress lane: keep PRs small and conventional.",
+      "evidence": "Three of our PRs merged (#180, #181, #191) starting 2026-10-08.",
+      "our_record": "3 PRs merged (#180, #181, #191)",
+      "verified_on": "2026-10-08"
+    },
+    {
+      "repo": "inngest/inngest-js",
+      "url": "https://github.com/inngest/inngest-js",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates observed; early days for us here.",
+      "what_to_do": "Claim and build; no replies yet, so set expectations on review speed accordingly.",
+      "evidence": "Two of our PRs are open (#1797, #1798) with checks green; no reviews yet as of 2026-10-15.",
+      "our_record": "2 PRs open (#1797, #1798)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "umami-software/umami",
+      "url": "https://github.com/umami-software/umami",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates observed; early days for us here.",
+      "what_to_do": "Claim and build; checks are green on our PR, reviews pending.",
+      "evidence": "Our PR #4631 is open and green with no reviews yet as of 2026-10-15.",
+      "our_record": "1 PR open (#4631)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "nocodb/nocodb",
+      "url": "https://github.com/nocodb/nocodb",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates observed; early days for us here.",
+      "what_to_do": "Claim and build; no checks had run yet on our PR as of 2026-10-15.",
+      "evidence": "Our PR #14839 is open; no checks had run yet when last checked.",
+      "our_record": "1 PR open (#14839)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "git-pkgs/forge",
+      "url": "https://github.com/git-pkgs/forge",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No gates at all: no CONTRIBUTING, no AGENTS.md, no CLA, no auto-close automation.",
+      "what_to_do": "A clean, open lane. Claim and build with normal good practice.",
+      "evidence": "Wave discovery (2026-10-17): no policy files or automation found. Our PR #172 is open; no reply yet.",
+      "our_record": "1 PR open (#172)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "formbricks/formbricks",
+      "url": "https://github.com/formbricks/formbricks",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates, but same-day races are the norm.",
+      "what_to_do": "Claim in the same pass you spot the issue. List views lie about comments; read the thread.",
+      "evidence": "Issue #9611 was claimed 2026-10-14 by another contributor hours before our vetting pass (2026-10-15); we passed. Friction: 37 percent outside merge share.",
+      "our_record": "0 (raced: claimed same-day by another contributor)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "posthog/posthog",
+      "url": "https://github.com/posthog/posthog",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates, but the company's own bot claims hot issues within hours.",
+      "what_to_do": "Scout the fallback pool, not the hot issues. A claim from the company bot is a social claim that wins.",
+      "evidence": "Observed 2026-10-15: posthog[bot] opens its own PRs on hot issues within hours of filing. Skipped this round.",
+      "our_record": "0 (skipped: company bot races)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "modelcontextprotocol/typescript-sdk",
+      "url": "https://github.com/modelcontextprotocol/typescript-sdk",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No assignment gate in practice: small, well-scoped PRs get reviewed fast.",
+      "what_to_do": "Open the PR; disclosure-only AI rules apply (deno-class). Note: an earlier friction measurement recorded an assignment culture, but our PR #3044 (2026-10-17) moved without one; treat the earlier reading as superseded.",
+      "evidence": "Our PR #3044 (v1.x requestId-0 backport) is open; the repo's own note is 'no assignment gate, small PRs get reviewed fast'. Friction Index detection still quotes older 'discuss before you code' language for new features, so open a discussion first for significant changes.",
+      "our_record": "1 PR open (#3044)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "denoland/deno",
+      "url": "https://github.com/denoland/deno",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "Disclosure-only AI rule; otherwise open with serious review standards.",
+      "what_to_do": "Disclose AI assistance; expect real technical review. Benchmark claims against real behavior (we diffed deepEqual against real Node).",
+      "evidence": "Our PR #37038 (node:assert deepEqual symmetry, 13 of 14 vs real Node with the divergence documented) is open. Repo expects agent contributors to disclose.",
+      "our_record": "1 PR open (#37038)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "e2b-dev/E2B",
+      "url": "https://github.com/e2b-dev/e2b",
+      "policy_classes": [
+        "discussion-first",
+        "open"
+      ],
+      "headline": "A PR-speed repo: contributors open fix PRs without claiming, and maintainers engage same-day.",
+      "what_to_do": "Do not rely on comment checks. Walk the issue timeline for cross-referenced PRs before calling anything unclaimed.",
+      "evidence": "Two claims posted 2026-10-15; the race on #1988 taught the mandatory timeline cross-reference check (the 'race' PR had closed unmerged 17 hours before the scout). Friction Index detection quotes the discuss-first guidance from CONTRIBUTING.",
+      "our_record": "2 claims posted",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "ComposioHQ/composio",
+      "url": "https://github.com/ComposioHQ/composio",
+      "policy_classes": [
+        "discussion-first",
+        "open"
+      ],
+      "headline": "High issue velocity; open an issue and get maintainer agreement before building new providers.",
+      "what_to_do": "Check assignees first: some issues are pre-assigned to staff. Some repos in this ecosystem are closed backends, so verify the fix lives in the repo before building.",
+      "evidence": "Two claims posted 2026-10-15; races in the high-velocity pool were observed on the 2026-10-17 wave. Friction Index detection quotes the maintainer-agreement guidance.",
+      "our_record": "2 claims posted",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "resend/resend-node",
+      "url": "https://github.com/resend/resend-node",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates; merges outsiders the same day.",
+      "what_to_do": "Claim within hours of filing. Fresh issues are the whole game here.",
+      "evidence": "Observed 2026-10-15: 5 merges in one day, 2 verified external. Issue #1147 was claimed same-day by another contributor; we are watching.",
+      "our_record": "0 (watching: same-day claims)",
+      "verified_on": "2026-10-15"
+    },
+    {
+      "repo": "crewAIInc/crewAI",
+      "url": "https://github.com/crewAIInc/crewAI",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "PRs must link an issue (ftc-require-issue workflow); buildable issues move in cohorts.",
+      "what_to_do": "Link the issue in the PR body. Claims here arrive in waves (a Stanford collaboration cohort claimed everything buildable on 2026-10-12), so revisit when fresh issues land.",
+      "evidence": "Skipped 2026-10-15: every buildable good-first-issue was claimed in a cohort. Our claim on #8246 was withdrawn with cause (the request was the author pitching their own commercial product).",
+      "our_record": "0 (claim withdrawn with cause: #8246)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "supabase/supabase",
+      "url": "https://github.com/supabase/supabase",
+      "policy_classes": [
+        "discussion-first",
+        "open"
+      ],
+      "headline": "New features need a discussion first; bugs are a different lane.",
+      "what_to_do": "Open a discussion for features; for bugs, claim and build. Races were observed on three scouted issues on the 2026-10-17 wave.",
+      "evidence": "Friction Index detection quotes the discussion-first rule for new features. We scouted #51629, #51656, and #51545 on 2026-10-17 and found all raced; no claim was posted. Friction: 82 percent outside merge share.",
+      "our_record": "0 (scouted: all three issues raced)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "tscircuit/tscircuit",
+      "url": "https://github.com/tscircuit/tscircuit",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No claim requirement, no CLA, friendly. Umbrella issues span multiple repos.",
+      "what_to_do": "Check which repo owns the fix before claiming. Changing shipped output semantics needs maintainer sign-off first.",
+      "evidence": "Two of our PRs are open (#310 circuit-to-canvas, #858 circuit-to-svg); the Gerber-anchor fix is held for maintainer sign-off. Snapshot-heavy repos make pushes big, use the web upload path.",
+      "our_record": "2 PRs open (#310, #858)",
+      "verified_on": "2026-10-17"
+    },
+    {
+      "repo": "ollama/ollama",
+      "url": "https://github.com/ollama/ollama",
+      "policy_classes": [
+        "open"
+      ],
+      "headline": "No formal gates, but same-day soft claims are the main hazard.",
+      "what_to_do": "Comment-level claims ('Working on this') land within hours and are easy to miss; the claim layer has to run on the standard path. Model and hardware issues dominate the tracker, and many are not sandbox-buildable.",
+      "evidence": "Issue #19078 was raced by a same-day 'Working on this' comment the pattern layer missed (2026-10-17); #19040 was unbuildable here. Friction: 54 percent outside merge share, 0.8 day median.",
+      "our_record": "0 (raced: same-day soft claim on #19078)",
+      "verified_on": "2026-10-17"
+    }
+  ]
+}

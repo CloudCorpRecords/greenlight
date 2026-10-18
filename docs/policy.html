@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Agent Policy Index</title>
+<style>
+:root{--green:#16a34a;--ink:#1a1a1a;--muted:#6b7280;--line:#e5e7eb;--bg:#fafafa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+.wrap{max-width:1100px;margin:0 auto;padding:32px 20px 64px}
+header{margin-bottom:8px}
+h1{font-size:2rem;letter-spacing:-0.02em}
+.tag{color:var(--muted);font-size:1.05rem;margin-top:6px;max-width:680px}
+.badge{display:inline-block;background:var(--green);color:#fff;font-size:.75rem;font-weight:700;border-radius:999px;padding:2px 10px;margin-top:10px}
+.controls{display:flex;gap:12px;align-items:center;margin:28px 0 12px;flex-wrap:wrap}
+#search{flex:1;min-width:200px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;font-size:1rem;background:#fff}
+.count{color:var(--muted);font-size:.9rem}
+.chips-row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+.fchip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 12px;font-size:.8rem;cursor:pointer;color:var(--ink)}
+.fchip.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.pill{display:inline-block;font-size:.75rem;font-weight:700;border-radius:999px;padding:2px 10px;white-space:nowrap;margin:1px 3px 1px 0}
+.p-agents-banned{background:#fee2e2;color:#991b1b}
+.p-paused{background:#fee2e2;color:#991b1b}
+.p-collaborators-only{background:#fee2e2;color:#991b1b}
+.p-maintainer-only{background:#fef9c3;color:#854d0e}
+.p-vouch-gated{background:#fef9c3;color:#854d0e}
+.p-assignment-gated{background:#fef9c3;color:#854d0e}
+.p-triage-hold{background:#fef9c3;color:#854d0e}
+.p-claim-first{background:#dcfce7;color:#166534}
+.p-agents-disclosure{background:#dcfce7;color:#166534}
+.p-cla-required{background:#e0e7ff;color:#3730a3}
+.p-dco-required{background:#e0e7ff;color:#3730a3}
+.p-discussion-first{background:#e0e7ff;color:#3730a3}
+.p-bot-gated-intake{background:#f3f4f6;color:#374151}
+.p-open{background:#dcfce7;color:#166534}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.repo a{font-weight:700;color:var(--ink);text-decoration:none;font-size:1.05rem}
+.repo a:hover{color:var(--green);text-decoration:underline}
+.when{font-size:.75rem;color:var(--muted);white-space:nowrap}
+.chips{margin:8px 0}
+.headline{font-weight:600;margin-bottom:6px}
+.do{font-size:.9rem;color:#374151;margin-bottom:6px}
+details{margin-top:8px;font-size:.85rem;color:#4b5563}
+details summary{cursor:pointer;color:var(--green);font-weight:600}
+.rec{margin-top:6px}
+.verdict{margin-top:10px;font-size:.82rem;color:var(--muted);font-style:italic}
+.legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:12px}
+.legend-item{font-size:.85rem;color:#374151}
+section{margin-top:40px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:24px}
+section h2{font-size:1.15rem;margin-bottom:10px}
+section p{color:#374151;margin-bottom:10px;font-size:.95rem}
+section p:last-child{margin-bottom:0}
+code{background:#f3f4f6;padding:2px 6px;border-radius:6px;font-size:.85em}
+.cta{text-align:center;margin-top:48px;background:#1a1a1a;color:#fff;border-radius:16px;padding:40px 24px}
+.cta h2{color:#fff}
+.cta p{color:#d1d5db}
+.cta .cmd{display:inline-block;background:#000;color:#4ade80;border:1px solid #333;padding:12px 20px;border-radius:10px;margin:18px 0;font-family:ui-monospace,monospace;font-size:.95rem}
+.cta a{color:#4ade80}
+footer{margin-top:28px;text-align:center;color:var(--muted);font-size:.85rem}
+footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>The Agent Policy Index</h1>
+<p class="tag">How do open-source projects treat AI agent contributors? Every entry below comes from real submissions made in October 2026: issues claimed, pull requests opened, bots and policies met face to face. This is the map we wish had existed before we started.</p>
+<span class="badge">45 repos indexed</span>
+</header>
+<section>
+<h2>How to read the classes</h2>
+<div class="legend">
+<div class="legend-item"><span class="pill p-agents-banned">Agent contributions banned</span><span>The repo&#x27;s agent policy forbids autonomous agent contributions and AI-drafted PR text. Do not submit there with an agent.</span></div>
+<div class="legend-item"><span class="pill p-agents-disclosure">AI disclosure required</span><span>Agents may contribute, but the repo requires AI involvement to be disclosed in titles, bodies, and release notes.</span></div>
+<div class="legend-item"><span class="pill p-assignment-gated">Assignment required</span><span>You must be assigned the issue by a maintainer before work counts. Unassigned PRs may be auto-closed.</span></div>
+<div class="legend-item"><span class="pill p-claim-first">Claim first</span><span>Comment on the issue to claim it before you start. Silent starts lose races.</span></div>
+<div class="legend-item"><span class="pill p-triage-hold">Triage hold</span><span>Issues in triage are not ready to build on. Wait until the triage labels clear.</span></div>
+<div class="legend-item"><span class="pill p-paused">Outside PRs paused</span><span>The repo has structurally paused or auto-closes external pull requests. Do not target it.</span></div>
+<div class="legend-item"><span class="pill p-maintainer-only">Maintainer-only PRs</span><span>External PRs are not accepted. The contribution is a detailed, verified issue comment.</span></div>
+<div class="legend-item"><span class="pill p-collaborators-only">Collaborators-only PRs</span><span>Only collaborators can open PRs. Outside fork-based PRs are rejected or never land.</span></div>
+<div class="legend-item"><span class="pill p-vouch-gated">Vouch required</span><span>A maintainer must vouch for you (or you must join a contributor list) before your PR survives.</span></div>
+<div class="legend-item"><span class="pill p-cla-required">CLA required</span><span>A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos.</span></div>
+<div class="legend-item"><span class="pill p-dco-required">DCO sign-off required</span><span>Every commit needs a Signed-off-by trailer. Unsigned commits fail the gate.</span></div>
+<div class="legend-item"><span class="pill p-discussion-first">Discussion first</span><span>Open an issue or discussion and get agreement before you build, especially for new features.</span></div>
+<div class="legend-item"><span class="pill p-bot-gated-intake">Bot-gated intake</span><span>A bot triages incoming work with labels like needs-product-decision. Claims are fine; PRs wait for a human signal.</span></div>
+<div class="legend-item"><span class="pill p-open">Open to agent-assisted PRs</span><span>No structural gate found against agent-assisted contributions. Standard contribution rules still apply.</span></div>
+</div>
+<p style="margin-top:12px">A repo can carry several classes. <b>Evidence</b> under each card tells you exactly what proves the class: the policy file, the workflow, or what happened to our PR. When a class is our inference rather than a documented rule, the evidence says so.</p>
+</section>
+<div class="controls">
+<input id="search" type="search" placeholder="Filter by repo name or keyword..." aria-label="Filter repos">
+<span class="count" id="count"></span>
+</div>
+<div class="chips-row" id="chiprow">
+<button class="fchip active" data-c="">All</button>
+<button class="fchip" data-c="agents-banned" title="The repo&#x27;s agent policy forbids autonomous agent contributions and AI-drafted PR text. Do not submit there with an agent.">Agent contributions banned</button>
+<button class="fchip" data-c="agents-disclosure" title="Agents may contribute, but the repo requires AI involvement to be disclosed in titles, bodies, and release notes.">AI disclosure required</button>
+<button class="fchip" data-c="assignment-gated" title="You must be assigned the issue by a maintainer before work counts. Unassigned PRs may be auto-closed.">Assignment required</button>
+<button class="fchip" data-c="claim-first" title="Comment on the issue to claim it before you start. Silent starts lose races.">Claim first</button>
+<button class="fchip" data-c="triage-hold" title="Issues in triage are not ready to build on. Wait until the triage labels clear.">Triage hold</button>
+<button class="fchip" data-c="paused" title="The repo has structurally paused or auto-closes external pull requests. Do not target it.">Outside PRs paused</button>
+<button class="fchip" data-c="maintainer-only" title="External PRs are not accepted. The contribution is a detailed, verified issue comment.">Maintainer-only PRs</button>
+<button class="fchip" data-c="collaborators-only" title="Only collaborators can open PRs. Outside fork-based PRs are rejected or never land.">Collaborators-only PRs</button>
+<button class="fchip" data-c="vouch-gated" title="A maintainer must vouch for you (or you must join a contributor list) before your PR survives.">Vouch required</button>
+<button class="fchip" data-c="cla-required" title="A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos.">CLA required</button>
+<button class="fchip" data-c="dco-required" title="Every commit needs a Signed-off-by trailer. Unsigned commits fail the gate.">DCO sign-off required</button>
+<button class="fchip" data-c="discussion-first" title="Open an issue or discussion and get agreement before you build, especially for new features.">Discussion first</button>
+<button class="fchip" data-c="bot-gated-intake" title="A bot triages incoming work with labels like needs-product-decision. Claims are fine; PRs wait for a human signal.">Bot-gated intake</button>
+<button class="fchip" data-c="open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</button>
+</div>
+<div class="grid" id="grid">
+
+<article class="card" data-repo="nuxt/nuxt" data-classes="agents-banned triage-hold">
+  <div class="card-head"><div class="repo"><a href="https://github.com/nuxt/nuxt">nuxt/nuxt</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-agents-banned" title="The repo&#x27;s agent policy forbids autonomous agent contributions and AI-drafted PR text. Do not submit there with an agent.">Agent contributions banned</span><span class="pill p-triage-hold" title="Issues in triage are not ready to build on. Wait until the triage labels clear.">Triage hold</span></div>
+  <p class="headline">Autonomous agents may not contribute, and AI may not draft PR text.</p>
+  <p class="do"><b>What to do:</b> Read their AGENTS.md on main before anything. If you are a human who understands the fix, you may open the PR yourself with a disclosure; an agent must not post the PR, its text, or any comment.</p>
+  <details><summary>Evidence</summary><p>AGENTS.md verified on main (2026-10-17): contributions may only be submitted by a human who understands them; agents may not draft or post PR titles, descriptions, issues, or comments. Our agent-posted protocol claim comment on issue #36626 was deleted the same day once the policy was found; the one-line fix was built and pushed to a fork and is awaiting a manual open by the contributor.</p><p class="rec">Our record: Fix built and pushed to a fork branch; PR not opened by us per the ban</p></details>
+  <p class="verdict">Agents are not welcome here.</p>
+</article>
+
+<article class="card" data-repo="astral-sh/uv" data-classes="agents-banned">
+  <div class="card-head"><div class="repo"><a href="https://github.com/astral-sh/uv">astral-sh/uv</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-agents-banned" title="The repo&#x27;s agent policy forbids autonomous agent contributions and AI-drafted PR text. Do not submit there with an agent.">Agent contributions banned</span></div>
+  <p class="headline">Autonomous agent contributions are not allowed, and AI-generated maintainer comments may be hidden.</p>
+  <p class="do"><b>What to do:</b> You may use AI as a coding tool, but a human must own the work, write the comments in their own words, and disclose any AI context in quote blocks. Do not submit anything an agent produced on its own.</p>
+  <details><summary>Evidence</summary><p>astral-sh/.github/AI_POLICY.md (read 2026-10-17): AI should not be used to generate comments when communicating with maintainers; we do not allow autonomous agents to be used for contributing; pull requests believed autonomous will be closed. Never targeted by the campaign; added as an exclusion after the policy read.</p><p class="rec">Our record: Never targeted: agent ban found before any claim</p></details>
+  <p class="verdict">Agents are not welcome here.</p>
+</article>
+
+<article class="card" data-repo="activepieces/activepieces" data-classes="paused">
+  <div class="card-head"><div class="repo"><a href="https://github.com/activepieces/activepieces">activepieces/activepieces</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-paused" title="The repo has structurally paused or auto-closes external pull requests. Do not target it.">Outside PRs paused</span></div>
+  <p class="headline">Unsolicited outside PRs are paused and a workflow closes them within about a minute.</p>
+  <p class="do"><b>What to do:</b> Do not claim, build, or open. The policy names AI-generated PR volume as the cause.</p>
+  <details><summary>Evidence</summary><p>CONTRIBUTING.md states pull requests from outside the core team are paused; the &#x27;Close external PRs&#x27; workflow auto-closed both of our PRs (#16580, #16581) despite clean claims and passing builds. Friction Index detection quotes the pause language. Learned the campaign&#x27;s standing vetting rule: read CONTRIBUTING and the workflow list before claiming.</p><p class="rec">Our record: 2 PRs closed unmerged (#16580, #16581)</p></details>
+  <p class="verdict">Agents are not welcome here.</p>
+</article>
+
+<article class="card" data-repo="gradio-app/gradio" data-classes="paused">
+  <div class="card-head"><div class="repo"><a href="https://github.com/gradio-app/gradio">gradio-app/gradio</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-paused" title="The repo has structurally paused or auto-closes external pull requests. Do not target it.">Outside PRs paused</span></div>
+  <p class="headline">External PRs are paused, explicitly citing AI coding agent PR volume.</p>
+  <p class="do"><b>What to do:</b> Do not target. Same structural class as activepieces; the pause is the gate, not any single issue.</p>
+  <details><summary>Evidence</summary><p>CONTRIBUTING states pull requests from outside the maintainer team are paused. Found by scout B on 2026-10-17 before any claim was posted; never targeted.</p><p class="rec">Our record: Never targeted: pause found before any claim</p></details>
+  <p class="verdict">Agents are not welcome here.</p>
+</article>
+
+<article class="card" data-repo="modelcontextprotocol/inspector" data-classes="maintainer-only">
+  <div class="card-head"><div class="repo"><a href="https://github.com/modelcontextprotocol/inspector">modelcontextprotocol/inspector</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-maintainer-only" title="External PRs are not accepted. The contribution is a detailed, verified issue comment.">Maintainer-only PRs</span></div>
+  <p class="headline">Issues are welcome; pull requests are not accepted from outside.</p>
+  <p class="do"><b>What to do:</b> Do not open a PR. The contribution is a detailed issue comment: reproduction, root cause, and a fix sketch.</p>
+  <details><summary>Evidence</summary><p>Repo policy: &#x27;We accept issues, not pull requests. Design and implementation are done by the maintainers.&#x27; We posted a verified comment (repro plus fix sketch) on issue #2723 on 2026-10-15; no reply yet. Friction Index detection quotes the policy language.</p><p class="rec">Our record: 1 verified issue comment (#2723)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="modelcontextprotocol/servers" data-classes="maintainer-only">
+  <div class="card-head"><div class="repo"><a href="https://github.com/modelcontextprotocol/servers">modelcontextprotocol/servers</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-maintainer-only" title="External PRs are not accepted. The contribution is a detailed, verified issue comment.">Maintainer-only PRs</span></div>
+  <p class="headline">Issues are welcome; pull requests are not accepted from outside.</p>
+  <p class="do"><b>What to do:</b> Same class as inspector: contribute via detailed issue comments. The policy even asks for the prompt behind a local fix.</p>
+  <details><summary>Evidence</summary><p>Repo policy mirrors inspector (&#x27;We accept issues, not pull requests&#x27;). We posted a verified comment on issue #5153 on 2026-10-15; no reply yet. Friction Index detection quotes the policy language.</p><p class="rec">Our record: 1 verified issue comment (#5153)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="dubinc/dub" data-classes="collaborators-only">
+  <div class="card-head"><div class="repo"><a href="https://github.com/dubinc/dub">dubinc/dub</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-collaborators-only" title="Only collaborators can open PRs. Outside fork-based PRs are rejected or never land.">Collaborators-only PRs</span></div>
+  <p class="headline">PR creation rejects non-collaborators; outside fork-based PRs effectively do not exist.</p>
+  <p class="do"><b>What to do:</b> Do not claim or build. Two of our claims (#4576, #4707) are dead ends here; PR creation 404s for outsiders.</p>
+  <details><summary>Evidence</summary><p>Scale-wave discovery (2026-10-17): PR creation 404s for non-collaborators and zero fork-based PRs appeared in the last 100 closed PRs. Note: the repo-intel row previously recorded &#x27;maintainers merge externals&#x27;; the newer, stronger evidence is that outsiders cannot open PRs at all. Claims #4576 and #4707 were posted before this was found and are queued for release.</p><p class="rec">Our record: 2 claims posted (#4576, #4707); both dead on the gate</p></details>
+  <p class="verdict">Agents are not welcome here.</p>
+</article>
+
+<article class="card" data-repo="mem0ai/mem0" data-classes="vouch-gated cla-required discussion-first">
+  <div class="card-head"><div class="repo"><a href="https://github.com/mem0ai/mem0">mem0ai/mem0</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-vouch-gated" title="A maintainer must vouch for you (or you must join a contributor list) before your PR survives.">Vouch required</span><span class="pill p-cla-required" title="A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos.">CLA required</span><span class="pill p-discussion-first" title="Open an issue or discussion and get agreement before you build, especially for new features.">Discussion first</span></div>
+  <p class="headline">You must be on the .github/VOUCHED.td contributor list, and an accepted-label is required before your PR.</p>
+  <p class="do"><b>What to do:</b> Skip unless a maintainer vouches for you. Not on the vouch list means no PR, structurally. Note: our repo-intel row recorded no CLA, but the policy docs describe a CLA signing step, so verify the exact signing path at PR time.</p>
+  <details><summary>Evidence</summary><p>Policy docs: unvouched authors get a comment that nothing is built from outside; docs also describe a CLA signature step and an open-an-issue-first rule (Friction Index detection quotes all three). Never targeted after the gate was found.</p><p class="rec">Our record: 0 (passed: vouch gate)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="triggerdotdev/trigger.dev" data-classes="vouch-gated">
+  <div class="card-head"><div class="repo"><a href="https://github.com/triggerdotdev/trigger.dev">triggerdotdev/trigger.dev</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-vouch-gated" title="A maintainer must vouch for you (or you must join a contributor list) before your PR survives.">Vouch required</span></div>
+  <p class="headline">A maintainer vouch is required before your first PR; unvouched PRs are auto-closed.</p>
+  <p class="do"><b>What to do:</b> Do not open a PR. The vouch is requested via a dedicated discussion/issue flow (discussion #5010).</p>
+  <details><summary>Evidence</summary><p>Scale-wave discovery (2026-10-17): vouch-check-pr.yml auto-closes PRs from authors without a maintainer vouch; discussion #5010 documents the vouch request path. Friction Index detection (hand-verified 2026-10-13) records the same gate. Never targeted after the gate was found.</p><p class="rec">Our record: 0 (ineligible until vouched)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="PrefectHQ/fastmcp" data-classes="assignment-gated">
+  <div class="card-head"><div class="repo"><a href="https://github.com/PrefectHQ/fastmcp">PrefectHQ/fastmcp</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-assignment-gated" title="You must be assigned the issue by a maintainer before work counts. Unassigned PRs may be auto-closed.">Assignment required</span></div>
+  <p class="headline">You must be assigned the issue before your work counts; the issue-link check fails until then.</p>
+  <p class="do"><b>What to do:</b> Comment to request assignment and wait. Do not apply labels manually, and follow the strict PR body format (prose plus a code example).</p>
+  <details><summary>Evidence</summary><p>Our PR #5757 (2026-10-15) sat waiting on assignment; it is now maintainer-approved and awaiting merge. The repo&#x27;s check-issue-link bot enforces the link.</p><p class="rec">Our record: 1 PR open (#5757, maintainer-approved)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="modelcontextprotocol/python-sdk" data-classes="assignment-gated">
+  <div class="card-head"><div class="repo"><a href="https://github.com/modelcontextprotocol/python-sdk">modelcontextprotocol/python-sdk</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-assignment-gated" title="You must be assigned the issue by a maintainer before work counts. Unassigned PRs may be auto-closed.">Assignment required</span></div>
+  <p class="headline">PRs not linked to a maintainer-assigned issue are closed automatically.</p>
+  <p class="do"><b>What to do:</b> Do not post a PR unless a maintainer assigned the linked issue to you. &#x27;Do not have an agent post them&#x27; is the practical rule.</p>
+  <details><summary>Evidence</summary><p>Scale-wave discovery (2026-10-17): PRs not linked to maintainer-assigned issues are auto-closed. Friction Index detection (hand-verified 2026-10-13) records the assignment culture across the MCP SDKs. Ineligible until assigned.</p><p class="rec">Our record: 0 (ineligible until assigned)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="OphirPay/OphirPay" data-classes="assignment-gated">
+  <div class="card-head"><div class="repo"><a href="https://github.com/OphirPay/OphirPay">OphirPay/OphirPay</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-assignment-gated" title="You must be assigned the issue by a maintainer before work counts. Unassigned PRs may be auto-closed.">Assignment required</span></div>
+  <p class="headline">You comment to claim and wait for a maintainer to assign you; the claim alone is not enough.</p>
+  <p class="do"><b>What to do:</b> Comment and wait; do not build until the assignment lands. Note the payout amounts in its Stellar Wave bounty program are undocumented (terms page 404).</p>
+  <details><summary>Evidence</summary><p>Repo uses an orderly claim queue (three claimants on day one, no assignments yet on 2026-10-15). Our assignment request on #1361 is still pending. Conventional Commits required; npm run ci must be green.</p><p class="rec">Our record: Assignment requested on #1361, still pending</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="shadcn-labs/pdfcn" data-classes="claim-first dco-required">
+  <div class="card-head"><div class="repo"><a href="https://github.com/shadcn-labs/pdfcn">shadcn-labs/pdfcn</a></div>
+  <div class="when">verified 2026-10-13</div></div>
+  <div class="chips"><span class="pill p-claim-first" title="Comment on the issue to claim it before you start. Silent starts lose races.">Claim first</span><span class="pill p-dco-required" title="Every commit needs a Signed-off-by trailer. Unsigned commits fail the gate.">DCO sign-off required</span></div>
+  <p class="headline">Comment to claim before you start, and sign every commit with DCO.</p>
+  <p class="do"><b>What to do:</b> Claim in the same pass you spot the issue; races here are fast. Every commit needs the Signed-off-by trailer.</p>
+  <details><summary>Evidence</summary><p>Repo policy: &#x27;Do not claim an issue silently. Comment before starting work, and check the thread first&#x27; plus the DCO requirement (Friction Index detection quotes both). Claims land within hours in this repo.</p><p class="rec">Our record: 6 PRs open; human reviews pending</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="reticlehq/reticle" data-classes="claim-first dco-required">
+  <div class="card-head"><div class="repo"><a href="https://github.com/reticlehq/reticle">reticlehq/reticle</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-claim-first" title="Comment on the issue to claim it before you start. Silent starts lose races.">Claim first</span><span class="pill p-dco-required" title="Every commit needs a Signed-off-by trailer. Unsigned commits fail the gate.">DCO sign-off required</span></div>
+  <p class="headline">Claim first, sign every commit, and ship one .changes file per PR.</p>
+  <p class="do"><b>What to do:</b> Read AGENTS.md before building; pnpm verify is the real gate. Never edit CHANGELOG yourself; red-test-first proof belongs in the PR.</p>
+  <details><summary>Evidence</summary><p>House rules live in AGENTS.md; CI flakes on the Windows install gate are not your bug. Our PR #1726 merged 85 minutes after opening on 2026-10-17 (maintainer divshekhar engages on PR questions).</p><p class="rec">Our record: 6 PRs opened, 1 merged (#1726)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="batrapulkit/squidbrake" data-classes="claim-first open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/batrapulkit/squidbrake">batrapulkit/squidbrake</a></div>
+  <div class="when">verified 2026-10-13</div></div>
+  <div class="chips"><span class="pill p-claim-first" title="Comment on the issue to claim it before you start. Silent starts lose races.">Claim first</span><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">The maintainer asks you to comment to claim before starting; otherwise the repo is open.</p>
+  <p class="do"><b>What to do:</b> Claim first, then build. Small maintainer repos merge fast, so keep the PR tight.</p>
+  <details><summary>Evidence</summary><p>Hand-verified 2026-10-14: maintainer asks contributors to comment to claim before starting (Friction Index detection records it). Our PR #91 merged.</p><p class="rec">Our record: 1 PR merged (#91)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="actualbudget/actual" data-classes="agents-disclosure open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/actualbudget/actual">actualbudget/actual</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-agents-disclosure" title="Agents may contribute, but the repo requires AI involvement to be disclosed in titles, bodies, and release notes.">AI disclosure required</span><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">Agents are welcome, with full AI disclosure: [AI] prefixes, disclosure in the PR body, and a plain-language release note.</p>
+  <p class="do"><b>What to do:</b> Prefix agent PR titles and commits with [AI], disclose AI use in the PR description, and add a release note file under upcoming-release-notes/ written for non-technical humans (enforced in review). Expect 2 approving reviews.</p>
+  <details><summary>Evidence</summary><p>AGENTS.md policy read 2026-10-17: open to anyone, no CLA, no assignment gate; disclosure and release-note rules were enforced on our PR #9240 in review. Friction: 57 percent outside merge share, 1.5 day median. Two of our PRs were closed unmerged on 2026-10-17 (#9240 by matt-fidd after full review rounds, #9250 silently by a maintainer).</p><p class="rec">Our record: 2 PRs opened (#9240, #9250), both closed unmerged</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="mastra-ai/mastra" data-classes="triage-hold">
+  <div class="card-head"><div class="repo"><a href="https://github.com/mastra-ai/mastra">mastra-ai/mastra</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-triage-hold" title="Issues in triage are not ready to build on. Wait until the triage labels clear.">Triage hold</span></div>
+  <p class="headline">The open pool is feature requests stuck in status: needs triage. Do not build until triage clears.</p>
+  <p class="do"><b>What to do:</b> Watch, do not build. Re-scan in a week; triage-held issues are the class Greenlight&#x27;s triage-hold gate was built for.</p>
+  <details><summary>Evidence</summary><p>Scouted 2026-10-15: open pool was feature requests marked needs-triage with no good-first-issues; skipped this round. Merges outsiders normally once issues clear.</p><p class="rec">Our record: 0 (skipped: triage pool)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="n8n-io/n8n" data-classes="cla-required">
+  <div class="card-head"><div class="repo"><a href="https://github.com/n8n-io/n8n">n8n-io/n8n</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-cla-required" title="A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos.">CLA required</span></div>
+  <p class="headline">A real CLA signature is required, through n8n&#x27;s own CLA bot, and a comment signature alone does not satisfy it.</p>
+  <p class="do"><b>What to do:</b> Sign at the bot&#x27;s link (cla-bot-prod.users.n8n.cloud via GitHub OAuth), then post /cla-check on the PR. Also: every issue is mirrored to Linear, so check duplicates before building.</p>
+  <details><summary>Evidence</summary><p>Our PR #41235 went through the custom CLA path (cla-signed label, 2026-10-16); comment-only signatures fail here. n8n-assistant bot and cubic-dev-ai review actively.</p><p class="rec">Our record: 1 PR open (#41235, CLA signed)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="marimo-team/marimo" data-classes="cla-required">
+  <div class="card-head"><div class="repo"><a href="https://github.com/marimo-team/marimo">marimo-team/marimo</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-cla-required" title="A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos.">CLA required</span></div>
+  <p class="headline">Marimo&#x27;s own CLA must be signed at PR time; PRs fail until you sign.</p>
+  <p class="do"><b>What to do:</b> Sign at marimo.io/cla when you open. For substantial UI changes, get maintainer approval before building (approval-gated by policy).</p>
+  <details><summary>Evidence</summary><p>Policy: all new PRs fail until the CLA is signed by leaving a comment. Our draft PR #11270 and closed-unmerged #11271 (maintainer closed the underlying issue) are in flight; an approval ask on #11244 is pending.</p><p class="rec">Our record: 1 draft PR (#11270), 1 closed unmerged (#11271), approval ask pending</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="langfuse/langfuse" data-classes="cla-required">
+  <div class="card-head"><div class="repo"><a href="https://github.com/langfuse/langfuse">langfuse/langfuse</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-cla-required" title="A Contributor License Agreement signature is required before merge. Find the exact path, it is fragmented across repos.">CLA required</span></div>
+  <p class="headline">CLA agreement via cla-assistant is required before merge.</p>
+  <p class="do"><b>What to do:</b> Sign through cla-assistant when the bot asks. Note that soft claims age out here, so an old claim with no PR may be re-claimable (carefully).</p>
+  <details><summary>Evidence</summary><p>cla-assistant.io/langfuse/langfuse is the signing path (Friction Index detection quotes it). Our backup target #18053 had a soft claim from 2026-09-30 with no PR by 2026-10-15.</p><p class="rec">Our record: 0 (backup target identified)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="openclaw/openclaw" data-classes="bot-gated-intake">
+  <div class="card-head"><div class="repo"><a href="https://github.com/openclaw/openclaw">openclaw/openclaw</a></div>
+  <div class="when">verified 2026-10-14</div></div>
+  <div class="chips"><span class="pill p-bot-gated-intake" title="A bot triages incoming work with labels like needs-product-decision. Claims are fine; PRs wait for a human signal.">Bot-gated intake</span></div>
+  <p class="headline">ClawSweeper labels incoming work: no-new-fix-pr, needs-maintainer-review, needs-product-decision.</p>
+  <p class="do"><b>What to do:</b> Claiming is fine, but build locally and park the PR until a maintainer gives scope confirmation.</p>
+  <details><summary>Evidence</summary><p>Claim posted 2026-10-14 with no maintainer reply since; the build sits verified on a fork (1 commit) behind a no-new-fix-pr style gate. Claim-and-wait is the pattern here.</p><p class="rec">Our record: Build parked on fork; PR opens on maintainer signal</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="firecrawl/firecrawl" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/firecrawl/firecrawl">firecrawl/firecrawl</a></div>
+  <div class="when">verified 2026-10-14</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">Reproduce first, then build. Review is fast and high quality.</p>
+  <p class="do"><b>What to do:</b> Check for competing PRs before you start; first claim wins socially here. Vercel deploy authorization on previews is maintainer-side, not your failure.</p>
+  <details><summary>Evidence</summary><p>cubic-dev-ai reviewed within hours on our PRs (2026-10-14). Two of our PRs are open (#5141 cubic-approved, #5164).</p><p class="rec">Our record: 2 PRs open (#5141, #5164)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="payloadcms/payload" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/payloadcms/payload">payloadcms/payload</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; the trap is needs-repro issues that do not reproduce on current source.</p>
+  <p class="do"><b>What to do:</b> Reproduce on the current release before building. Issue #18708 existed only in the published 3.90.2 tarball, not in source or 3.91.0, so no honest fix was possible there.</p>
+  <details><summary>Evidence</summary><p>Two of our PRs are open on main (#18820, #18821), both survived CodeRabbit rounds. One claim was withdrawn honestly after the needs-repro check failed.</p><p class="rec">Our record: 2 PRs open (#18820, #18821)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="usebruno/bruno" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/usebruno/bruno">usebruno/bruno</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; the race trap is maintainer-assigned issues with open PRs you cannot see from list views.</p>
+  <p class="do"><b>What to do:</b> Read the issue&#x27;s comments before claiming. Inherited collection params and runner merge behavior are known-hard areas that pay off.</p>
+  <details><summary>Evidence</summary><p>Our candidate #9511 turned out maintainer-assigned with an open PR (2026-10-15). Three of our PRs are open (#9556, #9561, #9562), all surviving CodeRabbit review rounds.</p><p class="rec">Our record: 3 PRs open (#9556, #9561, #9562)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="convex/convex-js" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/convex/convex-js">convex/convex-js</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; issues are precise and file-named. Note the repo was renamed from get-convex/convex-js.</p>
+  <p class="do"><b>What to do:</b> Claim and build. Hiring signal: Convex is hiring in SF on strong revenue growth, so the repo rewards fast, clean PRs.</p>
+  <details><summary>Evidence</summary><p>Three of our PRs are open (#203, #204, #205), including two from the 2026-10-17 wave. GitHub search still 422s on the old get-convex owner; REST redirects.</p><p class="rec">Our record: 3 PRs open (#203, #204, #205)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="vitejs/vite" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/vitejs/vite">vitejs/vite</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">Title lint is the only automation: PR titles must be conventional commits. Otherwise open, but races are same-day.</p>
+  <p class="do"><b>What to do:</b> Move fast and claim in the same pass you spot the issue. Soft claims can sit invisible for days (we missed #23757), so timeline cross-references are mandatory.</p>
+  <details><summary>Evidence</summary><p>Our PR #23808 is open (one-line EISDIR fix, red-test-first). Friction: 47 percent outside merge share, 1.7 day median. Same-day races are the norm.</p><p class="rec">Our record: 1 PR open (#23808)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="sveltejs/kit" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/sveltejs/kit">sveltejs/kit</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">Open, but the org triage bot races you: it opens draft fix PRs on fresh issues.</p>
+  <p class="do"><b>What to do:</b> Claim the moment an issue passes vetting. Include a changeset; the changeset bot confirms it.</p>
+  <details><summary>Evidence</summary><p>Our PR #17489 is open (one-line trailing-slash fix plus changeset). The svelte-triage-bot opened a draft fix PR on neighboring issue #17466 while we worked. Friction: 83 percent outside merge share.</p><p class="rec">Our record: 1 PR open (#17489)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="mealie-recipes/mealie" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/mealie-recipes/mealie">mealie-recipes/mealie</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; long-lived feature requests are a claim graveyard of serial claims that never land.</p>
+  <p class="do"><b>What to do:</b> Pick tightly-scoped bugs over feature requests. Action-required workflow conclusions mean &#x27;waiting on maintainer approval&#x27;, not a failure.</p>
+  <details><summary>Evidence</summary><p>Our PR #8757 is open (ingredient duplication fix, head verified); #8753 was closed unmerged silently by the repo owner on 2026-10-17. Friction: 83 percent outside merge share, 6.6 day median.</p><p class="rec">Our record: 1 PR open (#8757), 1 closed unmerged (#8753)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="ghostfolio/ghostfolio" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/ghostfolio/ghostfolio">ghostfolio/ghostfolio</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; assignment asks can sit unanswered for over a year, so just build.</p>
+  <p class="do"><b>What to do:</b> Do not wait for assignment; open the PR. The weak-pr-mention flag earned its keep here (an issue that mentions a fix without making one).</p>
+  <details><summary>Evidence</summary><p>Two of our PRs are open (#8218, #8219) from the 2026-10-17 wave. Friction: 7 percent outside merge share, 0.5 day median.</p><p class="rec">Our record: 2 PRs open (#8218, #8219)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="contextforge-org/contextforge-web-ui" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/contextforge-org/contextforge-web-ui">contextforge-org/contextforge-web-ui</a></div>
+  <div class="when">verified 2026-10-08</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; merges outside work readily and steadily.</p>
+  <p class="do"><b>What to do:</b> A reliable steady-progress lane: keep PRs small and conventional.</p>
+  <details><summary>Evidence</summary><p>Three of our PRs merged (#180, #181, #191) starting 2026-10-08.</p><p class="rec">Our record: 3 PRs merged (#180, #181, #191)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="inngest/inngest-js" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/inngest/inngest-js">inngest/inngest-js</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates observed; early days for us here.</p>
+  <p class="do"><b>What to do:</b> Claim and build; no replies yet, so set expectations on review speed accordingly.</p>
+  <details><summary>Evidence</summary><p>Two of our PRs are open (#1797, #1798) with checks green; no reviews yet as of 2026-10-15.</p><p class="rec">Our record: 2 PRs open (#1797, #1798)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="umami-software/umami" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/umami-software/umami">umami-software/umami</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates observed; early days for us here.</p>
+  <p class="do"><b>What to do:</b> Claim and build; checks are green on our PR, reviews pending.</p>
+  <details><summary>Evidence</summary><p>Our PR #4631 is open and green with no reviews yet as of 2026-10-15.</p><p class="rec">Our record: 1 PR open (#4631)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="nocodb/nocodb" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/nocodb/nocodb">nocodb/nocodb</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates observed; early days for us here.</p>
+  <p class="do"><b>What to do:</b> Claim and build; no checks had run yet on our PR as of 2026-10-15.</p>
+  <details><summary>Evidence</summary><p>Our PR #14839 is open; no checks had run yet when last checked.</p><p class="rec">Our record: 1 PR open (#14839)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="git-pkgs/forge" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/git-pkgs/forge">git-pkgs/forge</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No gates at all: no CONTRIBUTING, no AGENTS.md, no CLA, no auto-close automation.</p>
+  <p class="do"><b>What to do:</b> A clean, open lane. Claim and build with normal good practice.</p>
+  <details><summary>Evidence</summary><p>Wave discovery (2026-10-17): no policy files or automation found. Our PR #172 is open; no reply yet.</p><p class="rec">Our record: 1 PR open (#172)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="formbricks/formbricks" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/formbricks/formbricks">formbricks/formbricks</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates, but same-day races are the norm.</p>
+  <p class="do"><b>What to do:</b> Claim in the same pass you spot the issue. List views lie about comments; read the thread.</p>
+  <details><summary>Evidence</summary><p>Issue #9611 was claimed 2026-10-14 by another contributor hours before our vetting pass (2026-10-15); we passed. Friction: 37 percent outside merge share.</p><p class="rec">Our record: 0 (raced: claimed same-day by another contributor)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="posthog/posthog" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/posthog/posthog">posthog/posthog</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates, but the company&#x27;s own bot claims hot issues within hours.</p>
+  <p class="do"><b>What to do:</b> Scout the fallback pool, not the hot issues. A claim from the company bot is a social claim that wins.</p>
+  <details><summary>Evidence</summary><p>Observed 2026-10-15: posthog[bot] opens its own PRs on hot issues within hours of filing. Skipped this round.</p><p class="rec">Our record: 0 (skipped: company bot races)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="modelcontextprotocol/typescript-sdk" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/modelcontextprotocol/typescript-sdk">modelcontextprotocol/typescript-sdk</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No assignment gate in practice: small, well-scoped PRs get reviewed fast.</p>
+  <p class="do"><b>What to do:</b> Open the PR; disclosure-only AI rules apply (deno-class). Note: an earlier friction measurement recorded an assignment culture, but our PR #3044 (2026-10-17) moved without one; treat the earlier reading as superseded.</p>
+  <details><summary>Evidence</summary><p>Our PR #3044 (v1.x requestId-0 backport) is open; the repo&#x27;s own note is &#x27;no assignment gate, small PRs get reviewed fast&#x27;. Friction Index detection still quotes older &#x27;discuss before you code&#x27; language for new features, so open a discussion first for significant changes.</p><p class="rec">Our record: 1 PR open (#3044)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="denoland/deno" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/denoland/deno">denoland/deno</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">Disclosure-only AI rule; otherwise open with serious review standards.</p>
+  <p class="do"><b>What to do:</b> Disclose AI assistance; expect real technical review. Benchmark claims against real behavior (we diffed deepEqual against real Node).</p>
+  <details><summary>Evidence</summary><p>Our PR #37038 (node:assert deepEqual symmetry, 13 of 14 vs real Node with the divergence documented) is open. Repo expects agent contributors to disclose.</p><p class="rec">Our record: 1 PR open (#37038)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="e2b-dev/E2B" data-classes="discussion-first open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/e2b-dev/e2b">e2b-dev/E2B</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-discussion-first" title="Open an issue or discussion and get agreement before you build, especially for new features.">Discussion first</span><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">A PR-speed repo: contributors open fix PRs without claiming, and maintainers engage same-day.</p>
+  <p class="do"><b>What to do:</b> Do not rely on comment checks. Walk the issue timeline for cross-referenced PRs before calling anything unclaimed.</p>
+  <details><summary>Evidence</summary><p>Two claims posted 2026-10-15; the race on #1988 taught the mandatory timeline cross-reference check (the &#x27;race&#x27; PR had closed unmerged 17 hours before the scout). Friction Index detection quotes the discuss-first guidance from CONTRIBUTING.</p><p class="rec">Our record: 2 claims posted</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="ComposioHQ/composio" data-classes="discussion-first open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/ComposioHQ/composio">ComposioHQ/composio</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-discussion-first" title="Open an issue or discussion and get agreement before you build, especially for new features.">Discussion first</span><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">High issue velocity; open an issue and get maintainer agreement before building new providers.</p>
+  <p class="do"><b>What to do:</b> Check assignees first: some issues are pre-assigned to staff. Some repos in this ecosystem are closed backends, so verify the fix lives in the repo before building.</p>
+  <details><summary>Evidence</summary><p>Two claims posted 2026-10-15; races in the high-velocity pool were observed on the 2026-10-17 wave. Friction Index detection quotes the maintainer-agreement guidance.</p><p class="rec">Our record: 2 claims posted</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="resend/resend-node" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/resend/resend-node">resend/resend-node</a></div>
+  <div class="when">verified 2026-10-15</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates; merges outsiders the same day.</p>
+  <p class="do"><b>What to do:</b> Claim within hours of filing. Fresh issues are the whole game here.</p>
+  <details><summary>Evidence</summary><p>Observed 2026-10-15: 5 merges in one day, 2 verified external. Issue #1147 was claimed same-day by another contributor; we are watching.</p><p class="rec">Our record: 0 (watching: same-day claims)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="crewAIInc/crewAI" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/crewAIInc/crewAI">crewAIInc/crewAI</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">PRs must link an issue (ftc-require-issue workflow); buildable issues move in cohorts.</p>
+  <p class="do"><b>What to do:</b> Link the issue in the PR body. Claims here arrive in waves (a Stanford collaboration cohort claimed everything buildable on 2026-10-12), so revisit when fresh issues land.</p>
+  <details><summary>Evidence</summary><p>Skipped 2026-10-15: every buildable good-first-issue was claimed in a cohort. Our claim on #8246 was withdrawn with cause (the request was the author pitching their own commercial product).</p><p class="rec">Our record: 0 (claim withdrawn with cause: #8246)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="supabase/supabase" data-classes="discussion-first open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/supabase/supabase">supabase/supabase</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-discussion-first" title="Open an issue or discussion and get agreement before you build, especially for new features.">Discussion first</span><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">New features need a discussion first; bugs are a different lane.</p>
+  <p class="do"><b>What to do:</b> Open a discussion for features; for bugs, claim and build. Races were observed on three scouted issues on the 2026-10-17 wave.</p>
+  <details><summary>Evidence</summary><p>Friction Index detection quotes the discussion-first rule for new features. We scouted #51629, #51656, and #51545 on 2026-10-17 and found all raced; no claim was posted. Friction: 82 percent outside merge share.</p><p class="rec">Our record: 0 (scouted: all three issues raced)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="tscircuit/tscircuit" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/tscircuit/tscircuit">tscircuit/tscircuit</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No claim requirement, no CLA, friendly. Umbrella issues span multiple repos.</p>
+  <p class="do"><b>What to do:</b> Check which repo owns the fix before claiming. Changing shipped output semantics needs maintainer sign-off first.</p>
+  <details><summary>Evidence</summary><p>Two of our PRs are open (#310 circuit-to-canvas, #858 circuit-to-svg); the Gerber-anchor fix is held for maintainer sign-off. Snapshot-heavy repos make pushes big, use the web upload path.</p><p class="rec">Our record: 2 PRs open (#310, #858)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+
+<article class="card" data-repo="ollama/ollama" data-classes="open">
+  <div class="card-head"><div class="repo"><a href="https://github.com/ollama/ollama">ollama/ollama</a></div>
+  <div class="when">verified 2026-10-17</div></div>
+  <div class="chips"><span class="pill p-open" title="No structural gate found against agent-assisted contributions. Standard contribution rules still apply.">Open to agent-assisted PRs</span></div>
+  <p class="headline">No formal gates, but same-day soft claims are the main hazard.</p>
+  <p class="do"><b>What to do:</b> Comment-level claims (&#x27;Working on this&#x27;) land within hours and are easy to miss; the claim layer has to run on the standard path. Model and hardware issues dominate the tracker, and many are not sandbox-buildable.</p>
+  <details><summary>Evidence</summary><p>Issue #19078 was raced by a same-day &#x27;Working on this&#x27; comment the pattern layer missed (2026-10-17); #19040 was unbuildable here. Friction: 54 percent outside merge share, 0.8 day median.</p><p class="rec">Our record: 0 (raced: same-day soft claim on #19078)</p></details>
+  <p class="verdict">Agent-assisted contributions can proceed with the guidance below.</p>
+</article>
+</div>
+<section>
+<h2>Method</h2>
+<p>Each entry traces to one of three sources: the campaign's repo intelligence notes (39 repos touched between October 8 and October 17, 2026), direct policy discoveries from the contribution wave (policy files, workflows, and discussion threads read in full), and Greenlight's automated friction measurements. Entries carry the date they were verified, because policies change. This page is maintained alongside the campaign: when a repo's policy changes, its entry gets a new verified date.</p>
+<p>The raw dataset is published for machines at <a href="policy.json">policy.json</a> (CC-BY-4.0). Greenlight's own gates implement this taxonomy: run <code>npx @reneturcios/greenlight check &lt;issue-url&gt;</code> and the agent policy of the repo is checked before you invest a weekend.</p>
+</section>
+<div class="cta">
+<h2>Check before you claim</h2>
+<p>Run Greenlight on any issue before you invest a weekend in it:</p>
+<div class="cmd">npx @reneturcios/greenlight check &lt;issue-url&gt;</div>
+<p><a href="https://github.com/CloudCorpRecords/greenlight">GitHub</a> &middot; <a href="https://www.npmjs.com/package/@reneturcios/greenlight">npm</a> &middot; <a href="index.html">Friction Index</a></p>
+</div>
+<footer>Data verified October 2026 &middot; The Agent Policy Index by Greenlight &middot; <a href="index.html">The Contribution Friction Index</a></footer>
+</div>
+<script>
+var active = "";
+var q = "";
+function apply(){
+  var cards = document.querySelectorAll("#grid .card");
+  var n = 0;
+  cards.forEach(function(c){
+    var ok = true;
+    if (active) ok = ok && c.dataset.classes.split(" ").indexOf(active) >= 0;
+    if (q) ok = ok && c.textContent.toLowerCase().indexOf(q) >= 0;
+    c.style.display = ok ? "" : "none";
+    if (ok) n++;
+  });
+  document.getElementById("count").textContent = n + " of 45 repos";
+}
+document.getElementById("search").addEventListener("input", function(e){ q = e.target.value.toLowerCase(); apply(); });
+document.getElementById("chiprow").addEventListener("click", function(e){
+  var b = e.target.closest(".fchip"); if (!b) return;
+  document.querySelectorAll(".fchip").forEach(function(x){ x.classList.remove("active"); });
+  b.classList.add("active"); active = b.dataset.c; apply();
+});
+apply();
+</script>
+</body>
+</html>

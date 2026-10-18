@@ -2,7 +2,7 @@
 
 Greenlight checks a GitHub issue before you spend hours on it, and tells you in plain words whether your pull request is likely to land.
 
-**New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data.
+**New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data. The companion [Agent Policy Index](https://cloudcorprecords.github.io/greenlight/policy.html) maps how 45 of them treat AI agent contributors: who bans agents outright, who requires disclosure, and which gates (assignment, vouch, CLA, DCO) you will hit, with evidence from real submissions in October 2026.
 
 ## Watch it work
 
