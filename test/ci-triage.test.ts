@@ -219,6 +219,13 @@ describe("triageVerdict", () => {
   it("ALL PRE-EXISTING when everything is pre-existing or external", () => {
     assert.equal(triageVerdict([mk("pre-existing"), mk("external-blocker")]), "ALL PRE-EXISTING");
   });
+  it("NO CODE FAILURES when every failing check is an external blocker (v0.9.2)", () => {
+    // The bruno#9561 shape: three action_required checks, zero
+    // pre-existing, zero code failures. The old line read
+    // "ALL PRE-EXISTING", which is the wrong thing to say.
+    assert.equal(triageVerdict([mk("external-blocker"), mk("external-blocker"), mk("external-blocker")]), "NO CODE FAILURES");
+    assert.equal(triageVerdict([mk("external-blocker")]), "NO CODE FAILURES");
+  });
   it("HAS LIKELY-YOURS dominates", () => {
     assert.equal(triageVerdict([mk("pre-existing"), mk("likely-yours"), mk("indeterminate")]), "HAS LIKELY-YOURS");
   });

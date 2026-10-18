@@ -1,11 +1,19 @@
-import { describe, it } from "node:test";
+import { describe, it, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   extractPRReferences,
   fetchCommentMentionedPRs,
   fetchHouseRules,
+  apiGet,
+  apiPost,
+  setFetchImpl,
+  requestTimeoutMs,
+  RequestTimeoutError,
+  WriteBlockedError,
+  RateLimitError,
   type PullRefDetail,
 } from "../src/github.js";
+import { classifyBabysitError } from "../src/babysit.js";
 import type { CommentSignal } from "../src/types.js";
 
 function comment(author: string, body: string): CommentSignal {
@@ -431,5 +439,59 @@ describe("githubApiBase", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("request timeouts (v0.9.2)", () => {
+  const realEnv = process.env.GREENLIGHT_REQUEST_TIMEOUT_S;
+  afterEach(() => {
+    setFetchImpl(null);
+    if (realEnv === undefined) delete process.env.GREENLIGHT_REQUEST_TIMEOUT_S;
+    else process.env.GREENLIGHT_REQUEST_TIMEOUT_S = realEnv;
+  });
+
+  it("defaults to 30s and honors GREENLIGHT_REQUEST_TIMEOUT_S", async () => {
+    assert.equal(requestTimeoutMs({} as NodeJS.ProcessEnv), 30_000);
+    assert.equal(requestTimeoutMs({ GREENLIGHT_REQUEST_TIMEOUT_S: "5" } as NodeJS.ProcessEnv), 5_000);
+    assert.equal(requestTimeoutMs({ GREENLIGHT_REQUEST_TIMEOUT_S: "0" } as NodeJS.ProcessEnv), 30_000);
+  });
+
+  it("a hung request fails fast into RequestTimeoutError", async () => {
+    process.env.GREENLIGHT_REQUEST_TIMEOUT_S = "0.2";
+    // Mirrors real fetch: rejects with AbortError when the signal fires.
+    const hung = (async (_url: string, init?: RequestInit) => {
+      await new Promise((_, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("This operation was aborted", "AbortError"));
+        });
+      });
+    }) as typeof fetch;
+    setFetchImpl(hung);
+    await assert.rejects(
+      apiGet("/repos/o/r"),
+      (err: unknown) => err instanceof RequestTimeoutError && /timed out after 0.2s/.test(err.message)
+    );
+    // Babysit's classifier reads this as transient (never usage).
+    assert.equal(classifyBabysitError(new RequestTimeoutError("/repos/o/r", 0.2)), "transient");
+  });
+
+  it("a 403 with a Blocked body throws WriteBlockedError, not a rate-limit error", async () => {
+    const blocked = (async () =>
+      new Response(JSON.stringify({ message: "Blocked", documentation_url: "https://docs.github.com/rest" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })) as typeof fetch;
+    setFetchImpl(blocked);
+    await assert.rejects(apiPost("/repos/o/r/issues/1/comments", { body: "x" }), (err: unknown) => {
+      assert.ok(err instanceof WriteBlockedError, `expected WriteBlockedError, got ${err}`);
+      assert.ok(!(err instanceof RateLimitError), "must not masquerade as a rate limit");
+      return true;
+    });
+  });
+
+  it("a healthy 200 response is byte-identical with the timeout armed", async () => {
+    const ok = (async () => new Response(JSON.stringify({ ok: true }), { status: 200 })) as typeof fetch;
+    setFetchImpl(ok);
+    assert.deepEqual(await apiGet("/repos/o/r"), { ok: true });
   });
 });

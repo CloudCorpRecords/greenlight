@@ -86,6 +86,45 @@ export class ApiNotFoundError extends Error {
   }
 }
 
+/**
+ * Thrown when a GitHub API request exceeds the per-request timeout.
+ * Babysit's classifier reads these as transient (never usage), so they
+ * land in the "Could not check (transient)" bucket with watermarks
+ * untouched. Default 30s; GREENLIGHT_REQUEST_TIMEOUT_S overrides.
+ */
+export class RequestTimeoutError extends Error {
+  constructor(path: string, seconds: number) {
+    super(`GitHub API request timed out after ${seconds}s for ${path}`);
+    this.name = "RequestTimeoutError";
+  }
+}
+
+/** Per-request timeout in ms for GitHub API calls. Default 30s. */
+export function requestTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const n = Number(env.GREENLIGHT_REQUEST_TIMEOUT_S);
+  return Number.isFinite(n) && n > 0 ? n * 1000 : 30_000;
+}
+
+/**
+ * GitHub's account-level anti-spam flag (the 2026-10-17 campaign block):
+ * a 403 whose body says "Blocked". It is not a rate limit, so it gets
+ * its own error; the posting ledger classifies it as blocked and the
+ * tool never blind-retries it.
+ */
+export class WriteBlockedError extends Error {
+  constructor(path: string, detail: string) {
+    super(`GitHub blocked this write (403 anti-spam) for ${path}: ${detail.slice(0, 200)}`);
+    this.name = "WriteBlockedError";
+  }
+}
+
+/** Injectable fetch for tests (the timeout proof drives a never-resolving double). */
+let fetchImpl: typeof fetch | null = null;
+export function setFetchImpl(impl: typeof fetch | null): void {
+  fetchImpl = impl;
+}
+const activeFetch = (): typeof fetch => fetchImpl ?? fetch;
+
 export function githubToken(): string | undefined {
   return process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 }
@@ -103,6 +142,22 @@ export function resetApiCalls(): void {
   apiCallCount = 0;
 }
 
+/**
+ * One GitHub request with the per-request timeout applied. A timeout
+ * throws RequestTimeoutError (transient); anything else propagates.
+ */
+async function timedFetch(url: string, init: RequestInit, path: string): Promise<Response> {
+  const timeoutMs = requestTimeoutMs();
+  try {
+    return await activeFetch()(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new RequestTimeoutError(path, timeoutMs / 1000);
+    }
+    throw err;
+  }
+}
+
 export async function apiGet(path: string): Promise<unknown> {
   apiCallCount++;
   const headers: Record<string, string> = {
@@ -113,9 +168,10 @@ export async function apiGet(path: string): Promise<unknown> {
   const token = githubToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${githubApiBase()}${path}`, { headers });
+  const res = await timedFetch(`${githubApiBase()}${path}`, { headers }, path);
   if (res.status === 403 || res.status === 429) {
     const body = await res.text().catch(() => "");
+    if (/blocked/i.test(body)) throw new WriteBlockedError(path, body);
     const reset = res.headers.get("x-ratelimit-reset");
     const wait = reset ? ` Rate limit resets at ${new Date(Number(reset) * 1000).toISOString()}.` : "";
     const hint = token
@@ -143,8 +199,10 @@ export async function apiPost(path: string, body: unknown): Promise<unknown> {
   const token = githubToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${githubApiBase()}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  const res = await timedFetch(`${githubApiBase()}${path}`, { method: "POST", headers, body: JSON.stringify(body) }, path);
   if (res.status === 403 || res.status === 429) {
+    const bodyText = await res.text().catch(() => "");
+    if (/blocked/i.test(bodyText)) throw new WriteBlockedError(path, bodyText);
     const reset = res.headers.get("x-ratelimit-reset");
     const wait = reset ? ` Rate limit resets at ${new Date(Number(reset) * 1000).toISOString()}.` : "";
     throw new RateLimitError(`GitHub rate limit hit (${res.status}).${wait}`);

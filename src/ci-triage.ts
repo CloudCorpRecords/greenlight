@@ -36,7 +36,12 @@ import { apiGet, parsePullUrl } from "./github.js";
 
 export type CiCheckClass = "pre-existing" | "likely-yours" | "indeterminate" | "external-blocker";
 
-export type CiTriageVerdict = "ALL PRE-EXISTING" | "HAS LIKELY-YOURS" | "INDETERMINATE" | "NO FAILURES";
+export type CiTriageVerdict =
+  | "ALL PRE-EXISTING"
+  | "NO CODE FAILURES"
+  | "HAS LIKELY-YOURS"
+  | "INDETERMINATE"
+  | "NO FAILURES";
 
 /** A failing check run on the PR head. */
 export interface HeadCheck {
@@ -278,6 +283,12 @@ export function triageVerdict(checks: ClassifiedCheck[]): CiTriageVerdict {
   if (checks.length === 0) return "NO FAILURES";
   if (checks.some((c) => c.class === "likely-yours")) return "HAS LIKELY-YOURS";
   if (checks.some((c) => c.class === "indeterminate")) return "INDETERMINATE";
+  // v0.9.2: when every failing check is an external blocker (zero
+  // pre-existing, zero code failures), "ALL PRE-EXISTING" is the wrong
+  // line. Name what is actually true.
+  if (checks.length > 0 && checks.every((c) => c.class === "external-blocker")) {
+    return "NO CODE FAILURES";
+  }
   return "ALL PRE-EXISTING";
 }
 
