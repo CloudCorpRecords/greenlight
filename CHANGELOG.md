@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.12.0 (2026-10-18)
+
+The Claim Protocol GitHub App client: `greenlight claim --via-api` posts through the hosted claim API (https://claim-api-wine.vercel.app) instead of requiring a hand-posted comment.
+
+- **One-time sign in.** `greenlight auth login` runs GitHub's OAuth device flow against the claim-api OAuth app and stores the resulting user token; `auth login --browser` walks the browser grant and stores the pasted session token; `--token` / `GREENLIGHT_API_TOKEN` passthrough covers scripts and agents. Tokens live in the OS keychain when one is available (macOS `security`, Linux `secret-tool`); otherwise `~/.greenlight/api-token` with 0600 permissions. `auth status` / `auth logout` round it out.
+- **App-aware writes.** Before any `--via-api` write the client asks the backend whether the Greenlight Claims app is installed on the repo (`GET /v1/app/repos/:owner/:repo/installation`). Installed: the claim goes through the app backend (the server posts the protocol comment as the caller and the webhook records durable state). Not installed, or the endpoint missing (backend older than v1.0.0): the client falls back to the current direct-API comment path and prints a one-line note naming that the app is not installed. The downgrade is never silent. `claim` without `--via-api` is unchanged.
+- **Honest claim flow.** The hosted status read runs a TAKEN pre-flight (refuses on a holder that is not you unless `--queue-ok` joins the public queue); the posted comment is verified by re-reading the status and confirming your login appears in the chain; a 401 re-runs the device flow once, then prints the manual steps. `greenlight release <issue-url> --via-api` and `greenlight heartbeat <issue-url> --via-api` map onto the server endpoints with the same app-aware selection.
+- **MCP surface.** Three new tools bring the server to 23: `api_status` (the live hosted status payload, read only), `claim_via_api` and `heartbeat_via_api` (both report-mode-safe: dry run unless `execute` is true, and executing refuses without a stored token).
+- **Config.** The API base is cached in `~/.config/greenlight/config.json`; `--api-base` overrides per call. The OAuth app client id defaults to the claim-api app's id (read from the live instance); `GREENLIGHT_OAUTH_CLIENT_ID` / `--client-id` override it.
+
 ## 0.9.2 (2026-10-17)
 
 The pacing patch: the campaign's claim-posting pace tripped GitHub's account-level anti-spam flag (403 "Blocked" on comment creation), freezing all posting for hours. The tool now paces itself, and the linked-dead claim state exists.
