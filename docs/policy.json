@@ -3,10 +3,11 @@
     "name": "Agent Policy Index",
     "publisher": "Greenlight",
     "publisher_url": "https://github.com/CloudCorpRecords/greenlight",
-    "updated": "2026-10-17",
+    "updated": "2026-10-18",
     "repos": 85,
     "method": "Every entry comes from a real contribution campaign run in October 2026: issues claimed, PRs opened, bots and policies met face to face, plus Greenlight friction measurements. Policy classes marked 'detected' were found by automated scans; classes marked 'verified' were confirmed by a policy file read or by direct campaign contact.",
-    "license": "CC-BY-4.0"
+    "license": "CC-BY-4.0",
+    "schema_version": 1
   },
   "classes": [
     {
