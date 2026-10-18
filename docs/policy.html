@@ -290,7 +290,8 @@ function starChip(e){
 }
 function frictionChip(e){
   if(e.outsider_merge_share==null||e.outsider_merge_share==="")return "";
-  return '<span class="fric" title="Share of recent merged PRs from outside contributors">'+esc(e.outsider_merge_share)+'% outsider merges</span>';
+  var pct=e.outsider_merge_share<=1?Math.round(e.outsider_merge_share*100):Math.round(e.outsider_merge_share);
+  return '<span class="fric" title="Share of recent merged PRs from outside contributors">'+pct+'% outsider merges</span>';
 }
 function gfiChip(e){
   if(!(e.good_first_issues>0))return "";
@@ -312,7 +313,7 @@ function cardHTML(e){
   return '<article class="card sev-'+sev+'">'+
     '<div class="card-head"><div class="repo"><a href="'+esc(e.url)+'"><span class="org">'+esc(org)+'/</span>'+esc(name)+'</a></div></div>'+
     '<div class="meta-row">'+lang+starChip(e)+frictionChip(e)+gfiChip(e)+
-    (d?'<span class="ver">verified '+esc(d)+'</span>':"")+'</div>'+
+    (d?'<span class="ver">'+(e.scan_provenance?'scanned ':'verified ')+esc(d)+'</span>':"")+'</div>'+
     '<div class="chips">'+chips+'</div>'+
     '<p class="headline">'+esc(e.headline)+'</p>'+
     '<p class="do"><b>What to do:</b> '+esc(e.what_to_do)+'</p>'+
