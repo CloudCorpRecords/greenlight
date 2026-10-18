@@ -28,7 +28,7 @@ import {
 } from "./github.js";
 import { scoreIssue } from "./verdict.js";
 import { applyLlmClaims } from "./llm-claims.js";
-import type { LLMClaimFlag } from "./types.js";
+import type { LLMClaimFlag, LlmLayerStatus } from "./types.js";
 import { parseGates } from "./gates.js";
 import { fetchMergeVelocity } from "./merge-velocity.js";
 import { scoreFriction } from "./friction.js";
@@ -464,6 +464,8 @@ export interface MergedCheckResult {
   protocolLines: string[];
   /** AI claim-intent flags from the optional LLM layer; rides along for transparency. */
   llm_claims?: LLMClaimFlag[];
+  /** v0.9.2: whether the AI claim layer ran, and why not. */
+  llm_status?: LlmLayerStatus;
 }
 
 /**
@@ -510,6 +512,7 @@ export function mergeProtocolVerdict(
         protocol: protocolField,
         protocolLines,
         llm_claims: legacy.llm_claims,
+    llm_status: legacy.llm_status,
       };
     }
     // Protocol wins over the legacy claim assessment; PR-derived evidence
@@ -525,12 +528,20 @@ export function mergeProtocolVerdict(
       protocol: protocolField,
       protocolLines,
       llm_claims: legacy.llm_claims,
+    llm_status: legacy.llm_status,
     };
   }
 
   if (status.verdict === "GO") {
     // Expired-only history: the protocol has nothing live, so the verdict
-    // stands and the note rides along.
+    // stands and the note rides along. A linked-dead claim (v0.9.2) gets
+    // its own line: the issue is free, but the stale marker needs release.
+    if (status.claim?.state === "linked-dead") {
+      const c = status.claim;
+      protocolLines.push(
+        `protocol claim: @${c.claimant} (state: linked-dead — the linked PR${c.linked_pr ? ` #${c.linked_pr}` : ""} closed unmerged; release the stale claim before re-claiming)`
+      );
+    }
     protocolLines.push(
       status.protocol_note ?? "past protocol claims have all ended; no active lease"
     );
@@ -543,6 +554,7 @@ export function mergeProtocolVerdict(
       protocol: protocolField,
       protocolLines,
       llm_claims: legacy.llm_claims,
+    llm_status: legacy.llm_status,
     };
   }
 
@@ -557,6 +569,7 @@ export function mergeProtocolVerdict(
     protocol: protocolField,
     protocolLines,
     llm_claims: legacy.llm_claims,
+    llm_status: legacy.llm_status,
   };
 }
 

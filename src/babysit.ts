@@ -33,7 +33,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-export const BABYSIT_VERSION = "0.9.1";
+export const BABYSIT_VERSION = "0.9.2";
 
 /** Checks pending longer than this are reported as stuck, not just running. */
 export const STUCK_CHECK_MINUTES = 120;
@@ -695,7 +695,7 @@ function renderMarkdown(reports: BabysitPrReport[], run: Omit<BabysitRun, "markd
     lines.push("");
   } else if (run.claims.length > 0 || run.retiredClaims.length > 0) {
     lines.push(`## My claims (${run.claims.length} active)`);
-    const order: ClaimBucket[] = ["linked", "queue-lost", "expiring", "heartbeat-due", "unlinked-stale", "healthy-active"];
+    const order: ClaimBucket[] = ["linked", "linked-dead", "queue-lost", "expiring", "heartbeat-due", "unlinked-stale", "healthy-active"];
     for (const bucket of order) {
       const group = run.claims.filter((c) => c.bucket === bucket);
       if (group.length === 0) continue;

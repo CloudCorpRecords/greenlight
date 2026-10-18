@@ -222,6 +222,7 @@ export interface ClaimStateInput {
 export type ClaimStateName =
   | "active"
   | "linked"
+  | "linked-dead"
   | "completed"
   | "released"
   | "expired"
@@ -626,6 +627,8 @@ export interface IssueStatusPayload {
     expires_at: string;
     queue: Array<{ claimant: string; position: number; claimed_at: string }>;
     over_cap?: boolean;
+    /** The linked PR number, when the claim is linked (or linked-dead). */
+    linked_pr?: number | null;
   } | null;
   protocol_note: string | null;
   competing_prs: StatusCompetingPr[];
@@ -638,6 +641,24 @@ export interface IssueStatusPayload {
 function shortDate(isoTs: string): string {
   return isoTs.slice(0, 10);
 }
+
+/**
+ * CLI-side derivation (v0.9.2, Product Signals row 36): a protocol claim
+ * that is LINKED but whose linked PR closed unmerged is LINKED-DEAD.
+ * The engine (computeClaimState) keeps it "linked" so the lease never
+ * quietly resumes; this derivation is what the CLI shows and acts on.
+ * The hosted API has its own derivation and is out of scope.
+ */
+export function deriveDisplayClaimState(
+  state: ClaimStateName,
+  linkedPr: number | null,
+  competingPrs: Array<{ number: number; state: string }>
+): ClaimStateName {
+  if (state !== "linked" || linkedPr == null) return state;
+  const pr = competingPrs.find((p) => p.number === linkedPr);
+  return pr && pr.state === "closed" ? "linked-dead" : state;
+}
+
 
 /**
  * Build the SPEC 5.1 issue-status payload from a protocol computation plus
@@ -665,8 +686,11 @@ export function buildIssueStatus(args: IssueStatusArgs): IssueStatusPayload {
         ? `; queue: ${comp.queue.map((q) => `@${q.claimant} (#${q.position})`).join(", ")}`
         : "";
     const raceDesc = openRaces.length > 0 ? `; open competing PRs: ${openRaces.map((p) => `#${p.number}`).join(", ")}` : "";
+    // v0.9.2: linked-dead is derived here, on the CLI side, from the
+    // linked PR's live state (see deriveDisplayClaimState).
+    const displayState = deriveDisplayClaimState(a.state, a.linked_pr, competing);
     claim = {
-      state: a.state,
+      state: displayState,
       claimant: a.claimant,
       claimed_at: a.claimed_at,
       expires_at: a.expires_at,
@@ -676,6 +700,7 @@ export function buildIssueStatus(args: IssueStatusArgs): IssueStatusPayload {
         claimed_at: q.claimedAt,
       })),
       ...(a.over_cap ? { over_cap: true as const } : {}),
+      ...(a.linked_pr != null ? { linked_pr: a.linked_pr } : {}),
     };
     if (a.state === "completed") {
       // DECISION: a completed claim means the issue is done, not free. TAKEN
@@ -683,15 +708,28 @@ export function buildIssueStatus(args: IssueStatusArgs): IssueStatusPayload {
       verdict = "TAKEN";
       reason = `Protocol claim completed: @${a.claimant}'s linked PR (#${a.linked_pr}) merged; this issue is done${raceDesc}.`;
       protocolNote = "The protocol claim on this issue completed with a merged PR.";
+    } else if (displayState === "linked-dead") {
+      // The claim's lease froze on a PR that died: nobody is working this
+      // issue, but the stale marker still needs an explicit release.
+      verdict = "GO";
+      reason =
+        `Protocol claim linked-dead: @${a.claimant}'s linked PR (#${a.linked_pr}) closed unmerged; ` +
+        `the issue is free to work. Release the stale claim before re-claiming: ` +
+        `post a comment on ${args.issueUrl} containing <!-- greenlight-claim release -->` +
+        raceDesc +
+        ".";
+      protocolNote =
+        `A protocol claim is linked to a pull request that closed unmerged. ` +
+        `The issue is free, but the stale claim should be released explicitly.`;
     } else {
       verdict = "TAKEN";
       reason =
-        `Protocol claim ${a.state}: @${a.claimant} holds this issue until ${shortDate(a.expires_at)}` +
+        `Protocol claim ${displayState}: @${a.claimant} holds this issue until ${shortDate(a.expires_at)}` +
         queueDesc +
         raceDesc +
         ".";
       protocolNote =
-        a.state === "linked"
+        displayState === "linked"
           ? "A protocol claim is linked to a pull request; review is in the maintainer's hands."
           : "An active protocol claim governs this issue.";
     }

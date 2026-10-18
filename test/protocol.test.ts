@@ -497,3 +497,58 @@ describe("buildIssueStatus", () => {
     assert.equal(s.claim?.over_cap, true);
   });
 });
+
+describe("linked-dead derivation (v0.9.2)", () => {
+  const base = {
+    issueUrl: "https://github.com/o/r/issues/5",
+    repoProtocol: { honored: true, lease_days: 7 },
+    checkedAt: "2026-10-16T18:00:00Z",
+  };
+  const linkedComp = (prState: "open" | "closed" | "merged") =>
+    computeClaimState(
+      input({
+        comments: [claimComment("alice", 0, 1)],
+        linkedPrs: [{ number: 9, state: prState, createdAt: day(5) }],
+        now: day(6),
+      })
+    );
+
+  it("linked + closed-unmerged PR derives linked-dead with a release prompt", () => {
+    const s = buildIssueStatus({
+      ...base,
+      computation: linkedComp("closed"),
+      competingPrs: [{ number: 9, author: "alice", state: "closed" }],
+    });
+    assert.equal(s.claim?.state, "linked-dead");
+    assert.equal(s.claim?.linked_pr, 9);
+    assert.equal(s.verdict, "GO");
+    assert.ok(s.reason!.includes("linked-dead"));
+    assert.ok(s.reason!.includes("#9"));
+    assert.ok(s.reason!.includes("<!-- greenlight-claim release -->"), s.reason);
+  });
+
+  it("linked + open PR stays linked (TAKEN)", () => {
+    const s = buildIssueStatus({
+      ...base,
+      computation: linkedComp("open"),
+      competingPrs: [{ number: 9, author: "alice", state: "open" }],
+    });
+    assert.equal(s.claim?.state, "linked");
+    assert.equal(s.verdict, "TAKEN");
+  });
+
+  it("linked + merged PR stays completed (TAKEN, done)", () => {
+    const s = buildIssueStatus({
+      ...base,
+      computation: linkedComp("merged"),
+      competingPrs: [{ number: 9, author: "alice", state: "merged" }],
+    });
+    assert.equal(s.claim?.state, "completed");
+    assert.equal(s.verdict, "TAKEN");
+  });
+
+  it("linked with an unknown PR state stays linked (no evidence, no guess)", () => {
+    const s = buildIssueStatus({ ...base, computation: linkedComp("closed") });
+    assert.equal(s.claim?.state, "linked");
+  });
+});

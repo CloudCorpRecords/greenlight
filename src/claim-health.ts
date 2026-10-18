@@ -22,7 +22,14 @@
 import type { IssueStatusPayload } from "./protocol.js";
 import type { MyClaim } from "./claims-registry.js";
 
-export type ClaimBucket = "linked" | "healthy-active" | "heartbeat-due" | "expiring" | "unlinked-stale" | "queue-lost";
+export type ClaimBucket =
+  | "linked"
+  | "linked-dead"
+  | "healthy-active"
+  | "heartbeat-due"
+  | "expiring"
+  | "unlinked-stale"
+  | "queue-lost";
 
 /** "No activity" window for the unlinked-stale bucket. */
 export const UNLINKED_STALE_HOURS = 72;
@@ -57,6 +64,20 @@ export function bucketClaim(input: ClaimHealthInput): ClaimHealth {
   const now = input.now ?? new Date();
   const tag = `${claim.owner}/${claim.repo}#${claim.number}`;
   const claimState = status.claim;
+
+  // Linked-dead (v0.9.2): the claim froze on a PR that closed unmerged.
+  // Nobody is working the issue, but the stale marker needs an explicit
+  // release before the issue reads clean.
+  if (claimState?.state === "linked-dead") {
+    const closedPr = status.competing_prs.find((p) => p.state === "closed");
+    return {
+      bucket: "linked-dead",
+      detail:
+        `${tag}: linked PR ${closedPr ? `#${closedPr.number} by @${closedPr.author} ` : ""}closed unmerged — ` +
+        `release the stale claim (post a comment containing <!-- greenlight-claim release -->)`,
+      prUrl: closedPr?.url ?? claim.prUrl,
+    };
+  }
 
   // Linked: an open PR against the issue means the work is with the
   // maintainer. Prefer the operator's own PR; a known PR URL from the
