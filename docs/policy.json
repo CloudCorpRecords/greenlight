@@ -1510,11 +1510,11 @@
    "repo": "coollabsio/coolify",
    "url": "https://github.com/coollabsio/coolify",
    "policy_classes": [
-    "agents-banned"
+    "agents-disclosure"
    ],
-   "headline": "Agent contributions are banned here",
-   "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
-   "evidence": "5k scan 2026-10-18: agents-banned in CONTRIBUTING.md: \"ad refactors or style rewrites are not helpful - Low-effort AI-generated pull requests will be closed  AI usage is allowed. However, contributors must fully unde\"",
+   "headline": "AI use must be mentioned in the PR description",
+   "what_to_do": "Disclose any AI tool use in the PR description. AI-generated PRs submitted without clear understanding of the change will be closed.",
+   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): CONTRIBUTING.md: \"If AI tools were used at any stage, mention it in the pull request description. AI-generated pull requests without clear understanding will be closed.\" A disclosure rule, not a ban.",
    "verified_on": "2026-10-18",
    "our_record": null,
    "scanned_on": "2026-10-18",
@@ -3045,11 +3045,11 @@
    "repo": "heygen-com/hyperframes",
    "url": "https://github.com/heygen-com/hyperframes",
    "policy_classes": [
-    "agents-banned"
+    "open"
    ],
-   "headline": "Agent contributions are banned here",
-   "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
-   "evidence": "5k scan 2026-10-18: agents-banned in CONTRIBUTING.md: \"test meaningful behavior, not just assert truthy values. - Do not submit AI-generated code you don't understand. If you can't explain what a chan\"",
+   "headline": "AI-assisted contributions welcome, no disclosure required",
+   "what_to_do": "Normal contribution flow. The repo welcomes AI tool use and does not ask for disclosure; it does require that you understand the code you submit.",
+   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): CONTRIBUTING.md, AI-Assisted Contributions: \"We welcome contributions that use AI tools (GitHub Copilot, Claude, ChatGPT, etc.). If you used AI to help write a PR, there is no need to disclose it, we review all code on its merits.\" The scan had misread the responsibility rule \"Do not submit AI-generated code you don't understand\" as a ban.",
    "verified_on": "2026-10-18",
    "our_record": null,
    "scanned_on": "2026-10-18",
@@ -3192,11 +3192,12 @@
    "repo": "hugohe3/ppt-master",
    "url": "https://github.com/hugohe3/ppt-master",
    "policy_classes": [
-    "agents-banned"
+    "agents-banned",
+    "agents-disclosure"
    ],
-   "headline": "Agent contributions are banned here",
-   "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
-   "evidence": "5k scan 2026-10-18: agents-banned in CONTRIBUTING.md: \"t a contribution; it's an unreviewed code dump:  - **Purely AI-generated PRs submitted without human review will be closed unmerged.** Before opening a PR, read the full diff yoursel\"",
+   "headline": "AI assistance welcome; unreviewed AI dumps are closed",
+   "what_to_do": "A human must personally review the work before submitting. Purely AI-generated PRs submitted without human review are closed unmerged; reviewed AI-assisted work is welcome in this AI-driven project.",
+   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): CONTRIBUTING.md: \"AI assistance is welcome, this project is itself AI-driven. But an AI-drafted PR you haven't personally reviewed is not a contribution... Purely AI-generated PRs submitted without human review will be closed unmerged.\" Ban is scoped to unreviewed autonomous submissions.",
    "verified_on": "2026-10-18",
    "our_record": null,
    "scanned_on": "2026-10-18",
