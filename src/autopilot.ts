@@ -26,6 +26,13 @@ import { fetchAuthorCensus, type CensusPr } from "./sync.js";
 import { defaultAccountAuthor } from "./babysit.js";
 import { triagePr, type ClassifiedCheck } from "./ci-triage.js";
 import {
+  loadCapabilities,
+  prCreateBlockReason,
+  defaultCapabilitiesPath,
+  type CapabilitiesFile,
+  type CapabilityAction,
+} from "./capabilities.js";
+import {
   triageReview,
   authorKindOf,
   type ReviewTriageDeps,
@@ -104,8 +111,40 @@ export function defaultRepliesPath(): string {
   return join(homedir(), ".greenlight", "autopilot-replies.json");
 }
 
-export function defaultCapabilitiesPath(): string {
-  return join(homedir(), ".greenlight", "capabilities.json");
+/**
+ * Autopilot consumes the v0.10.1 capability ledger (src/capabilities.ts)
+ * rather than duplicating it: loadCapabilities reads the canonical
+ * ~/.greenlight/capabilities.json shape, prCreateBlockReason answers the
+ * skip question, and fix outcomes are appended with autopilot-scoped
+ * actions so they never shadow the ledger's pr_create/claim outcomes.
+ */
+export function recordAutopilotFixOutcome(
+  capsPath: string,
+  repo: string,
+  kind: "dco" | "merge-conflict" | "format",
+  outcome: "ok" | "failed-other",
+  evidence: string,
+  at: string = new Date().toISOString()
+): void {
+  try {
+    const file: CapabilitiesFile = loadCapabilities(capsPath);
+    file.entries.push({
+      repo: repo.toLowerCase(),
+      action: ("autopilot_fix:" + kind) as CapabilityAction,
+      outcome,
+      evidence: evidence.slice(0, 280),
+      at,
+    });
+    mkdirSync(dirName(capsPath), { recursive: true });
+    writeFileSync(capsPath, JSON.stringify(file, null, 2) + "\n");
+  } catch {
+    // Best effort: a ledger that cannot be written is a missed memory.
+  }
+}
+
+function dirName(path: string): string {
+  const idx = path.lastIndexOf("/");
+  return idx > 0 ? path.slice(0, idx) : ".";
 }
 
 function emptyWatermark(): PrWatermark {
@@ -123,89 +162,6 @@ export function loadAutopilotState(path: string): AutopilotState {
 export function saveAutopilotState(path: string, state: AutopilotState): void {
   mkdirSync(join(homedir(), ".greenlight"), { recursive: true });
   writeFileSync(path, JSON.stringify(state, null, 2));
-}
-
-export interface CapabilityRecord {
-  repo: string;
-  action: string;
-  outcome: string;
-  evidence: string;
-  at: string;
-}
-
-/**
- * Read the v0.10.1 capability ledger defensively: the exact schema may
- * differ, so accept {repos: {repo: [...]}} | {entries: [...]} | [...] and
- * normalize to a record list. Absent file: empty, degrade gracefully.
- */
-export function loadCapabilities(path: string): CapabilityRecord[] {
-  try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
-    if (Array.isArray(raw)) return raw.filter(isCapabilityRecord);
-    if (raw && typeof raw === "object") {
-      const obj = raw as Record<string, unknown>;
-      if (obj.repos && typeof obj.repos === "object") {
-        const out: CapabilityRecord[] = [];
-        for (const v of Object.values(obj.repos as Record<string, unknown>)) {
-          if (Array.isArray(v)) for (const r of v) if (isCapabilityRecord(r)) out.push(r);
-          else if (isCapabilityRecord(v)) out.push(v);
-        }
-        return out;
-      }
-      if (Array.isArray(obj.entries)) return (obj.entries as unknown[]).filter(isCapabilityRecord);
-    }
-  } catch { /* absent or unreadable: degrade */ }
-  return [];
-}
-
-function isCapabilityRecord(r: unknown): r is CapabilityRecord {
-  if (!r || typeof r !== "object") return false;
-  const o = r as Record<string, unknown>;
-  return typeof o.repo === "string" && typeof o.action === "string" && typeof o.outcome === "string";
-}
-
-/** Append one outcome to the ledger, preserving the file's existing shape when recognizable. */
-export function recordCapability(path: string, record: CapabilityRecord): void {
-  let shape: "repos" | "entries" | "array" | "new" = "new";
-  let repos: Record<string, CapabilityRecord[]> = {};
-  try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
-    if (Array.isArray(raw)) {
-      shape = "array";
-      repos = { [record.repo]: (raw as unknown[]).filter(isCapabilityRecord) };
-    } else if (raw && typeof raw === "object") {
-      const obj = raw as Record<string, unknown>;
-      if (obj.repos && typeof obj.repos === "object") {
-        shape = "repos";
-        for (const [k, v] of Object.entries(obj.repos as Record<string, unknown>)) {
-          repos[k] = Array.isArray(v) ? (v as unknown[]).filter(isCapabilityRecord) : isCapabilityRecord(v) ? [v] : [];
-        }
-      } else if (Array.isArray(obj.entries)) {
-        shape = "entries";
-        repos = { [record.repo]: (obj.entries as unknown[]).filter(isCapabilityRecord) };
-      }
-    }
-  } catch { /* new file */ }
-  const list = repos[record.repo] ?? [];
-  list.push(record);
-  repos[record.repo] = list;
-  mkdirSync(join(homedir(), ".greenlight"), { recursive: true });
-  if (shape === "array") {
-    writeFileSync(path, JSON.stringify(Object.values(repos).flat(), null, 2));
-  } else if (shape === "entries") {
-    writeFileSync(path, JSON.stringify({ entries: Object.values(repos).flat() }, null, 2));
-  } else {
-    writeFileSync(path, JSON.stringify({ repos }, null, 2));
-  }
-}
-
-/** True when the ledger's latest pr_create-family outcome for this repo is a block. */
-export function repoIsBlocked(records: CapabilityRecord[], repo: string): CapabilityRecord | null {
-  const relevant = records
-    .filter((r) => r.repo === repo && /pr_create|post|claim/.test(r.action))
-    .filter((r) => /blocked|forbidden|404/.test(r.outcome));
-  if (relevant.length === 0) return null;
-  return relevant.sort((a, b) => (a.at < b.at ? 1 : -1))[0];
 }
 
 export interface AutopilotFix {
@@ -445,7 +401,7 @@ async function runAutopilotOnPr(
   watermark: PrWatermark,
   opts: AutopilotRunOptions,
   deps: AutopilotDeps,
-  capabilities: CapabilityRecord[],
+  capabilities: CapabilitiesFile,
   capsPath: string,
   state: AutopilotState,
   expectedForkOwner: string
@@ -456,9 +412,9 @@ async function runAutopilotOnPr(
   const drafts: ReplyDraft[] = [];
 
   // Capability gate: never rebuild where PR creation is blocked.
-  const blocked = repoIsBlocked(capabilities, `${pr.owner}/${pr.repo}`);
-  if (blocked) {
-    return { pr, url: pr.url, skipped: `capability ledger: ${blocked.outcome} (${blocked.evidence})`, items, fixes, plans, replyDrafts: 0 };
+  const blockReason = prCreateBlockReason(capabilities, `${pr.owner}/${pr.repo}`);
+  if (blockReason) {
+    return { pr, url: pr.url, skipped: `capability ledger: ${blockReason}`, items, fixes, plans, replyDrafts: 0 };
   }
 
   // 1. Review feedback (incremental).
@@ -624,13 +580,8 @@ async function runAutopilotOnPr(
           queuedAt: new Date().toISOString(),
           queuedReason: "queued behind the GitHub comment block",
         });
-        recordCapability(capsPath, {
-          repo: `${pr.owner}/${pr.repo}`,
-          action: "autopilot_fix:dco",
-          outcome: "ok",
-          evidence: `${res.oldHead.slice(0, 8)} -> ${res.newHead.slice(0, 8)}`,
-          at: new Date().toISOString(),
-        });
+        recordAutopilotFixOutcome(capsPath, `${pr.owner}/${pr.repo}`, "dco", "ok",
+          `${res.oldHead.slice(0, 8)} -> ${res.newHead.slice(0, 8)}`);
       } catch (err) {
         plans.push({
           itemId: dcoItem.id,
@@ -674,13 +625,7 @@ async function runAutopilotOnPr(
           queuedAt: new Date().toISOString(),
           queuedReason: "queued behind the GitHub comment block",
         });
-        recordCapability(capsPath, {
-          repo: `${pr.owner}/${pr.repo}`,
-          action: "autopilot_fix:merge-conflict",
-          outcome: "ok",
-          evidence: fix.detail,
-          at: new Date().toISOString(),
-        });
+        recordAutopilotFixOutcome(capsPath, `${pr.owner}/${pr.repo}`, "merge-conflict", "ok", fix.detail);
       } else {
         plans.push({
           itemId: conflictItem.id,
@@ -723,13 +668,7 @@ async function runAutopilotOnPr(
           queuedAt: new Date().toISOString(),
           queuedReason: "queued behind the GitHub comment block",
         });
-        recordCapability(capsPath, {
-          repo: `${pr.owner}/${pr.repo}`,
-          action: "autopilot_fix:format",
-          outcome: "ok",
-          evidence: fix.detail,
-          at: new Date().toISOString(),
-        });
+        recordAutopilotFixOutcome(capsPath, `${pr.owner}/${pr.repo}`, "format", "ok", fix.detail);
       } else {
         plans.push({ itemId: fmtCandidate.id, kind: fmtCandidate.kind, title: fmtCandidate.title, plan: fix.reason });
       }
@@ -1110,7 +1049,7 @@ export async function runAutopilot(opts: AutopilotRunOptions): Promise<Autopilot
   const repliesPath = opts.repliesPath ?? defaultRepliesPath();
   const capsPath = opts.capabilitiesPath ?? defaultCapabilitiesPath();
   const state = loadAutopilotState(statePath);
-  const capabilities = loadCapabilities(capsPath);
+  const capabilities: CapabilitiesFile = loadCapabilities(capsPath);
 
   let urls: string[] = [];
   if (opts.prs && opts.prs.length > 0) {

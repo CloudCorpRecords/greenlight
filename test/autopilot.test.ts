@@ -13,13 +13,15 @@ import { join } from "node:path";
 import {
   runAutopilot,
   loadAutopilotState,
-  repoIsBlocked,
-  recordCapability,
-  loadCapabilities,
+  recordAutopilotFixOutcome,
   type AutopilotPull,
   type AutopilotDeps,
-  type CapabilityRecord,
 } from "../src/autopilot.js";
+import {
+  loadCapabilities,
+  recordCapability,
+  prCreateBlockReason,
+} from "../src/capabilities.js";
 import type { CommitObject } from "../src/autopilot-git.js";
 
 function pull(over: Partial<AutopilotPull> = {}): AutopilotPull {
@@ -72,26 +74,29 @@ function tmpPaths() {
 
 describe("capability ledger", () => {
   it("degrades gracefully when the file is absent", () => {
-    const records = loadCapabilities("/tmp/definitely-not-here-12345.json");
-    assert.deepEqual(records, []);
-    assert.equal(repoIsBlocked(records, "o/r"), null);
+    const file = loadCapabilities("/tmp/definitely-not-here-12345.json");
+    assert.deepEqual(file.entries, []);
+    assert.equal(prCreateBlockReason(file, "o/r"), undefined);
   });
 
-  it("detects a blocked repo", () => {
-    const records: CapabilityRecord[] = [
-      { repo: "o/r", action: "pr_create", outcome: "blocked-422", evidence: "user is blocked", at: "2026-10-18T00:00:00Z" },
-    ];
-    const hit = repoIsBlocked(records, "o/r");
-    assert.ok(hit);
-    assert.equal(hit.outcome, "blocked-422");
-  });
-
-  it("records and reads back in a canonical shape", () => {
+  it("detects a blocked repo via the real ledger module", () => {
     const p = tmpPaths();
-    recordCapability(p.caps, { repo: "o/r", action: "pr_create", outcome: "ok", evidence: "PR #1", at: "t" });
-    const records = loadCapabilities(p.caps);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].evidence, "PR #1");
+    recordCapability("o/r", "pr_create", "blocked-422", "user is blocked", p.caps, "2026-10-18T00:00:00Z");
+    const file = loadCapabilities(p.caps);
+    const reason = prCreateBlockReason(file, "o/r");
+    assert.ok(reason);
+    assert.ok(reason.includes("blocked-422"));
+  });
+
+  it("appends autopilot fix outcomes with autopilot-scoped actions", () => {
+    const p = tmpPaths();
+    recordCapability("o/r", "pr_create", "blocked-422", "user is blocked", p.caps, "2026-10-18T00:00:00Z");
+    recordAutopilotFixOutcome(p.caps, "o/r", "dco", "ok", "pushed abc12345");
+    const file = loadCapabilities(p.caps);
+    assert.equal(file.entries.length, 2);
+    assert.ok(file.entries.some((e) => e.action === "autopilot_fix:dco"));
+    // The autopilot-scoped entry never shadows the real pr_create block.
+    assert.ok(prCreateBlockReason(file, "o/r")?.includes("blocked-422"));
   });
 });
 
@@ -168,13 +173,7 @@ describe("runAutopilot report mode", () => {
 
   it("skips repos recorded as blocked", async () => {
     const p = tmpPaths();
-    recordCapability(p.caps, {
-      repo: "o/r",
-      action: "pr_create",
-      outcome: "blocked-422",
-      evidence: "user is blocked",
-      at: "2026-10-18T00:00:00Z",
-    });
+    recordCapability("o/r", "pr_create", "blocked-422", "user is blocked", p.caps, "2026-10-18T00:00:00Z");
     const run = await runAutopilot({
       statePath: p.state,
       repliesPath: p.replies,
@@ -246,6 +245,6 @@ describe("runAutopilot --apply", () => {
     assert.equal(run.summary.repliesQueued, 1);
     // Capability outcome recorded.
     const caps = loadCapabilities(p.caps);
-    assert.ok(caps.some((c) => c.action === "autopilot_fix:dco" && c.outcome === "ok"));
+    assert.ok(caps.entries.some((c) => c.action === "autopilot_fix:dco" && c.outcome === "ok"));
   });
 });
