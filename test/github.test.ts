@@ -495,3 +495,81 @@ describe("request timeouts (v0.9.2)", () => {
     assert.deepEqual(await apiGet("/repos/o/r"), { ok: true });
   });
 });
+
+describe("v0.9.3 policy file locations", () => {
+  it("finds CONTRIBUTING.md in docs/ when root and .github/ lack it (AFFiNE shape)", async () => {
+    const { fetchHouseRules: fhr } = await import("../src/github.js");
+    const fetched: string[] = [];
+    const rules = await fhr("acme", "widget", {
+      fetchRaw: async (file: string) => {
+        fetched.push(file);
+        return file === "docs/CONTRIBUTING.md" ? "docs policy text" : undefined;
+      },
+    });
+    assert.deepEqual(rules.map((r) => r.file), ["docs/CONTRIBUTING.md"]);
+    // root and .github/ were probed before docs/
+    assert.ok(fetched.indexOf("CONTRIBUTING.md") < fetched.indexOf("docs/CONTRIBUTING.md"));
+    assert.ok(fetched.indexOf(".github/CONTRIBUTING.md") < fetched.indexOf("docs/CONTRIBUTING.md"));
+  });
+
+  it("stops probing a filename after the first hit (root wins)", async () => {
+    const { fetchHouseRules: fhr } = await import("../src/github.js");
+    const fetched: string[] = [];
+    const rules = await fhr("acme", "widget", {
+      fetchRaw: async (file: string) => {
+        fetched.push(file);
+        return file === "CONTRIBUTING.md" ? "root policy" : undefined;
+      },
+    });
+    assert.deepEqual(rules.map((r) => r.file), ["CONTRIBUTING.md"]);
+    assert.ok(!fetched.includes(".github/CONTRIBUTING.md"), "no wasted .github probe");
+    assert.ok(!fetched.includes("docs/CONTRIBUTING.md"), "no wasted docs probe");
+  });
+
+  it("probes repo-level AI_POLICY.md at root, .github/, docs/", async () => {
+    const { fetchHouseRules: fhr } = await import("../src/github.js");
+    const rules = await fhr("acme", "widget", {
+      fetchRaw: async (file: string) =>
+        file === "AI_POLICY.md" ? "autonomous agents are not allowed" : undefined,
+    });
+    assert.deepEqual(rules.map((r) => r.file), ["AI_POLICY.md"]);
+  });
+
+  it("fetchOrgAiPolicy returns the org .github AI_POLICY.md once (seam, no cache)", async () => {
+    const { fetchOrgAiPolicy: foa } = await import("../src/github.js");
+    let calls = 0;
+    const text = await foa("astral-sh", {
+      fetchOrgPolicy: async (owner: string) => {
+        calls++;
+        assert.equal(owner, "astral-sh");
+        return "We do not allow autonomous agents";
+      },
+    });
+    assert.equal(text, "We do not allow autonomous agents");
+    assert.equal(calls, 1);
+    const missing = await foa("nope", { fetchOrgPolicy: async () => undefined });
+    assert.equal(missing, undefined);
+  });
+
+  it("fetchPolicySources appends the org policy as a labeled source", async () => {
+    const { fetchPolicySources: fps } = await import("../src/github.js");
+    const sources = await fps("astral-sh", "ruff", {
+      fetchRaw: async (file: string) =>
+        file === "CONTRIBUTING.md" ? "repo contributing" : undefined,
+      fetchOrgPolicy: async () => "We do not allow autonomous agents",
+    });
+    assert.deepEqual(sources.map((s) => s.file), [
+      "CONTRIBUTING.md",
+      "AI_POLICY.md (org astral-sh)",
+    ]);
+  });
+
+  it("fetchPolicySources omits the org source when the org has no policy", async () => {
+    const { fetchPolicySources: fps } = await import("../src/github.js");
+    const sources = await fps("acme", "widget", {
+      fetchRaw: async () => undefined,
+      fetchOrgPolicy: async () => undefined,
+    });
+    assert.deepEqual(sources, []);
+  });
+});

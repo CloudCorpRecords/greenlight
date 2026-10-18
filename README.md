@@ -250,6 +250,15 @@ The governance is plain:
 
 Cost on the default model (`accounts/fireworks/models/glm-5p3-flash`): one issue check costs well under a tenth of a cent. Override the model with `GREENLIGHT_LLM_MODEL` and the endpoint with `GREENLIGHT_LLM_BASE_URL`. `greenlight doctor` reports whether the layer is configured (the key is never printed).
 
+### v0.9.3: the tool learns its gates
+
+The Agent Policy Index field work kept finding agent bans Greenlight itself missed, so the detection learned them instead of working around them:
+
+- **Policy files are read where repos actually keep them.** `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and `AI_POLICY.md` are now probed at the repo root, in `.github/`, and in `docs/` (first hit per filename wins), plus the org-level `.github/AI_POLICY.md`, probed once per org and cached. Root-only reading had called tailwindcss, reveal.js, and AFFiNE "no policy" while their CONTRIBUTING sat one directory away.
+- **Nine real bans are now detected, each pinned by a regression fixture:** immich, home-assistant (via its AI_POLICY.md), zed, meilisearch, mastodon (via the org policy), astral-sh/ruff and astral-sh/uv (via the org policy), stanfordnlp/dspy, kedro-org/kedro, and alacritty. Matching is done on the whole file with whitespace and markdown emphasis normalized, so line-wrapped prose no longer slips through.
+- **Scoped bans dual-class instead of collapsing.** A ban aimed at one kind of agent operation (TypeScript's "bulk, agent-driven contributions", ppt-master's "purely AI-generated PRs submitted without human review") now surfaces as both `agents_banned` for autonomous operation and `agents_disclosure` for the human-led path. An explicit prohibition (nuxt, ripgrep, zed) still stands on its own, and explicit welcome or waiver language (hyperframes welcomes AI help and waives disclosure) never reads as a ban.
+- **Friction JSON states its units.** `friction --json` now carries `outsider_merge_share` (0 to 1 fraction) and `outsider_merge_share_pct` (0 to 100), plus `signals.externalPRMergeRate_pct` next to the existing fraction field. The human-readable output is unchanged.
+
 ### v0.3.4: never race blind
 
 One evening, five of twelve claimed issues were already taken. The races were not in the comments: they were in the issue timelines, where GitHub records PRs that reference the issue even when their bodies never say "closes #N". So `check` now reads the timeline. An open cross-referenced PR caps the verdict at **TAKEN** with the PR URL and title quoted. A merged one adds a "the issue may already be fixed, verify what shipped" note instead, capped at **RISKY**, because a merged PR can fix only part of an issue. Also new: emoji-proof fix-announcement matching ("Opened #NNN", "🤖 ..." prefixes), bounty-liveness warnings (dead platforms like Algora are named, unverified bounties are flagged, and bounties never raise a verdict), and a `possibly-server-side` warning when the issue's quoted error text does not exist anywhere in the repo. The `friction` command gains one more line when computable: the share of recent merged PRs written by outsiders and the median time to merge, straight from the API.

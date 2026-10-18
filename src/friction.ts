@@ -27,13 +27,12 @@
  * Null signals are simply skipped: the index never fabricates numbers.
  */
 import type { FrictionReport, RepoSignals } from "./types.js";
-import { gateLabel } from "./gates.js";
+import { gateLabel, parseGatesFromSources } from "./gates.js";
 import {
-  fetchContributing,
+  fetchPolicySources,
   detectRepoPolicy,
   countStarterIssues,
 } from "./github.js";
-import { parseGates } from "./gates.js";
 import { fetchMergeVelocity } from "./merge-velocity.js";
 
 const GATE_WEIGHTS: Record<string, number> = {
@@ -87,42 +86,77 @@ export function scoreFriction(signals: RepoSignals): FrictionReport {
     if (bonus > 0) reasons.push(`${signals.openGoodFirstIssueCount} open good-first-issues (+${bonus.toFixed(1)})`);
   }
 
+  // v0.9.3: ratio fields in JSON always ship both units. The fraction
+  // keeps its meaning; the _pct sibling is unambiguous.
+  const signalsOut: RepoSignals = {
+    ...signals,
+    externalPRMergeRate_pct:
+      signals.externalPRMergeRate === undefined || signals.externalPRMergeRate === null
+        ? null
+        : Math.round(signals.externalPRMergeRate * 100),
+  };
   return {
     owner: signals.owner,
     repo: signals.repo,
     score: Math.round(clamp(score, 0, 100)),
     gates: signals.gates,
     reasons,
-    signals,
+    signals: signalsOut,
   };
 }
 
 /**
- * The repo_friction pipeline as one callable: gates from CONTRIBUTING and
- * house rules, starter-issue count, and merge velocity as a best-effort
- * signal. Shared by the CLI, the MCP repo_friction tool, and the
- * protocol preflight (which pairs it with the issue status).
+ * Attach the outsider merge share to a friction report with an explicit
+ * unit contract (v0.9.3): the fraction and the 0..100 percent side by
+ * side, so no consumer can mistake one for the other again.
+ */
+export function attachOutsiderShare(report: FrictionReport): FrictionReport {
+  const share =
+    report.signals.externalPRMergeRate ??
+    report.mergeVelocity?.externalShare ??
+    null;
+  report.outsider_merge_share = share;
+  report.outsider_merge_share_pct = share === null ? null : Math.round(share * 100);
+  return report;
+}
+
+/**
+ * The repo_friction pipeline as one callable: gates from the full policy
+ * source set (CONTRIBUTING variants and house rules at root, .github/
+ * and docs/, plus the org-level AI_POLICY.md), starter-issue count, and
+ * merge velocity as a best-effort signal. Shared by the CLI, the MCP
+ * repo_friction tool, and the protocol preflight (which pairs it with
+ * the issue status).
  */
 export async function fetchFrictionSummary(
   owner: string,
   repo: string
 ): Promise<FrictionReport> {
-  const [contributing, policy, starterCount] = await Promise.all([
-    fetchContributing(owner, repo),
+  const [sources, policy, starterCount] = await Promise.all([
+    fetchPolicySources(owner, repo),
     detectRepoPolicy(owner, repo),
     countStarterIssues(owner, repo),
   ]);
-  const gates = parseGates(contributing, { collaboratorsOnlyPolicy: policy.collaboratorsOnly });
-  const report = scoreFriction({
+  const gates = parseGatesFromSources(sources);
+  if (policy.collaboratorsOnly && !gates.some((g) => g.kind === "collaborators_only" && g.detected)) {
+    gates.push({
+      kind: "collaborators_only",
+      detected: true,
+      evidence: "repo policy: PR creation restricted to collaborators",
+    });
+  }
+  const signals: RepoSignals = {
     owner,
     repo,
     gates,
     externalPRMergeRate: null,
+    externalPRMergeRate_pct: null,
     medianFirstReviewHours: null,
     maintainerIssueResponseHours: null,
     openGoodFirstIssueCount: starterCount,
     note: "live",
-  });
+  };
+  const report = scoreFriction(signals);
   // Merge velocity is a signal, never a score input. Best-effort: silent
   // when it fails.
   try {
@@ -130,5 +164,5 @@ export async function fetchFrictionSummary(
   } catch {
     report.mergeVelocity = null;
   }
-  return report;
+  return attachOutsiderShare(report);
 }

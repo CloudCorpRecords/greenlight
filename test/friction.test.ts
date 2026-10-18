@@ -81,3 +81,31 @@ describe("scoreFriction", () => {
     assert.ok(soft.reasons.some((x) => x.includes("comment first before starting") && x.includes("-5")));
   });
 });
+
+describe("v0.9.3 outsider share unit contract", () => {
+  it("attachOutsiderShare emits the fraction and the 0-100 percent side by side", async () => {
+    const { attachOutsiderShare } = await import("../src/friction.js");
+    const report = scoreFriction(base());
+    report.mergeVelocity = { mergedPRs: 28, externalShare: 0.71, medianMergeDays: 2.1 };
+    attachOutsiderShare(report);
+    assert.equal(report.outsider_merge_share, 0.71);
+    assert.equal(report.outsider_merge_share_pct, 71);
+  });
+
+  it("prefers signals.externalPRMergeRate when both are present", async () => {
+    const { attachOutsiderShare } = await import("../src/friction.js");
+    const report = scoreFriction(base({ externalPRMergeRate: 0.5 }));
+    report.mergeVelocity = { mergedPRs: 28, externalShare: 0.9, medianMergeDays: 2.1 };
+    attachOutsiderShare(report);
+    assert.equal(report.outsider_merge_share, 0.5);
+    assert.equal(report.outsider_merge_share_pct, 50);
+  });
+
+  it("leaves both null when the share is uncomputable", async () => {
+    const { attachOutsiderShare } = await import("../src/friction.js");
+    const report = scoreFriction(base());
+    attachOutsiderShare(report);
+    assert.equal(report.outsider_merge_share, null);
+    assert.equal(report.outsider_merge_share_pct, null);
+  });
+});
