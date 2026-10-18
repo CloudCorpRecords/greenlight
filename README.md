@@ -276,6 +276,14 @@ The Agent Policy Index field work kept finding agent bans Greenlight itself miss
 - **Scoped bans dual-class instead of collapsing.** A ban aimed at one kind of agent operation (TypeScript's "bulk, agent-driven contributions", ppt-master's "purely AI-generated PRs submitted without human review") now surfaces as both `agents_banned` for autonomous operation and `agents_disclosure` for the human-led path. An explicit prohibition (nuxt, ripgrep, zed) still stands on its own, and explicit welcome or waiver language (hyperframes welcomes AI help and waives disclosure) never reads as a ban.
 - **Friction JSON states its units.** `friction --json` now carries `outsider_merge_share` (0 to 1 fraction) and `outsider_merge_share_pct` (0 to 100), plus `signals.externalPRMergeRate_pct` next to the existing fraction field. The human-readable output is unchanged.
 
+### v0.10.1: never again hardening
+
+Three failures on 2026-10-18, each paid for in full, each now structurally impossible to repeat:
+
+- **`greenlight shipcheck` verifies every link of a release chain.** A v0.9.3 ship report once claimed a git commit that did not exist: the tag pointed at a nonexistent object while npm and the registry were genuinely fine, and every verification step checked the package and the listing but never the git links. `shipcheck <owner/repo> --version x.y.z` checks all of them: the tag ref resolves, the commit object exists, package.json at the tag carries the version, the GitHub release exists, npm shows the version, and the MCP Registry shows it active. It exits non-zero naming the broken link, so a CI gate can run it after every publish. Reads only.
+- **The capability ledger remembers what the account can do.** actualbudget/actual blocked PR creation (422 "user is blocked") and modelcontextprotocol/typescript-sdk 404'd it despite a valid fork; both were discovered only after full builds were done. Every claim and PR-creation outcome the tool observes is now recorded in `~/.greenlight/capabilities.json` with a timestamp and an evidence string, so the lesson is paid for once.
+- **`greenlight preflight` is the reads-only go/no-go before a build.** It checks the fork exists with the right parent, reports KNOWN-BLOCKED with the recorded evidence when the ledger holds a structural block, summarizes the repo's policy gates, and with `--base` and `--files` flags each file's blob at the build base against the current upstream head, flagging DRIFTED files by name (actual #7333's upstream moved on the exact file the fix touched, discovered at open time). `scout` now excludes ledger-blocked repos before spending any API budget, naming the recorded reason.
+
 ### v0.10.0: multi-agent campaign management
 
 Campaigns are no longer one agent: several agents now open PRs in parallel threads, and the tool's local memory only knew about PRs this process created. v0.10.0 makes the whole board visible and the shared limits safe:
