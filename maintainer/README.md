@@ -1,3 +1,4 @@
+# Greenlight Guard — the maintainer side
 
 Greenlight started as the contributor's pre-flight check: is this issue
 worth my time? Guard is the other side of the same engine. It looks at an
@@ -130,8 +131,7 @@ returning the same data including the markdown.
   delay.
 - CLA detection only sees the PR itself (labels and comments). Authors
   who signed through a flow invisible on the PR will be flagged as "not
-  visible", which is why the wording says exactly that
-- The author-history signal is one search call; when it fails, the che
+  visible", which is why the wording says exactly that.
+- The author-history signal is one search call; when it fails, the check
   is skipped silently rather than guessed.
-
-This repo dogfoods the guard on its own pull requests (installed 2026-10-16).
+  This repo dogfoods the guard on its own pull requests (installed 2026-10-16).
