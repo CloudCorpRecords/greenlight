@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 0.13.0 (2026-10-18)
+
+Timeline X-Ray: deep-verify candidate issues against their GitHub timelines before writing code. Field data from the usebruno/bruno focus session: of 7 hand-vetted issues, 6 were secretly taken by open PRs visible only in the issue timeline (cross-referenced events), not in list views (#8149 -> PR #8176, #9319 -> PR #9320, #8287 -> PR #8288, #8264 -> PR #9475, #9517 -> PR #9552, #9483 -> PR #9484). Vetting by hand cost about an hour; X-Ray automates it.
+
+- **New command.** `greenlight xray <owner/repo> [--issues 1,2,3 | --from-scan] [--limit N] [--json]` x-rays candidate issues: timeline + search linked-PR walk with the existing linkStrength scoring (reused, not forked), reporter-owned-PR detection (a mention-strength PR authored by the issue reporter counts as closing-strength evidence — the classic hidden trap), and a lazy comment-claim scan (only when no open PRs were found, keeping a 10-issue x-ray near ~35 API calls). Verdicts are GO / RISKY / TAKEN with per-PR evidence (number, state, link strength, discovery path, author, URL).
+- **`scan --deep`.** Runs the x-ray over the ranked candidates and demotes anything it finds worse than the check verdict before presenting results; deep-verified issues carry the `xray-deep-verified` flag.
+- **MCP surface.** New `xray_issues` tool (the server now carries 24 tools); `scan_repo` gains a `deep` parameter.
+- **Honest budget.** Every x-ray result reports the API calls it consumed; timeline, PR, and comment responses ride the existing file cache, so repeat runs are nearly free.
+- 24 new tests: mocked timeline payloads for every verdict rule, multi-page timeline walks, commit-sourced event handling, the scan-demotion merge, and regression fixtures for the six real Bruno TAKEN cases plus the two GO cases.
+
 ## 0.12.0 (2026-10-18)
 
 The Claim Protocol GitHub App client: `greenlight claim --via-api` posts through the hosted claim API (https://claim-api-wine.vercel.app) instead of requiring a hand-posted comment.
