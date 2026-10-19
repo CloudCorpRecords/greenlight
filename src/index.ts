@@ -23,6 +23,7 @@ import {
   AutomationRefusal,
 } from "./automate.js";
 import { triagePr } from "./ci-triage.js";
+import { runCiPrep } from "./ci-prep.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
@@ -615,6 +616,26 @@ server.tool(
   },
   async ({ issue_url, execute, mode, api_base, token }) => {
     return text(await mcpHeartbeatViaApi({ issue_url, execute, mode, api_base, token }));
+  }
+);
+
+
+server.tool(
+  "ci_prep",
+  "Run a target repo's own pull_request workflows locally BEFORE opening a PR: discovers .github/workflows triggered on pull_request, executes the mappable run steps (tests, lint, typecheck, build) with per-step timeouts, checks repo conventions (changesets, conventional-commit subjects, DCO sign-off), and reports PASS/FAIL/SKIPPED per check with a GO/NO-GO verdict. Steps that cannot run locally (deploys, secrets, publishes) are SKIPPED with the reason named, never passed. Use after building a fix, before pushing. Local execution only; never touches GitHub.",
+  {
+    path: z.string().describe("Local path to the target repo checkout, e.g. /home/user/work/bruno"),
+    base: z.string().optional().describe("Base git ref for convention checks (default: auto-detect)."),
+    use_act: z.boolean().default(false).describe("Run workflows via act+docker when available; falls back to native mode when not."),
+    timeout_secs: z.number().default(300).describe("Per-step execution timeout in seconds."),
+  },
+  async ({ path, base, use_act, timeout_secs }) => {
+    try {
+      const result = await runCiPrep(path, { base, useAct: use_act, timeoutSecs: timeout_secs });
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
   }
 );
 

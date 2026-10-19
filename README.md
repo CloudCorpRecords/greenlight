@@ -153,6 +153,14 @@ npx @reneturcios/greenlight ci https://github.com/reticlehq/reticle/pull/1620
 # JSON output for scripting
 npx @reneturcios/greenlight ci <pr-url> --json
 
+# CI pre-flight: run a repo's own PR checks locally before pushing (exit 1 on NO-GO)
+npx @reneturcios/greenlight ci-prep ~/work/bruno
+
+# [PASS] tests (workflow ci, job build)
+# [SKIPPED] publish (workflow release, job release) - publishes a package
+# [PASS] convention: DCO sign-off
+# Verdict: GO
+
 # Review triage for a PR with review feedback: which comments need you?
 npx @reneturcios/greenlight review https://github.com/n8n-io/n8n/pull/41235
 

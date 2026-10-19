@@ -78,6 +78,18 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight ci https://github.com/owner/repo/pull/456"],
   },
   {
+    name: "ci-prep",
+    usage: "greenlight ci-prep <path> [--base <ref>] [--json] [--act]",
+    description: "Run a repo's own PR checks locally before pushing: workflow steps, changesets, commit format, DCO.",
+    flags: [
+      "--base <ref> (base ref for convention checks; default: auto-detect)",
+      "--act (run workflows via act+docker when available; falls back to native mode)",
+      "--timeout-secs <n> (per-step timeout, default 300)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight ci-prep ~/work/bruno"],
+  },
+  {
     name: "review",
     usage: "greenlight review <pr-url> [--json]",
     description: "Triage review feedback: which findings need you, with reply drafts. Never posts.",
@@ -414,6 +426,7 @@ export const NEEDS_TARGET: Record<string, string> = {
   xray: "a repo, e.g. greenlight xray usebruno/bruno --issues 8149,9319",
   friction: "a repo, e.g. greenlight friction vercel/next.js",
   ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
+  "ci-prep": "a local repo path, e.g. greenlight ci-prep ~/work/bruno",
   review: "a PR URL, e.g. greenlight review https://github.com/owner/repo/pull/456",
   guard: "a PR URL, e.g. greenlight guard https://github.com/owner/repo/pull/456",
   digest: "a repo, e.g. greenlight digest facebook/react",

@@ -13,6 +13,7 @@
  *   greenlight pr <issue-url> --branch <name> [--title t] [--yes] [--json]
  *   greenlight verify-comment <issue-url> [--json] [--from-file notes.md]
  *   greenlight verify [--base <ref>] [--cmd "<test command>"] [--parser node:test|pytest] [--allow-dirty] [--json]
+ *   greenlight ci-prep <path> [--base <ref>] [--json] [--act]
  *   greenlight babysit [--prs urls] [--mine --repos o/r] [--account] [--claims-only] [--json]
  *   greenlight autopilot [--author login] [--prs urls] [--max-prs N] [--apply] [--max-fixes N] [--json]
  *   greenlight sync [--author login] [--tracker csv|json] [--stale-days N] [--write] [--json]
@@ -78,6 +79,7 @@ import {
   type VerifiedCommentInput,
 } from "./verify-comment.js";
 import { verifyRepo } from "./verify.js";
+import { runCiPrep, formatCiPrepHuman } from "./ci-prep.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
 import { runAutopilot, defaultAutopilotStatePath } from "./autopilot.js";
 import { runSync, formatSyncHuman, syncJson } from "./sync.js";
@@ -860,6 +862,23 @@ async function cmdCi(prUrl: string, asJson: boolean): Promise<void> {
   console.log(ciVerdictLine(result.verdict));
 }
 
+async function cmdCiPrep(target: string, args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const base = flagValue(args, "--base");
+  const timeoutSecs = flagValue(args, "--timeout-secs");
+  const result = await runCiPrep(target, {
+    base: base ?? undefined,
+    timeoutSecs: timeoutSecs ? parseInt(timeoutSecs, 10) : undefined,
+    useAct: args.includes("--act"),
+  });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(formatCiPrepHuman(result));
+  }
+  if (result.verdict === "NO-GO") process.exitCode = 1;
+}
+
 async function cmdReview(prUrl: string, asJson: boolean): Promise<void> {
   const result = await triageReview(prUrl);
   if (asJson) {
@@ -1403,7 +1422,7 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import", "--via-api", "--queue-ok", "--browser", "--reaction", "--deep", "--from-scan"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--act", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import", "--via-api", "--queue-ok", "--browser", "--reaction", "--deep", "--from-scan"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -1447,6 +1466,7 @@ async function main(): Promise<void> {
     if (command === "xray" && target) return await cmdXray(target, args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
+    if (command === "ci-prep" && target) return await cmdCiPrep(target, args);
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
     if (command === "guard" && target) return await cmdGuard(target, args);
     if (command === "digest" && target) return await cmdDigest(target, args);
