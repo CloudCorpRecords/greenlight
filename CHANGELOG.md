@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.0 (2026-10-18)
+
+- **PR Radar (`greenlight radar` / MCP `pr_radar`).** Maintainer-side duplicate/competing PR detection: clusters a repo's open PRs by closing-strength links to the same issue (reusing the linkStrength machinery from the check pipeline and Timeline X-Ray) or by high changed-file overlap (Jaccard file similarity, with a title-token pre-filter so file lists are fetched only for plausible pairs). Each cluster reports PR numbers, authors, evidence, and a heuristic suggested-keep pick (earliest opened, then most files, then greenest CI; always labeled heuristic, never a verdict). The maintainer control-room wedge: which open PRs are doing the same work.
+- **PR Brief (`greenlight brief` / MCP `pr_brief`).** Verified review brief for any PR: files grouped by area/risk, CI triage with the existing base-vs-head classifier, review findings classified real vs false-positive with evidence (reusing the deterministic review triage), test evidence present or explicitly marked absent, and merge-readiness blockers (conflicts, unresolved change requests, missing changeset). Ends with a one-line look-at-this-first. No generic praise, no invented findings.
+- **README repositioning.** The README now states Greenlight's position directly: the pre-flight and coordination layer at the boundary between outside contributors and maintainers of public open-source repos, the one layer no VC-backed tool covers. The product is presented in its three layers (Decide, Solve, Coordinate), with every claim backed by evidence and the full technical reference preserved.
+
 ## 0.14.0 (2026-10-18)
 
 - **CI Pre-flight (`greenlight ci-prep` / MCP `ci_prep`).** Runs a target repo's own pull_request workflows locally *before* a PR is pushed: discovers `.github/workflows` triggered on pull_request, executes the mappable run steps (tests, lint, typecheck, build) with per-step timeouts, and checks repo conventions (changeset requirement, conventional-commit subjects, DCO sign-off). Steps that cannot run locally (deploys, secrets, publishes, external services) are SKIPPED with the reason named, never reported PASS. Verdict GO/NO-GO (exit code 1 on NO-GO); `--act` runs the real workflows via act+docker when available and says so plainly when not.

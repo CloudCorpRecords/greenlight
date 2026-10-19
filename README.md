@@ -1,62 +1,58 @@
 # Greenlight
 
-Greenlight checks a GitHub issue before you spend hours on it, and tells you in plain words whether your pull request is likely to land.
+**Greenlight is the pre-flight and coordination layer for open-source contribution: the software that stands between an outside contributor (increasingly an AI agent) and the maintainers of a public repo, and answers the questions no other tool answers. Can I contribute here at all? Is this issue secretly taken? What are the house rules? Who else is racing me? And for maintainers: who is flooding my queue, and what is safe to merge?**
 
-**New:** [The Contribution Friction Index](https://cloudcorprecords.github.io/greenlight/) ranks 43 well known projects by how hard it really is to get a pull request merged, from live GitHub data.
+## Why this layer exists
+
+Follow the venture money and you will see where it is not going. Cognition (Devin) raised about $2B at a $48B valuation, and Factory raised $200M at a $5B valuation, to run autonomous coding agents *inside* enterprises' own repos. CodeRabbit raised $88M (valued near $550M), Graphite raised a $52M Series B before being acquired by Cursor, and Greptile raised a $25M Series A, all reviewing a team's *own* pull requests. OpenHands is an agent runtime. Every funded player assumes you are inside the org.
+
+Nobody owns the boundary. No VC-backed tool answers the outside contributor's questions: can I contribute here, is this issue secretly taken, what are this repo's gates and AI policies, who else is racing me. And no VC-backed tool answers the maintainer's questions: which of these 30 open PRs are duplicates, who is claiming what, which claims have gone stale, which agent-written PRs are safe to merge. Greenlight is that layer, built from running real contribution campaigns through it every week.
+
+## The problem
+
+AI made code cheap. Contribution coordination is now the bottleneck, and it breaks in specific, repeatable ways:
+
+* **Hidden competition.** Issue list views lie. In a hand-vetted focus session on usebruno/bruno, 6 of 7 promising issues were secretly taken by PRs visible only in the issues' timelines, not in the list view or search results. You can spend a weekend on work that was already done.
+* **Gates and bans.** Greenlight's own Agent Policy Index now tracks 505 repos: 127 of them (25%) carry contribution gates, and 19 ban agent contributions outright. Whole repos (nuxt, uv, Gradio, Activepieces) have closed their doors to outside PRs entirely. Nobody told you; it was in AGENTS.md.
+* **Duplicate AI PRs.** When several contributors (human or agent) race the same issue, maintainers get three overlapping PRs and no way to arbitrate. GitHub has no claim system, only comments.
+* **House rules everywhere.** CLAs, DCO sign-off, changesets, commit formats, assignment requests. Every repo invents its own, hides them in different files, and rejects your PR on the technicality.
+
+These are coordination problems, not coding problems. The code agents keep getting better; the boundary keeps getting messier. Greenlight works the boundary.
+
+## What Greenlight does
+
+Three layers, from decide to solve to coordinate:
+
+| Layer | Question it answers | Flagship commands |
+|---|---|---|
+| **Decide** | Is this issue mine to take? Is this repo worth my time? | `check`, `scan`, `friction`, `xray`, `preflight` |
+| **Solve** | Will my PR pass? What broke? What do I do next? | `ci-prep`, `ci`, `review`, `brief`, `verify`, `autopilot`, `babysit`, `evidence` |
+| **Coordinate** | Who is working on what, and who resolves conflicts? | `claim` (+ Claim Protocol), `guard`, `radar`, `digest`, `passport` |
+
+* **Decide.** `check` reads an issue, its comments, linked and mentioned PRs (timeline plus search plus comment references), and the repo's rules, then answers in plain words: GO, RISKY, TAKEN, GATED, or STALE. `scan` ranks a repo's open issues so you pick a winnable one first. `friction` scores a repo 0 to 100 on how hard it really is to get a PR merged, with every gate quoting the file its evidence came from. `xray` (Timeline X-Ray) deep-verifies candidates against their issue timelines before you write a line, catching hidden in-flight PRs including reporter-owned fix PRs; `scan --deep` demotes anything taken before it shows you the list.
+* **Solve.** `ci-prep` runs a repo's own pull-request checks locally before you push (tests, lint, typecheck, plus conventions like changesets, commit format, DCO), so avoidable CI failures never appear in front of a maintainer. `ci` triages red PRs into pre-existing vs likely-yours vs external-blocker against base-branch history. `review` classifies every review thread as likely-real, likely-noise, or needs-decision and drafts your replies. `verify` reports the honest red-green test delta of your change. `autopilot` verifies bot findings against the code at head and fixes the mechanical items (DCO surgery, conflict re-merges, formatting) itself. `brief` assembles a verified one-screen brief for any PR: change shape by area and risk, CI triaged against base-branch history, findings classified real vs false-positive with evidence, test evidence present or explicitly marked absent, merge blockers, and a one-line look-at-this-first. `babysit` watches your open PRs and reports one prioritized action list.
+* **Coordinate.** `claim` posts a protocol claim (expiring lease, public queue, heartbeats; full spec in [`protocol/SPEC.md`](protocol/SPEC.md)), with a hosted app client option via `--via-api`. `guard` analyzes an incoming PR for a maintainer: competing fix, prior claims, missing artifacts, first-time contributor. `digest` reports a repo's PR races, claimed-by-other conflicts, stale claims, and assignment-gate conflicts. `radar` scans the whole open-PR queue and clusters competing or duplicate PRs with evidence per cluster and a suggested keep, labeled a heuristic, never a verdict. `passport` renders a contributor's merged work plus claim record.
+
+Every verdict and every report cites its evidence: the quoted policy line, the claim comment URL, the PR number, the failing check. Nothing is asserted without a source.
+
+## Who it is for
+
+* **Contributors (human).** Run `check` before you spend an evening on an issue. Run `scan` when you are picking what to work on. Run `ci-prep` before you push.
+* **AI agents and coding tools.** One command (`init --agent claude-code`, also cursor, copilot, windsurf, cline) installs the MCP config plus the one behavior rule: check Greenlight before opening a PR. Agents waste the most tokens fixing already-taken issues; 27 MCP tools make the whole engine available mid-run.
+* **Maintainers.** `guard` on each incoming PR, `radar` across the whole open queue, `digest` for the weekly triage, and the roadmap below for the control room: stale-claim sweeps, policy enforcement, AI-PR filtering.
+
+## Proof, stated plainly
+
+* 965 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
+* Dogfooded on real campaigns: the toolkit has authored 80+ pull requests across dozens of public open-source repos. Every feature exists because a real contribution died without it.
+* Distributed everywhere the audience already looks: npm (`@reneturcios/greenlight`), the MCP Registry, and GHCR (`ghcr.io/cloudcorprecords/greenlight`), plus Docker and direct MCP stdio.
+* Two living datasets ship with it: the Contribution Friction Index (`data/friction-index.json`) and the Agent Policy Index (505 repos, 127 gated, 19 agent bans, published at `docs/policy.html`), both built from real campaign field work, not scraped guesses.
 
 ## Watch it work
 
 ![Greenlight demo](docs/assets/greenlight-demo.gif)
 
 *The 59-second demo: real issue checks on real repos, an AI-caught hidden claim, a GATED agent ban, campaign scouting, and the claims babysitter. [Full narrated video](docs/assets/greenlight-demo.mp4).*
-
-## Use Greenlight inside your AI coding tool
-
-One command sets it up:
-
-```bash
-npx @reneturcios/greenlight init --agent claude-code
-```
-
-(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 24 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment, babysit_prs, evidence_pack, scout_campaign, my_claims, sync_campaign, campaign_portfolio, autopilot_report, api_status, claim_via_api, heartbeat_via_api, xray_issues).
-
-## The problem
-
-You find an issue that looks perfect. You code all evening. Then one of these happens:
-
-* Someone already claimed the work in a comment. The issue still says "unassigned", but three volunteers wrote "I'll take this" weeks ago and you never saw it.
-* The repo wanted you to ask first. Your pull request gets closed because the maintainers require contributors to request assignment or get a vouch (a recommendation from someone they know) before anyone may open a PR, and nobody told you.
-* Your commits get rejected on a technicality. The repo requires a "Signed-off-by" line on every commit (called DCO sign-off, short for Developer Certificate of Origin) or an entry in its changelog folder, and you find out after you push.
-
-These are all contribution rituals: unwritten rules a repo expects before an outside pull request counts. Every repo has different ones, and they hide in different places, from CONTRIBUTING files to AGENTS.md house-rules files (plain-language instruction files that tell people and coding agents how to work in that repo). We hit all of these by hand while vetting real issues, so Greenlight automates the checking.
-
-## What Greenlight does
-
-One engine, four plain steps:
-
-1. **Check before you claim.** Point it at any issue URL. It reads the issue, its comments, linked and mentioned pull requests, and the repo's rules, then answers: GO (yours to take), RISKY (possible, but know this first), TAKEN (someone is on it), GATED (a repo rule blocks you), or STALE (abandoned). It also spots partially-claimed work and issues where half the fix already shipped, so you scope to what remains.
-2. **Claim the right way.** It drafts the claim comment in the form the repo's rules actually want: a plain "I'll work on this" where that is enough, an assignment request where the repo requires one, or a refusal where a vouch is needed (no tool can vouch for you). It never posts without your say-so.
-3. **Prep your workspace with the repo's own rules.** It sets up your fork and branch, then writes a checklist that includes what it learned from the repo itself: the house-rules files, the verify command they insist on, whether the repo wants a changelog entry, and how its commits are styled.
-4. **Open the PR only when the basics pass.** It checks the branch is really ahead of the repo, and on repos that require DCO sign-off it verifies every commit carries the Signed-off-by line before it opens the pull request.
-
-## Use it when
-
-* You found an issue you like and are about to spend real time on it.
-* You want to know if an issue is really still yours to finish, or whether someone quietly claimed part of it in a comment.
-* A repo's rules are unclear and you want to see them summarized before you start.
-* You claimed something a while ago and want to know if that claim still counts.
-* You are picking between several repos or issues and want the most winnable one first.
-
-## What it does, technically
-
-One engine, four surfaces:
-
-1. **Availability verdicts** for an issue: `GO`, `RISKY`, `TAKEN`, `GATED`, `STALE`. Signals: assignees, linked open/closed/merged PRs (timeline + search + comment references), claim-comment heuristics including scoped claims and bare short claims (phrases like "please assign", "working on this", "taking the remaining fallback ask", "I'll take this"), partially-addressed detection (merged PRs that reference the issue, maintainer comments like "half addressed ... leaving this open"), issue age and last activity.
-2. **Repo friction scores** (0-100, 100 = easiest): contribution gates parsed from CONTRIBUTING variants plus house-rules files (`AGENTS.md`, `CLAUDE.md`), with each gate recording which file its evidence came from (assignment-first, vouch, CLA, DCO, discussion-first, comment-first, collaborators-only, paused unsolicited PRs, external PRs auto-closed by workflow), plus outcome signals where computable.
-3. **Scan mode**: rank a repo's open good-first-issue / help-wanted issues by verdict so a contributor (or agent) picks a winnable one first. Falls back to recent open unassigned issues when a repo has no labeled starter issues.
-4. **Contribution automation**: `claim`, `prep`, and `pr` commands (plus matching MCP tools) that run the pipeline after the verdict. All writes are dry-run by default and need a token plus an explicit go flag.
-
-A validation corpus of thirteen real cases from the campaign (`test/fixtures/cases/`, run by `test/cases.test.ts`) pins every verdict rule to something that actually happened: a taken issue, a weak PR mention, claim-first gates, assignment and vouch gates, a scoped claim, a half-shipped issue, a clean GO, a stale claim, fix-announcement PR links in sibling repos, a duplicate of a completed issue, and paused unsolicited PRs with a close-external-PRs workflow.
 
 ## Install
 
@@ -99,16 +95,15 @@ docker run ghcr.io/cloudcorprecords/greenlight check <issue-url>
 docker run ghcr.io/cloudcorprecords/greenlight --version
 ```
 
-## The toolkit
+## Use it inside your AI coding tool
 
-Greenlight is the front door of a four-tool lifecycle for open-source contribution work, all published under the same npm scope and cross-wired:
+One command sets it up:
 
-1. **gatefile** (`npx @reneturcios/gatefile extract owner/repo`) extracts a repo's contribution gates into a committed `contribution-gates.json`. Greenlight consumes that file directly: `greenlight check <issue-url> --gates-file contribution-gates.json`, or automatically when the file sits in the working directory, so gates are answered once and reused instead of re-derived from prose.
-2. **greenlight** verdicts, scans, claims, prep, and PR opening (this tool).
-3. **claimcheck** (`npx @reneturcios/claimcheck claims owner/repo`) watches claimed issues for stale claims and finished fixes parked on forks, the two ways claimed work silently dies.
-4. **prwatch** (`npx @reneturcios/prwatch attention --user you`) triages your open PRs by what needs you right now: review threads, failing checks, conflicts, reviewer silence.
+```bash
+npx @reneturcios/greenlight init --agent claude-code
+```
 
-Each tool is a CLI and an MCP server (`<tool> mcp`).
+(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 27 tools (see the list below).
 
 ## CLI
 
@@ -164,6 +159,18 @@ npx @reneturcios/greenlight ci-prep ~/work/bruno
 # Review triage for a PR with review feedback: which comments need you?
 npx @reneturcios/greenlight review https://github.com/n8n-io/n8n/pull/41235
 
+# Verified review brief for any PR: change shape by area and risk, CI
+# triaged against base-branch history, findings classified with evidence,
+# test evidence present or explicitly marked absent, merge blockers, and
+# a one-line look-at-this-first
+npx @reneturcios/greenlight brief https://github.com/usebruno/bruno/pull/9569
+
+# Brief: 4 files (+335/-11), 2 source + 2 tests
+# CI: code checks green; external blockers named (fork workflows require maintainer approval)
+# review: NO FINDINGS
+# blockers: none
+# lookFirst: No blockers or real findings. Start here: 2 source files carry the change.
+
 # Campaign scout: rank repo targets, dedupe against the campaign file, append as SCOUTED
 npx @reneturcios/greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write
 
@@ -185,10 +192,6 @@ npx @reneturcios/greenlight babysit --claims-only
 # ledgered. greenlight status shows your pacing posture.
 npx @reneturcios/greenlight status https://github.com/owner/repo/issues/123
 
-# [likely-real] interpolation drops `__proto__` (packages/bruno-cli/src/runner/interpolate-vars.js:42)
-#   why: anchor matches: the comment's quoted token Object.assign({}, params) is present in the anchored hunk
-#   draft reply: Good catch. Fixed in <next commit>: ...
-
 # Maintainer guard for an incoming PR: competing fix, prior claims, missing
 # artifacts (changeset / DCO / CLA), first-time contributor. Renders markdown
 # ready to post as one comment; Greenlight itself never posts.
@@ -197,6 +200,15 @@ npx @reneturcios/greenlight guard https://github.com/owner/repo/pull/123
 # Greenlight guard: 1 thing to check
 #   - Missing release-note file (repo uses .changes/): expected .changes/123-slug.md
 npx @reneturcios/greenlight guard <pr-url> --quiet   # exit 3 when flagged, silent otherwise
+
+# Duplicate/competing PR radar for the whole queue: clusters PRs fixing the
+# same issue or touching the same files, with evidence and a suggested keep
+# per cluster (always labeled a heuristic, never a verdict)
+npx @reneturcios/greenlight radar usebruno/bruno --limit 100
+
+# 100 open PRs scanned in 6 API calls: 3 competing clusters, 94 unclustered
+# cluster (same issue #5011): #5016 "Fix: Param table UI breaks bug" ~ #5074 "fix: Param Table UI Breaks on resize" - suggested keep #5016 (heuristic)
+# cluster (file overlap, 100% Jaccard in packages/): #3484 ~ #5747 - suggested keep #3484 (heuristic)
 
 # Verified comment for a maintainer-only repo: the issue takes no outside
 # PRs (inspector, servers), so the contribution is a detailed, verified
@@ -222,7 +234,7 @@ npx @reneturcios/greenlight verify-comment https://github.com/modelcontextprotoc
 cd your-repo && npx @reneturcios/greenlight verify --base origin/main
 # exit 3 when new failures exist, 1 when unverifiable
 
-# PR babysitter: one prioritized action list across your open PRs —
+# PR babysitter: one prioritized action list across your open PRs --
 # needs you now, waiting on them, quiet. Reruns report what changed.
 npx @reneturcios/greenlight babysit --mine --repos acme/widgets,acme/gadgets
 # or: greenlight babysit --prs <url1>,<url2> --fail-on-action   (exit 3 when action is needed)
@@ -236,6 +248,15 @@ npx @reneturcios/greenlight evidence https://github.com/acme/widgets/pull/42 --o
 # Contributor passport: protocol claims from the public Claim Ledger plus
 # merged PRs from GitHub. No Ledger file yet? It says so plainly.
 npx @reneturcios/greenlight passport CloudCorpRecords
+
+# The proxy, for authenticated reads (60/hr anonymous -> 5000/hr token):
+# reads GITHUB_TOKEN once at startup, attaches it server-side, binds
+# 127.0.0.1 only, and refuses to start without a token.
+export GITHUB_TOKEN=<your-classic-token> && greenlight proxy &
+export GREENLIGHT_GITHUB_BASE_URL=http://127.0.0.1:8792 GITHUB_TOKEN=proxy
+
+# Verify every link of a release chain (tag, commit, release, npm, registry)
+npx @reneturcios/greenlight shipcheck <owner/repo> --version x.y.z
 ```
 
 Real examples from our vetting:
@@ -245,82 +266,6 @@ Real examples from our vetting:
 * `langchain-ai/langchain#41185` scores **TAKEN** (claim race): 3 strong claimants while still "unassigned".
 * `PrefectHQ/fastmcp#5718` scores **GATED**: FastMCP requires assignment or a "prs welcome" label before a PR.
 * `triggerdotdev/trigger.dev#5016` scores **GATED**: unvouched-author PRs are auto-closed, a vouch request goes first.
-
-## How scoring works
-
-The verdict engine is deterministic (no LLM) and checks, in order:
-
-1. Closed issue: **TAKEN** (never landable).
-2. Any assignee: **TAKEN**.
-3. An open linked PR that **closes** the issue: **TAKEN**. A PR that merely mentions the issue number (like pdfcn PR #91, which closes #70 but lists sibling issues in its body) only adds a `weak-pr-mention` flag and downgrades an otherwise-GO verdict to **RISKY**. Marked a duplicate of an issue closed as completed: **RISKY** with the `duplicate-of-closed` flag (the work already shipped; a still-open duplicate target only adds a `duplicate-of-open` warning with its URL).
-4. Two or more strong claimants: **TAKEN** (claim race).
-5. One strong fresh whole-issue claim (under 45 days): **RISKY** with the `claimed` flag. A fresh claim scoped to part of the issue ("taking the remaining fallback ask"): **RISKY** with `claimed` + `partial-claim` flags and a reason naming the claimer and the scope, never TAKEN.
-6. One strong claim older than 45 days with no closing PR: **RISKY** with the `stale_claim` flag. The claimant probably walked away, but nobody knows for sure. Stale scoped claims get the same treatment.
-7. A hard gate (assignment, vouch, collaborators-only, paused unsolicited PRs, external PRs auto-closed by workflow) with nobody assigned: **GATED**. The last two come from CONTRIBUTING language (\"paused unsolicited pull requests\") and a scan of `.github/workflows` for close-external-PR automation.
-8. No activity for 180+ days: **STALE**.
-9. A soft claim-first gate (the repo asks contributors to comment before starting, like pdfcn): never **GATED**; it caps an otherwise-GO verdict at **RISKY** with a note, the same downgrade shape as a weak PR mention.
-10. Otherwise: **GO**.
-11. An open PR referenced in a non-author comment whose title/body mentions the issue number: downgrades an otherwise-GO verdict to **RISKY** with the `comment-mentioned-pr` flag ("may already cover part of this issue"). Neither can produce **TAKEN**; only closing PRs do that. Fix-announcement comments ("/attempt #N" commands or "Submitted fix for ... in <PR url>" narratives, often linking PRs in sibling repos) get the same downgrade under their own reason quoting the PR URL, with the `attempt-linked-pr` flag, even when the PR never names the issue. `/attempt` comments also register as strong claims.
-12. **Partially-addressed**: merged PRs that reference the issue number (comment-mentioned or linked), or maintainer comments signaling part of the work already shipped ("Half addressed by #905, leaving this open for half B", "Shipped in v3.1.0" next to the issue reference). A plain **GO** hides the scoping work this needs, so the flag `partially-addressed` is added, an otherwise-GO verdict is capped at **RISKY** with a reason like "part of this issue already shipped (PR #905, merged); scope your work to what remains". Never **TAKEN**.
-
-Claim detection scans comments for explicit claim phrases, in-progress signals ("fix ready", "PR incoming", "opened a PR"), and soft offers ("happy to fix", "take a look at this one"). Bot authors are ignored, as are issue reporters unless they announce a ready fix. Soft claims now carry their comment date, so the verdict can show how old they are (the `weak-claim` flag, warning only). Scoped claims ("taking the remaining fallback ask", "claiming this half") are recorded as partial: a fresh partial claim downgrades an otherwise-GO verdict to RISKY with a reason naming the claimer and the scope, never TAKEN. PR references (#NNN) in non-author comments are cross-checked against the PR API: an open referenced PR that mentions the issue downgrades GO to RISKY with the `comment-mentioned-pr` flag, and a merged one feeds rule 12 above.
-
-### Optional AI claim detection
-
-The pattern layer cannot know every way a human says "I'm taking this" (one evening it missed "I'm looking into contributing a fix here" on a real issue). Set `FIREWORKS_API_KEY` and `check` gains an optional second pair of eyes: a cheap Fireworks model reads the eligible comments (bots and the issue author excluded, same pool as the patterns) and flags statements of intent the patterns missed.
-
-The governance is plain:
-
-- **Off by default.** No key, no calls, output byte-identical to the pattern-only engine.
-- **Patterns stay primary and cheaper.** The AI only runs when they found no strong claim.
-- **Flags, never verdicts.** An AI flag adds the `llm-claim` flag with the exact quote as evidence and downgrades an otherwise-GO verdict to **RISKY**. It can never produce **TAKEN** and never overrides **GATED**. Verdicts stay deterministic.
-- **No invented evidence.** The quote must be an exact substring of the comment body; anything else is dropped before it can reach the verdict.
-- **Failures are silent.** A timeout, a non-200 response, or an unparseable reply returns no signal, never an error into the check path. Classifications are cached by comment id and model id, so repeat checks cost nothing.
-
-Cost on the default model (`accounts/fireworks/models/glm-5p3-flash`): one issue check costs well under a tenth of a cent. Override the model with `GREENLIGHT_LLM_MODEL` and the endpoint with `GREENLIGHT_LLM_BASE_URL`. `greenlight doctor` reports whether the layer is configured (the key is never printed).
-
-### v0.9.3: the tool learns its gates
-
-The Agent Policy Index field work kept finding agent bans Greenlight itself missed, so the detection learned them instead of working around them:
-
-- **Policy files are read where repos actually keep them.** `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and `AI_POLICY.md` are now probed at the repo root, in `.github/`, and in `docs/` (first hit per filename wins), plus the org-level `.github/AI_POLICY.md`, probed once per org and cached. Root-only reading had called tailwindcss, reveal.js, and AFFiNE "no policy" while their CONTRIBUTING sat one directory away.
-- **Nine real bans are now detected, each pinned by a regression fixture:** immich, home-assistant (via its AI_POLICY.md), zed, meilisearch, mastodon (via the org policy), astral-sh/ruff and astral-sh/uv (via the org policy), stanfordnlp/dspy, kedro-org/kedro, and alacritty. Matching is done on the whole file with whitespace and markdown emphasis normalized, so line-wrapped prose no longer slips through.
-- **Scoped bans dual-class instead of collapsing.** A ban aimed at one kind of agent operation (TypeScript's "bulk, agent-driven contributions", ppt-master's "purely AI-generated PRs submitted without human review") now surfaces as both `agents_banned` for autonomous operation and `agents_disclosure` for the human-led path. An explicit prohibition (nuxt, ripgrep, zed) still stands on its own, and explicit welcome or waiver language (hyperframes welcomes AI help and waives disclosure) never reads as a ban.
-- **Friction JSON states its units.** `friction --json` now carries `outsider_merge_share` (0 to 1 fraction) and `outsider_merge_share_pct` (0 to 100), plus `signals.externalPRMergeRate_pct` next to the existing fraction field. The human-readable output is unchanged.
-
-### v0.13.0: Timeline X-Ray
-
-`greenlight xray` deep-verifies candidate issues against their GitHub timelines: the linked-PR walk (timeline + search) with linkStrength scoring, reporter-owned-PR detection, and a lazy comment-claim scan, at ~4 API calls per issue. `scan --deep` demotes anything the x-ray finds taken before presenting results. New MCP tool `xray_issues`; `scan_repo` gains `deep`. Born from a Bruno focus session where 6 of 7 hand-vetted issues turned out to be secretly taken by timeline-only PRs.
-
-### v0.12.0: the Claim Protocol GitHub App client
-
-One command claims now: `greenlight claim <issue-url> --via-api` posts through the hosted claim API instead of handing you a comment to paste. `greenlight auth login` runs the GitHub device flow once and stores the token in your OS keychain (or `~/.greenlight/api-token` at 0600 when no keychain is available); `--token` / `GREENLIGHT_API_TOKEN` covers scripts. Before any `--via-api` write, the client checks whether the Greenlight Claims app is installed on the repo: installed means the claim goes through the app backend (durable state recorded via webhooks); not installed means the current direct-API comment path with a printed one-line note saying so. The downgrade is never silent. The flow is honest end to end: a hosted status read runs the TAKEN pre-flight (refuses on another holder unless `--queue-ok`), the posted comment is verified by re-reading the status, and a 401 re-runs the device flow once before printing the manual steps. `greenlight release --via-api` and `greenlight heartbeat --via-api` cover the rest of the lifecycle. The MCP server grows to 23 tools with `api_status`, `claim_via_api`, and `heartbeat_via_api` (all report-mode-safe).
-
-### v0.11.0: Autopilot
-
-Open PRs were dying between babysit sweeps: a bot review sitting unanswered, a CI failure on the PR's own code, a drifted branch, a missing DCO trailer. Autopilot closes that loop. `greenlight autopilot` (report-only by default, `--apply` to fix) collects reviews, comments, and check results per open PR, verifies bot findings against the code at head (REAL, FALSE_POSITIVE with quoted counter-evidence, or NEEDS_HUMAN), and triages CI failures as introduced vs pre-existing against the base branch. The mechanical items fix themselves: DCO gaps get message-only surgery with byte-identical trees, merge conflicts resolve only when provably mechanical (lockfiles regenerated, changelogs unioned, version or counter bumps), and formatting pushes only when the diff is whitespace-only. Everything else becomes a plan, never a speculative edit. Fixes land on your fork branch with Rene's sign-off, respect the capability ledger's blocked repos, and replies queue as drafts behind the comment block instead of posting. Also exposed as the read-only `autopilot_report` MCP tool.
-### v0.10.1: never again hardening
-
-Three failures on 2026-10-18, each paid for in full, each now structurally impossible to repeat:
-
-- **`greenlight shipcheck` verifies every link of a release chain.** A v0.9.3 ship report once claimed a git commit that did not exist: the tag pointed at a nonexistent object while npm and the registry were genuinely fine, and every verification step checked the package and the listing but never the git links. `shipcheck <owner/repo> --version x.y.z` checks all of them: the tag ref resolves, the commit object exists, package.json at the tag carries the version, the GitHub release exists, npm shows the version, and the MCP Registry shows it active. It exits non-zero naming the broken link, so a CI gate can run it after every publish. Reads only.
-- **The capability ledger remembers what the account can do.** actualbudget/actual blocked PR creation (422 "user is blocked") and modelcontextprotocol/typescript-sdk 404'd it despite a valid fork; both were discovered only after full builds were done. Every claim and PR-creation outcome the tool observes is now recorded in `~/.greenlight/capabilities.json` with a timestamp and an evidence string, so the lesson is paid for once.
-- **`greenlight preflight` is the reads-only go/no-go before a build.** It checks the fork exists with the right parent, reports KNOWN-BLOCKED with the recorded evidence when the ledger holds a structural block, summarizes the repo's policy gates, and with `--base` and `--files` flags each file's blob at the build base against the current upstream head, flagging DRIFTED files by name (actual #7333's upstream moved on the exact file the fix touched, discovered at open time). `scout` now excludes ledger-blocked repos before spending any API budget, naming the recorded reason.
-
-### v0.10.0: multi-agent campaign management
-
-Campaigns are no longer one agent: several agents now open PRs in parallel threads, and the tool's local memory only knew about PRs this process created. v0.10.0 makes the whole board visible and the shared limits safe:
-
-- **`greenlight sync` reconciles local tracking with API truth.** It pulls the authoritative census (`author:<login> type:pr`) and reports drift: PRs the registry never saw (another agent opened them), state mismatches (the registry says open, the API says merged), and stale claims with no linked PR after `--stale-days` (default 7). `--tracker <csv|json>` diffs a tracker file too; `--write` upserts the registry's known-PRs section. Reads only, never posts.
-- **`greenlight babysit --account` watches the whole account.** Instead of only locally-known PRs, the portfolio comes from the author census, so PRs opened by other agents or machines get the same needs-you-now triage. Without the flag, behavior is unchanged.
-- **The posting ledger is multi-agent.** Every entry now carries an `agent` field (`GREENLIGHT_AGENT_ID` when set, otherwise `<hostname>:<pid>`), the daily soft cap and claim cadence are enforced against the combined ledger, and a lock file guards read-modify-write so concurrent processes cannot race past the cap. Set `GREENLIGHT_AGENT_ID` per agent (for example `worker-a`, `cron-scan`) to see who posted what.
-- **`greenlight portfolio` is the one-screen summary:** census counts, claims by state, the pending posting queue (unconfirmed posts plus unlinked claims), and the drift count. Human text or `--json`. The same surface is exposed as the `sync_campaign` and `campaign_portfolio` MCP tools.
-
-### v0.3.4: never race blind
-
-One evening, five of twelve claimed issues were already taken. The races were not in the comments: they were in the issue timelines, where GitHub records PRs that reference the issue even when their bodies never say "closes #N". So `check` now reads the timeline. An open cross-referenced PR caps the verdict at **TAKEN** with the PR URL and title quoted. A merged one adds a "the issue may already be fixed, verify what shipped" note instead, capped at **RISKY**, because a merged PR can fix only part of an issue. Also new: emoji-proof fix-announcement matching ("Opened #NNN", "🤖 ..." prefixes), bounty-liveness warnings (dead platforms like Algora are named, unverified bounties are flagged, and bounties never raise a verdict), and a `possibly-server-side` warning when the issue's quoted error text does not exist anywhere in the repo. The `friction` command gains one more line when computable: the share of recent merged PRs written by outsiders and the median time to merge, straight from the API.
-
-Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, paused unsolicited PRs -40, external PRs auto-closed -50, discussion-first -10, claim-first -5, CLA/DCO -5 each), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
 
 ## MCP server
 
@@ -338,117 +283,83 @@ The same engine is exposed over stdio for coding agents (Claude, Cursor, Cline).
 }
 ```
 
-Tools:
+Tools (27):
 
 * `check_issue` - verdict for one issue URL
 * `scan_repo` - rank a repo's open issues, GO first (label-tagged starter issues, falling back to recent open unassigned issues; `deep: true` timeline-x-rays the candidates first)
+* `xray_issues` - Timeline X-Ray: deep-verify candidate issues against their timelines (hidden in-flight PRs, reporter-owned fix PRs, comment claims); GO / RISKY / TAKEN per issue with PR evidence
 * `repo_friction` - friction score for a repo
 * `claim_issue` - verdict-gated claim comment (dry run unless `execute: true`)
 * `prep_issue` - fork and branch check plus a local PREP.md checklist with the repo's learned conventions (dry run unless `execute: true`)
 * `open_pr` - DCO-aware PR opening from a fork branch (dry run unless `execute: true`)
+* `ci_prep` - run a repo's own PR checks locally before pushing (exit 1 on NO-GO)
 * `ci_triage` - classify each failing check on a PR as pre-existing, likely-yours, indeterminate (with a stated lean), or external-blocker, by comparing against the base branch's recent check history
 * `review_triage` - triage the review feedback on your PR: each finding classified likely-real / likely-noise / needs-decision with its reason and a reply draft (humans are never called noise; drafts only, nothing posted)
+* `pr_brief` - verified review brief for any PR: files grouped by area/risk, CI triage against base-branch history, findings classified real vs false-positive with evidence, test evidence present or explicitly marked absent, merge blockers, and a one-line look-at-this-first (never invents findings)
 * `guard_pr` - maintainer-side analysis of an incoming PR: competing fix, prior claims by someone other than the author, missing artifacts (changeset / DCO / CLA), first-time contributor. Returns comment-ready markdown (never posts).
 * `repo_digest` - repo-level maintainer report: PR races with first-claim arbitration, claimed-by-other conflicts, stale claims, assignment-gate conflicts, triage-held issues (never posts).
+* `pr_radar` - maintainer-side duplicate/competing PR radar: clusters a repo's open PRs into competing sets (same target issue, or high changed-file overlap) with evidence per cluster and a suggested keep (always labeled a heuristic, never a verdict; never posts).
 * `claim_status` - Claim Protocol pre-flight for one issue: who holds it, until when, who is queued, competing PRs, gates, whether the repo honors the protocol
 * `preflight` - the one-call answer: claim_status plus the repo friction summary
 * `verify_comment` - draft the verified-finding comment for maintainer-only repos (draft only, never posts)
 * `babysit_prs` - watch open PRs and get the one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks; also watches the my-claims registry (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost)
 * `evidence_pack` - the Verified PR evidence pack for one PR: guard verdict, CI triage, review triage, protocol status of linked issues, every claim citing its source
-* `xray_issues` - Timeline X-Ray: deep-verify candidate issues against their timelines (hidden in-flight PRs, reporter-owned fix PRs, comment claims); GO / RISKY / TAKEN per issue with PR evidence
+* `scout_campaign` - campaign mode: rank repo targets, dedupe against the campaign file, resume on API-budget exhaustion
+* `my_claims` - the claims registry: linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost
+* `sync_campaign` - reconcile local tracking with API truth (drift, state mismatches, stale claims)
+* `campaign_portfolio` - one-screen campaign summary: census counts, claims by state, pending queue, drift count
+* `autopilot_report` - per-PR feedback classification (read-only; verify bot findings, triage CI, mechanical fixes as plans)
+* `api_status` - hosted claim API status
+* `claim_via_api` - claim through the hosted claim API
+* `heartbeat_via_api` - heartbeat through the hosted claim API
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
 
-### v0.9.0: compliance + campaign
+## How scoring works
 
-Field work in October surfaced two repos publishing agent rules outside CONTRIBUTING (nuxt/nuxt's AGENTS.md bans autonomous-agent contributions outright; actualbudget/actual's AI policy requires an `[AI]` prefix plus a disclosure sentence), a fleet of mastra issues all carrying bot triage notices that scored GO with no gate kind for the hold, and two explicit soft claims the scan path missed because it ran the deterministic verdict alone. v0.9.0 closes all three gaps, then turns the campaign workflow into one command.
+The verdict engine is deterministic (no LLM) and checks, in order:
 
-**Agent-policy gates.** Gate loading already reads AGENTS.md and CLAUDE.md as house-rule sources; two new gate kinds now parse them. `agents_banned` is a hard gate: a repo that bans autonomous-agent contributions scores GATED, with the quoted policy line as evidence, and `claim` refuses it like TAKEN unless `--force` (a human must still open the PR). `agents_disclosure` is a flag, never a verdict change: repos that require an `[AI]` prefix and an AI disclosure get concrete required actions from `prep` and `check`. Repos with neither policy produce byte-identical output to before.
+1. Closed issue: **TAKEN** (never landable).
+2. Any assignee: **TAKEN**.
+3. An open linked PR that **closes** the issue: **TAKEN**. A PR that merely mentions the issue number (like pdfcn PR #91, which closes #70 but lists sibling issues in its body) only adds a `weak-pr-mention` flag and downgrades an otherwise-GO verdict to **RISKY**. Marked a duplicate of an issue closed as completed: **RISKY** with the `duplicate-of-closed` flag (the work already shipped; a still-open duplicate target only adds a `duplicate-of-open` warning with its URL).
+4. Two or more strong claimants: **TAKEN** (claim race).
+5. One strong fresh whole-issue claim (under 45 days): **RISKY** with the `claimed` flag. A fresh claim scoped to part of the issue ("taking the remaining fallback ask"): **RISKY** with `claimed` + `partial-claim` flags and a reason naming the claimer and the scope, never TAKEN.
+6. One strong claim older than 45 days with no closing PR: **RISKY** with the `stale_claim` flag. The claimant probably walked away, but nobody knows for sure. Stale scoped claims get the same treatment.
+7. A hard gate (assignment, vouch, collaborators-only, paused unsolicited PRs, external PRs auto-closed by workflow) with nobody assigned: **GATED**. The last two come from CONTRIBUTING language ("paused unsolicited pull requests") and a scan of `.github/workflows` for close-external-PR automation.
+8. No activity for 180+ days: **STALE**.
+9. A soft claim-first gate (the repo asks contributors to comment before starting, like pdfcn): never **GATED**; it caps an otherwise-GO verdict at **RISKY** with a note, the same downgrade shape as a weak PR mention.
+10. Otherwise: **GO**.
+11. An open PR referenced in a non-author comment whose title/body mentions the issue number: downgrades an otherwise-GO verdict to **RISKY** with the `comment-mentioned-pr` flag ("may already cover part of this issue"). Neither can produce **TAKEN**; only closing PRs do that. Fix-announcement comments ("/attempt #N" commands or "Submitted fix for ... in <PR url>" narratives, often linking PRs in sibling repos) get the same downgrade under their own reason quoting the PR URL, with the `attempt-linked-pr` flag, even when the PR never names the issue. `/attempt` comments also register as strong claims.
+12. **Partially-addressed**: merged PRs that reference the issue number (comment-mentioned or linked), or maintainer comments signaling part of the work already shipped ("Half addressed by #905, leaving this open for half B", "Shipped in v3.1.0" next to the issue reference). A plain **GO** hides the scoping work this needs, so the flag `partially-addressed` is added, an otherwise-GO verdict is capped at **RISKY** with a reason like "part of this issue already shipped (PR #905, merged); scope your work to what remains". Never **TAKEN**.
 
-**Triage hold.** A bot triage notice ("wait until maintainers remove the triage or approval label before opening a pull request") or a triage label (`needs triage`, `pending triage`, ...) marks an issue as held: `check` names the hold and caps an otherwise-GO verdict at RISKY with flag `triage-hold` (never TAKEN), scan demotes held issues below clean ones, and `digest` lists held issues per repo in their own section, the watch list for claims that may clear tomorrow.
+Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, paused unsolicited PRs -40, external PRs auto-closed -50, discussion-first -10, claim-first -5, CLA/DCO -5 each), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
 
-**Claim AI on the default path.** `scan` now runs the same per-issue pipeline as `check`: legacy verdict, the optional Fireworks claim-intent layer when `FIREWORKS_API_KEY` is set, merged with the Claim Protocol. The 30-day classification cache (comment id + model) is shared across check, scan, and claim, and the layer's governance holds everywhere: flags only downgrade GO to RISKY via the `llm-claim` flag, never TAKEN, never overriding GATED; every flag carries an exact-substring quote; a failed classification round caches nothing.
+### Agent-policy gates and triage holds
 
-**Claims babysitting.** When `claim` actually posts, the claim (issue URL, repo, number, posted_at, eta-days) is recorded into `~/.greenlight/my-claims.json`; `greenlight claim --register <issue-url>` records claims posted by other means. `babysit` gains a claims section (and `--claims-only`): each registered claim is bucketed by its live protocol status into linked (PR open, fine), healthy-active, heartbeat-due (no activity and the lease past half), expiring (lease under 48h), unlinked-stale (no PR after 72h), or queue-lost (someone ahead completed or the claim was superseded). Claims that complete retire from the registry with a note.
+Policy files are read where repos actually keep them: `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, and `AI_POLICY.md` at the repo root, in `.github/`, and in `docs/` (first hit per filename wins), plus the org-level `.github/AI_POLICY.md`. Two gate kinds parse agent rules:
 
-**Campaign scout mode.** `greenlight scout --repos o/r,... --campaign campaign.json --write` turns a repo list into ranked campaign targets: the scan pipeline per repo, issues already in the campaign file dropped in ANY status, survivors ranked by `30*verdictWeight (GO=2, RISKY=1) + 0.25*friction + 20*outsideMergeShare + 15/(1+medianMergeDays/14) + 5*freshness`, appended as `SCOUTED` with verdict and evidence summary. `--budget N` caps GitHub API calls (default 300); on budget hit the campaign file keeps a resume cursor and the scout exits cleanly, and a rerun resumes where it stopped. `--repos-file` takes one owner/repo per line.
+* `agents_banned` is a hard gate: a repo that bans autonomous-agent contributions scores **GATED**, with the quoted policy line as evidence, and `claim` refuses it like TAKEN unless `--force`.
+* `agents_disclosure` is a flag, never a verdict change: repos that require an AI prefix or disclosure get concrete required actions from `prep` and `check`.
 
-```bash
-greenlight scout --repos acme/widgets,acme/gadgets --campaign campaign.json --write
-greenlight babysit --claims-only
-```
+A bot triage notice ("wait until maintainers remove the triage or approval label before opening a pull request") or a triage label marks an issue as held: `check` names the hold and caps an otherwise-GO verdict at **RISKY** with the `triage-hold` flag (never TAKEN), and `scan` demotes held issues below clean ones. Held issues are future pipeline, not current work.
 
-### v0.9.1: the trust patch
+## Optional AI claim detection
 
-A full day of dogfooding at portfolio scale (43 open PRs) found five fidelity problems, all fixed here. No new features, no new surface area beyond the repair.
+The pattern layer cannot know every way a human says "I'm taking this" (one evening it missed "I'm looking into contributing a fix here" on a real issue). Set `FIREWORKS_API_KEY` and `check` gains an optional second pair of eyes: a cheap Fireworks model reads the eligible comments (bots and the issue author excluded, same pool as the patterns) and flags statements of intent the patterns missed.
 
-**Babysit speed and honest failures.** Per-PR fetching is now parallel with a bounded concurrency (default 5, `--concurrency N` to override): a 15-PR sweep drops from ~9 minutes toward ~2. Each PR's reads get 2 attempts with a short backoff; a PR that still cannot be observed lands in a new `Could not check (transient)` section with its error kind (`transient` vs `usage`), never in needs-you or waiting, and its watermark is untouched so the next run reports it as if this run never happened.
+The governance is plain:
 
-**Guard flag subjects.** Every guard flag now carries a `subject`: `pr` (this PR's own diff, e.g. missing artifacts), `issue` (one of the PR's linked issues, e.g. a competing fix, with a canonical `owner/repo#N` `issueRef`), or `repo` (repo-wide signal). Babysit raises needs-you only for subject `pr`, and for subject `issue` when the issue is the PR's own linked issue; everything else collects into a `Repo notes` section, informational only. Field case: a babysit run on actual #9250 once reported "17 new things: Competing fix for #123" that belonged to other PRs in the repo; that shape now produces zero needs-you items from guard.
+- **Off by default.** No key, no calls, output byte-identical to the pattern-only engine.
+- **Patterns stay primary and cheaper.** The AI only runs when they found no strong claim.
+- **Flags, never verdicts.** An AI flag adds the `llm-claim` flag with the exact quote as evidence and downgrades an otherwise-GO verdict to **RISKY**. It can never produce **TAKEN** and never overrides **GATED**. Verdicts stay deterministic.
+- **No invented evidence.** The quote must be an exact substring of the comment body; anything else is dropped before it can reach the verdict.
+- **Failures are silent.** A timeout, a non-200 response, or an unparseable reply returns no signal, never an error into the check path. Classifications are cached by comment id and model id, so repeat checks cost nothing.
 
-**Claim registry import.** `greenlight claim --import --ledger-user <github-login>` fetches the public Claim Ledger and imports every active or linked claim by that user into `~/.greenlight/my-claims.json`; `greenlight claim --import --urls <issue-url,...>` backfills manually. Re-imports dedupe; retired states are skipped.
-
-**The proxy, shipped.** `greenlight proxy` starts the localhost forwarder that lifts you from the 60/hr anonymous quota to the 5000/hr authenticated budget: it reads `GITHUB_TOKEN` (or `GH_TOKEN`) once at startup, attaches it server-side, ignores incoming Authorization headers, binds 127.0.0.1 only, and refuses to start without a token. `greenlight doctor` now names the proxy as the remedy when you are unauthenticated.
-
-**MCP parity.** Two new tools bring the server to 17: `scout_campaign` (campaign mode over MCP) and `my_claims` (the claims-bucketing half of the babysitter).
-
-```bash
-export GITHUB_TOKEN=<your-classic-token> && greenlight proxy &
-export GREENLIGHT_GITHUB_BASE_URL=http://127.0.0.1:8792 GITHUB_TOKEN=proxy
-greenlight claim --import --ledger-user <your-login>
-greenlight babysit --concurrency 5
-```
-
-### v0.6.0: the babysitter, the autopilot, and the trust layer
-
-**PR Babysitter.** `greenlight babysit` (or the `babysit_prs` MCP tool) is the answer to 34 open PRs and no time to watch them. Point it at PR URLs, or let it discover your open PRs across repos (`--mine --repos`), and it runs CI triage, review triage, and the guard on each one, diffs against stored watermarks, and prints one prioritized list: *needs you now* first (new likely-real review findings, CI newly failing on your code, merge conflicts, new guard flags, checks stuck over 2 hours), then *waiting on them* (checks still running, CI green with no feedback yet), then *quiet* (a PR that merged or closed retires from the watch with its resolution noted). The first run has no watermarks, so it says so and shows the full picture. Exit 0 always (cron-friendly); `--fail-on-action` gives exit 3 when the needs-you-now list is non-empty.
-
-**Maintainer Autopilot.** The guard Action can now act, not just report — but only when the maintainer opts in. An `autopilot` section in `.greenlight-guard.json` carries a label map (check id to label name, e.g. `"protocol-claim": "claim-conflict"`) and a nudge toggle. The guard computes label decisions over severity-flag findings and ready-to-copy stale-claim nudge lines for 14+ day claims with no other open PR; it never applies anything itself. The Action applies the decided labels with the Actions token (creating labels that do not exist yet; failures degrade to warnings, never a failed run), and the nudge lines ride inside the single guard comment for the maintainer to post on the issue. Autopilot never closes PRs, never merges, and never posts beyond the one guard comment. `greenlight guard <pr-url> --labels-dry-run` shows exactly what it would do.
-
-**Evidence pack and passport.** `greenlight evidence <pr-url>` (or the `evidence_pack` MCP tool) assembles the Verified PR evidence pack: guard verdict, CI triage, review triage, and Claim Protocol status of the linked issues, in one markdown document where every claim cites its source — the check run, the review anchor, the claim comment URL. The test-suite delta is included only when you hand it a `greenlight verify --json` report; the pack never runs suites itself and says so when the report is missing. And `greenlight passport <github-login>` renders the contributor passport: protocol claims from the public Claim Ledger (active, queued, the completed-vs-expired honor record, the over-cap flag) plus merged PRs from GitHub — the trust layer the Claim Protocol was always heading toward.
-
-### v0.3.5: CI triage (solve-first)
-
-The first solve-side command. On a red PR, `ci` fetches the PR's base and head, collects the failing check runs (with the first failure lines from annotations when it can), and builds the same checks' history from the twelve most recent base-branch commits. Each failing check gets one line with its class and the evidence: `pre-existing` (same check failing on base, with counts and the last failure time), `likely-yours` (failing on head, passing on base, and the PR touches files that relate to the check), `indeterminate` (no base signal to compare), or `external-blocker` (Vercel/Netlify/deploy-preview auth failures, infrastructure not the PR). Indeterminate checks always state their lean: not touching the check's area leans pre-existing, touching it leans yours, with the reason spelled out. A verdict line closes it out: ALL PRE-EXISTING, HAS LIKELY-YOURS, INDETERMINATE, or NO FAILURES.
-
-### v0.3.7: prep hardening (solve-first)
-
-The third solve-side upgrade, to `greenlight prep`. The checklist now starts with the exact signing path the repo demands (CLA Assistant with its signature phrase, a repo-specific CLA bot's signing page, or DCO with `git commit -s`) and the release-note artifact it owes (`.changeset/`, `.changes/<issue>-slug.md`, towncrier fragments, or a CHANGELOG note). Before anything else, it runs the fix-lives-here check: the v0.3.4 server-side signal plus a satellite-repo hint that fires only on tight textual evidence, warning prominently when the fix may not be buildable from this repo. A house-rules block closes it out: claim style, PR title convention, draft-first norm, and the test command, each with its source file.
-
-### v0.3.9: the maintainer guard
-
-Guard flips the engine around: `greenlight guard <pr-url>` (or the `guard_pr` MCP tool) analyzes an *incoming* pull request and renders one short markdown report a maintainer can post as a comment. It checks for a competing fix (other open PRs already fixing the same issue, found via the issue's timeline), prior claims by someone other than the PR author, missing required artifacts (a `.changes/` or `.changeset/` file the repo assembles its changelog from, DCO sign-off trailers, CLA status), and whether the author is a first-time contributor. Output starts with a one-line summary ("Greenlight guard: nothing flagged" or "N things to check"), `--quiet` stays silent unless flagged, and exit code 3 tells a workflow when findings exist. The repo ships a composite GitHub Action (`action.yml`) that posts or updates a single comment on each PR, an `examples/guard-workflow.yml` a maintainer copies into `.github/workflows/`, and per-repo check toggles through `.greenlight-guard.json`.
-
-### v0.4.0: the Claim Protocol
-
-GitHub has no claim system, only comments — so Greenlight now ships one. A claim is a comment carrying the `<!-- greenlight-claim v1 -->` marker (full spec: [`protocol/SPEC.md`](protocol/SPEC.md)): an expiring lease (7-day default, renewable by heartbeat — any comment, or a rocket reaction on the claim comment) with a public queue, frozen the moment a PR links and ended by expiry, release, or a merged PR. Repos can opt in with `.greenlight/claims.json` on their default branch; repos that haven't are read claim-by-claim with no policy assumed.
-
-```bash
-# Who holds this issue, until when, who is queued, which PRs compete
-greenlight status https://github.com/ComposioHQ/composio/issues/4668
-
-# The claim comment greenlight claim drafts now carries the marker,
-# optional plan/eta lines, and the protocol footer (--plan, --eta-days)
-greenlight claim <issue-url> --plan "reproduce then fix" --eta-days 5
-```
-
-Precedence, so the two engines never fight: a live protocol claim (active, linked, completed) wins over the legacy *claim inference* in `check` — its reason replaces the old claim-derived lines and the flag becomes `protocol-claim`. It never overrides gates, and never overrides cross-referenced PR evidence (when both say TAKEN, the reasons merge). Old-fashioned claims with no marker still run the legacy engine unchanged, and the guard raises a `protocol-claim` flag when a PR's linked issue is held by someone other than the PR author.
-
-Two new MCP tools make 12: `claim_status` (the full SPEC 5.1 status payload) and `preflight` (claim status plus the repo friction summary, the one-call "can I work on this" answer). Over-cap squatting detection ships library-only in this release: the engine's `applyOverCap` needs a global per-account index that Phase 1 does not build, so it is exported but uncalled, going live with the Phase 2 Ledger.
-
-### v0.3.11: the repo digest (maintainer-side)
-
-Guard answers "what is wrong with this PR"; digest answers "what needs my attention across my whole repo". `greenlight digest <owner/repo>` (or the `repo_digest` MCP tool) prints one markdown report in four sections: **PR races** (two or more open PRs fixing the same issue, same-repo and cross-repo links included, with first-claim arbitration: who claimed first, who opened first, who duplicates effort), **claimed-by-other conflicts** (an open PR whose linked issue was claimed by someone else before the PR), **stale claims** (issues claimed 14+ days ago with no open PR, with "nudge" under 30 days and "release the claim" after), and **assignment-gate conflicts** (repos that require assignment before a PR: open PRs whose author is not among the issue's assignees). The summary header always states the list cap and the true open-PR total (`--limit N` bounds the API budget; comment reads are skipped for comment-less issues, timeline walks happen only for stale-claim candidates). `--json` for machines; `--fail-on-race` exits 3 when a race exists so a nightly job can alert. A section that cannot be computed says so and why, never silently empty.
-
-The digest is Greenlight's first step from pre-flight into the maintainer's weekly triage: guard catches a bad PR at the door, digest tells you which issues and PRs across the repo are quietly rotting.
-
-### v0.3.6: review triage (solve-first)
-
-The second solve-side command. On a PR with review feedback, `review` gathers every review thread (bot and human), classifies each finding, and drafts the reply for you. Findings group into three buckets: **likely-real** (the comment's quoted anchor token is in the diff hunk; fix these), **needs-decision** (bot questions and every substantive human comment, which is never called noise; your call), and **likely-noise** (findings on generated files, style nits contradicted by the surrounding code, anchor mismatches, security claims the hunk disproves; probably push back). Each finding prints with its author, file and line, the one-line summary, the deterministic reason for its class, and the draft reply. Summaries, walkthroughs, praise, and findings on dismissed reviews count as noise or resolved, never as findings. Like everything in Greenlight, the drafts are output only: nothing is posted.
+`greenlight doctor` reports whether the layer is configured (the key is never printed).
 
 ## Automation
 
-Greenlight 0.2.0 automates the contribution pipeline its author ran by hand
+Greenlight automates the contribution pipeline its author ran by hand
 for four real PRs (shadcn-labs/pdfcn #92-#95): verdict, claim comment, fork
 branch, and opening the PR, with DCO awareness throughout.
 
@@ -485,16 +396,29 @@ Safety defaults, and this is a feature:
 * **Repo-aware prep.** `prep` also learns the repo's contribution rituals
   for the PREP.md checklist: which house-rules files exist, the verify
   command they insist on (like `pnpm verify`), whether the repo assembles
-  its changelog from a `.changes/` directory, which root package.json
-  scripts exist, and whether recent commits follow Conventional Commits.
+  its changelog from a `.changes/` directory, which root package.json scripts
+  exist, and whether recent commits follow Conventional Commits.
   Binding rules increasingly live in `AGENTS.md` rather than CONTRIBUTING,
   and prep reads those too.
+
+## The toolkit
+
+Greenlight is the front door of a four-tool lifecycle for open-source contribution work, all published under the same npm scope and cross-wired:
+
+1. **gatefile** (`npx @reneturcios/gatefile extract owner/repo`) extracts a repo's contribution gates into a committed `contribution-gates.json`. Greenlight consumes that file directly: `greenlight check <issue-url> --gates-file contribution-gates.json`, or automatically when the file sits in the working directory, so gates are answered once and reused instead of re-derived from prose.
+2. **greenlight** verdicts, scans, claims, prep, and PR opening (this tool).
+3. **claimcheck** (`npx @reneturcios/claimcheck claims owner/repo`) watches claimed issues for stale claims and finished fixes parked on forks, the two ways claimed work silently dies.
+4. **prwatch** (`npx @reneturcios/prwatch attention --user you`) triages your open PRs by what needs you right now: review threads, failing checks, conflicts, reviewer silence.
+
+Each tool is a CLI and an MCP server (`<tool> mcp`).
 
 ## The friction index
 
 `data/friction-index.json` is a checked-in, growing dataset of scored repos. It starts with the MCP/AI ecosystem we hand-vetted on 2026-10-13 (FastMCP, trigger.dev, langchain, deepagents, openclaw, squidbrake, reticle, pdfcn, chatflow-agent, and the three MCP SDK repos). Regenerate it with `npm run index`.
 
 Entries labeled `hand-verified 2026-10-13` come from reading the repos' actual policies and issue trackers by hand. Entries labeled `live` were parsed from live house-rules files (CONTRIBUTING variants, AGENTS.md, CLAUDE.md). Each gate records which file its evidence came from. Computed outcome fields (merge rates, review times) stay `null` until we can compute them honestly, never fabricated.
+
+The published page ([cloudcorprecords.github.io/greenlight](https://cloudcorprecords.github.io/greenlight/)) adds the Agent Policy Index: 505 repos evaluated for contribution gates and AI policies, with quoted evidence per entry. Nobody else publishes this map.
 
 ## Development
 
@@ -503,14 +427,18 @@ npm test    # tsx --test, includes fixture tests that reproduce our real verdict
 npm run build
 ```
 
-## Roadmap (Later)
+## Roadmap
 
-* Review-response triage: gather every bot and human review thread on a PR, classify each finding (real, noise, needs a decision) with the code context, draft the reply or fix list (solve-first, next after CI triage)
-* Claim-to-PR prep scaffolding: emit the per-repo work order (house rules, CLA method and link, changeset conventions, fork/branch names) from one `prep` pass
-* Browser extension that scores issues inline on github.com
-* Hosted dashboard of the friction index, refreshed on a schedule
-* Maintainer GitHub Action that auto-labels claim comments
-* Parked-fix detection and auto-nudges: scan forks for branches referencing open issues and nudge when the gate is satisfied
+Clearly marked: these are not shipped yet. (v0.15.0 moved two roadmap items into the product: `radar` is duplicate/competing PR clustering, and `brief` is the verified review brief for any PR.)
+
+* **Maintainer control room.** `guard` works per PR and `radar` clusters the queue (both shipped); the control room is the hosted per-repo surface built on top: stale-claim sweeps with one-click release requests, first-time-contributor risk notes, and a weekly maintainer digest. The engine pieces exist; the product is the assembly plus hosting.
+* **Policy enforcement packs.** Repos keep inventing the same rules (changeset required, release note required, DCO, AI disclosure). A policy-pack format (built from `gatefile` output) that a maintainer adopts in one file, enforced by the Action with the same quoted-evidence style.
+* **AI PR volume defense.** The filter, not the ban: `guard` scoring incoming PRs for claim legitimacy, repro evidence, and test deltas, so maintainers can keep the door open to good agent work while filtering spam. The campaign data (refused claims, honest verify, evidence packs) is the proof set.
+* **Claim arbitration as a service.** Two claims, one queue, public ordering, maintainer override: live arbitration of competing claims, the piece maintainers cannot build themselves.
+* Browser extension that scores issues inline on github.com.
+* Parked-fix detection and auto-nudges: scan forks for branches referencing open issues and nudge when the gate is satisfied.
+
+Full release history lives in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## License
 
