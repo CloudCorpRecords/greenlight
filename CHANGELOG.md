@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.0 (2026-10-18)
+
+- **CI Pre-flight (`greenlight ci-prep` / MCP `ci_prep`).** Runs a target repo's own pull_request workflows locally *before* a PR is pushed: discovers `.github/workflows` triggered on pull_request, executes the mappable run steps (tests, lint, typecheck, build) with per-step timeouts, and checks repo conventions (changeset requirement, conventional-commit subjects, DCO sign-off). Steps that cannot run locally (deploys, secrets, publishes, external services) are SKIPPED with the reason named, never reported PASS. Verdict GO/NO-GO (exit code 1 on NO-GO); `--act` runs the real workflows via act+docker when available and says so plainly when not.
+
 
 ## 0.13.0 (2026-10-18)
 
