@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   extractIssueRefs,
+  branchIssueRefs,
   closingIssueForPR,
   titleTokens,
   titlePrefilterHit,
@@ -59,9 +60,76 @@ describe("closingIssueForPR", () => {
     const p = pr({ number: 5115, title: "interpolate credentialsId in the token viewer", body: "body", branch: "bugfix/oauth2-credentialsId-interpolation" });
     assert.equal(closingIssueForPR(p), undefined);
   });
+  it("posthog false positive: HTTP status code in branch is not issue #500", () => {
+    // Source: PostHog/posthog seeding report, cluster 1 (false positive).
+    // Branches "vojtab/fix-mcp-oauth-500" and
+    // "posthog-code/fix-experiment-exposure-500-missing-variants" were parsed
+    // as issue #500; both PRs are about different things ("500 errors" text).
+    const a = pr({ number: 57688, title: "fix(mcp): prevent 500 errors for OAuth bearer", body: "", branch: "vojtab/fix-mcp-oauth-500" });
+    const b = pr({ number: 73576, title: "fix(experiments): descriptive error when flag loses variants", body: "", branch: "posthog-code/fix-experiment-exposure-500-missing-variants" });
+    assert.equal(closingIssueForPR(a), undefined);
+    assert.equal(closingIssueForPR(b), undefined);
+  });
+  it("supabase false positive: GitHub web-UI patch-N branches are not issues", () => {
+    // Source: supabase/supabase seeding report, clusters 1 and 2 (false
+    // positives). Branches "inian-patch-1" and "patch-2" are GitHub's
+    // auto-generated names for web-UI file edits, not issue references.
+    const a = pr({ number: 34900, title: "Update access-control.mdx", body: "", branch: "inian-patch-1" });
+    const b = pr({ number: 35203, title: "docs: fix JS syntax errors", body: "", branch: "patch-2" });
+    assert.equal(closingIssueForPR(a), undefined);
+    assert.equal(closingIssueForPR(b), undefined);
+  });
   it("the PR's own number is never a self-cluster", () => {
     const p = pr({ number: 100, title: "PR #100", body: "Closes #100", branch: "docs-touch" });
     assert.equal(closingIssueForPR(p), undefined);
+  });
+});
+
+describe("branchIssueRefs", () => {
+  it("keeps genuine conventions: prefix token, segment start, trailing word-number", () => {
+    // fix-9483-wsdl: existing genuine convention (bruno-era regression guard).
+    assert.deepEqual(branchIssueRefs("fix-9483-wsdl"), [9483]);
+    // feat/61-resume-block: issue-first segment convention.
+    assert.deepEqual(branchIssueRefs("feat/61-resume-block"), [61]);
+    // supabase #43910 genuine cluster: trailing number after a word.
+    assert.deepEqual(branchIssueRefs("fix/studio-sms-template-newlines-6435"), [6435]);
+    // n8n #9074 genuine cluster: bare mid-branch 3+ digit token.
+    assert.deepEqual(branchIssueRefs("pay-852-partial-workflow-executions-with-run-data-and-merge-node"), [852]);
+    // n8n #10758 retry branch: 852 still extracted, trailing "-2" is a counter.
+    assert.deepEqual(branchIssueRefs("pay-852-partial-workflow-executions-with-run-data-and-merge-node-try-2"), [852]);
+    // explicit # marker always counts.
+    assert.deepEqual(branchIssueRefs("docs/#42997-clarify"), [42997]);
+  });
+  it("rejects web-UI patch-N branches (supabase/langfuse false positives)", () => {
+    // Sources: supabase/supabase seeding report clusters 1-2,
+    // langfuse/langfuse seeding report cluster 2.
+    assert.deepEqual(branchIssueRefs("inian-patch-1"), []);
+    assert.deepEqual(branchIssueRefs("patch-2"), []);
+    assert.deepEqual(branchIssueRefs("patch-1"), []);
+    assert.deepEqual(branchIssueRefs("someuser-patch-1"), []);
+  });
+  it("rejects HTTP status codes without an explicit marker (posthog false positive)", () => {
+    // Source: PostHog/posthog seeding report cluster 1.
+    assert.deepEqual(branchIssueRefs("vojtab/fix-mcp-oauth-500"), []);
+    assert.deepEqual(branchIssueRefs("posthog-code/fix-experiment-exposure-500-missing-variants"), []);
+    assert.deepEqual(branchIssueRefs("fix-mcp-oauth-404"), []); // unmarked status code
+    assert.deepEqual(branchIssueRefs("issue-404-page"), [404]); // explicit prefix still counts
+  });
+  it("rejects version numbers and numeric sub-counters (n8n false positive)", () => {
+    // Source: n8n-io/n8n seeding report cluster 2 (link rejected):
+    // "shorten-changelog-prior-to-1.0" (version) and
+    // "claude/task-22584764486-1" (bot task counter).
+    assert.deepEqual(branchIssueRefs("shorten-changelog-prior-to-1.0"), []);
+    assert.deepEqual(branchIssueRefs("claude/task-22584764486-1"), []);
+  });
+  it("rejects bare mid-branch/trailing counters under 100 (langfuse false positive)", () => {
+    // Source: langfuse/langfuse seeding report cluster 3:
+    // "bundle-size-3-migrate" parsed as issue #3. Also "-try-2" style retries.
+    assert.deepEqual(branchIssueRefs("bundle-size-3-migrate"), []);
+    assert.deepEqual(branchIssueRefs("copilot/fix-thing-try-2"), []);
+  });
+  it("rejects alphanumeric version tokens like oauth2", () => {
+    assert.deepEqual(branchIssueRefs("bugfix/oauth2-credentialsId-interpolation"), []);
   });
 });
 

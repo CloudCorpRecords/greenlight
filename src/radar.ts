@@ -182,25 +182,121 @@ export function extractIssueRefs(text: string): number[] {
 }
 
 /**
+ * Tokens that, immediately before a number in a branch name, mark it as an
+ * intentional issue reference ("fix-9483-wsdl", "issue-61"). Pure data.
+ */
+const ISSUE_PREFIX_TOKENS = new Set([
+  "fix",
+  "fixes",
+  "fixed",
+  "bug",
+  "bugfix",
+  "hotfix",
+  "issue",
+  "issues",
+  "feat",
+  "feature",
+  "pr",
+  "gh",
+  "ticket",
+]);
+
+/**
+ * Common HTTP status codes. A bare one in a branch name ("fix-mcp-oauth-500",
+ * "fix-experiment-exposure-500-missing-variants") is an error code, not an
+ * issue number; it only counts with an explicit marker (#N or a prefix token).
+ */
+const HTTP_STATUS_CODES = new Set([
+  400, 401, 402, 403, 404, 405, 406, 408, 409, 410, 413, 414, 415, 416, 417, 418,
+  421, 422, 423, 425, 426, 428, 429, 431, 451,
+  500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511,
+]);
+
+/**
+ * Issue numbers referenced by a branch name, deduplicated. Pure.
+ *
+ * A number counts ONLY under a defensible convention:
+ *  - explicit "#N" marker in the branch;
+ *  - an issue-prefix token immediately before it ("fix-9483-wsdl", "issue-61");
+ *  - first token of a branch segment ("feat/61-resume-block", "123-fix-x");
+ *  - trailing token at the end of the branch when it is a 3+ digit,
+ *    non-status-code number preceded by a word ("fix/studio-sms-...-6435");
+ *  - bare mid-branch token when it is a 3+ digit, non-status-code number
+ *    ("pay-852-partial-...").
+ * Never counted: GitHub web-UI "patch-N" names (patch-1, inian-patch-1),
+ * version numbers (1.0, 2.73.0-rc.5), sub-counters after another number
+ * (claude/task-22584764486-1), bare counters under 100 mid/trailing
+ * (bundle-size-3-migrate, ...-try-2), and alphanumerics like "oauth2"
+ * (letter boundaries are not delimiters).
+ *
+ * Found by the maintainer-seeding runs: the seeding reports document 6
+ * false-positive same-issue clusters, all from branch numbers that are not
+ * issue references (supabase #1/#2 from patch-N branches, posthog #500
+ * from "500 errors" branches, n8n #1 from "prior-to-1.0" and a bot task
+ * counter, langfuse #1/#3 from patch-1 and bundle-size-3-migrate). Each is
+ * pinned by a regression test naming the source.
+ */
+export function branchIssueRefs(branch: string): number[] {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  const add = (n: number) => {
+    if (n > 0 && n <= 999999 && !seen.has(n)) {
+      seen.add(n);
+      out.push(n);
+    }
+  };
+  for (const segment of branch.split("/")) {
+    // Word tokens with raw offsets (letters/digits; "oauth2" stays one token).
+    const tokens: Array<{ text: string; index: number }> = [];
+    const re = /[A-Za-z0-9]+/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(segment)) !== null) {
+      tokens.push({ text: m[0], index: m.index });
+    }
+    for (let i = 0; i < tokens.length; i++) {
+      const { text: w, index } = tokens[i];
+      if (!/^\d+$/.test(w)) continue;
+      const n = Number(w);
+      const prev = i > 0 ? tokens[i - 1].text.toLowerCase() : "";
+      const after = segment.slice(index + w.length, index + w.length + 2);
+      if (/^\.\d/.test(after)) continue; // version: "1.0", "2.73.0-rc.5"
+      if (prev === "patch") continue; // GitHub web-UI branch: patch-1, inian-patch-1
+      if (/^\d+$/.test(prev)) continue; // sub-counter after a number: task-22584764486-1
+      const marked =
+        new RegExp(`#${n}\\b`).test(branch) || ISSUE_PREFIX_TOKENS.has(prev);
+      if (marked) {
+        add(n);
+        continue;
+      }
+      if (i === 0) {
+        // Issue-first branch convention: "feat/61-resume-block", "123-fix-x".
+        add(n);
+        continue;
+      }
+      if (HTTP_STATUS_CODES.has(n)) continue; // unmarked status code: an error code.
+      if (n >= 100) add(n); // bare 3+ digit token, mid-branch or trailing.
+      // Bare 1-2 digit tokens mid-branch or trailing ("-3-", "-try-2") are
+      // counters, not issues.
+    }
+  }
+  return out;
+}
+
+/**
  * The issue a PR is really working on: the referenced issue number for
  * which classifyLinkStrength says "closing". Bare mentions (pdfcn #91
  * listing sibling issues) never cluster. Candidate numbers come from
- * title/body #N refs AND standalone numeric tokens in the branch name
- * ("fix-9483-wsdl"); both go through the same classifyLinkStrength
- * gate, so the branch token must be a standalone token to count. Pure.
+ * title/body #N refs AND branchIssueRefs (the tightened branch rule set,
+ * so "oauth2", "patch-N", status codes, versions, and counters never
+ * yield candidates); both go through the same classifyLinkStrength
+ * gate. Pure.
  */
 export function closingIssueForPR(pr: RadarPR): number | undefined {
   const candidates: number[] = [];
   for (const n of extractIssueRefs(`${pr.title}\n${pr.body}`)) {
     if (n !== pr.number && !candidates.includes(n)) candidates.push(n);
   }
-  // Delimiters are branch conventions (- _ / . whitespace), not letter
-  // boundaries: "oauth2" must not yield a phantom issue #2, while
-  // "fix-9483-wsdl" and "feat/61-resume-block" still do.
-  const branchRe = /(?:^|[-_\s/.])(\d{1,6})(?:[-_\s/.]|$)/g;
-  let m: RegExpExecArray | null;
-  while ((m = branchRe.exec(pr.branch)) !== null) {
-    const n = Number(m[1]);
+  for (const n of branchIssueRefs(pr.branch)) {
     if (n !== pr.number && !candidates.includes(n)) candidates.push(n);
   }
   for (const n of candidates) {
