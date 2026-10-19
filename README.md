@@ -18,7 +18,7 @@ One command sets it up:
 npx @reneturcios/greenlight init --agent claude-code
 ```
 
-(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 17 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment, babysit_prs, evidence_pack, scout_campaign, my_claims).
+(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 24 tools (check_issue, scan_repo, repo_friction, claim_issue, prep_issue, open_pr, ci_triage, review_triage, guard_pr, repo_digest, claim_status, preflight, verify_comment, babysit_prs, evidence_pack, scout_campaign, my_claims, sync_campaign, campaign_portfolio, autopilot_report, api_status, claim_via_api, heartbeat_via_api, xray_issues).
 
 ## The problem
 
@@ -133,6 +133,10 @@ npx @reneturcios/greenlight check https://github.com/batrapulkit/squidbrake/issu
 # Rank a repo's starter issues, GO first (falls back to recent open
 # unassigned issues when the repo does not use those labels; --no-fallback to opt out)
 npx @reneturcios/greenlight scan PrefectHQ/fastmcp
+
+# Deep-verify candidates against their timelines first (catches hidden in-flight PRs)
+npx @reneturcios/greenlight xray usebruno/bruno --issues 8149,9319
+npx @reneturcios/greenlight scan usebruno/bruno --deep
 
 # Friction score for a repo
 npx @reneturcios/greenlight friction triggerdotdev/trigger.dev
@@ -276,6 +280,10 @@ The Agent Policy Index field work kept finding agent bans Greenlight itself miss
 - **Scoped bans dual-class instead of collapsing.** A ban aimed at one kind of agent operation (TypeScript's "bulk, agent-driven contributions", ppt-master's "purely AI-generated PRs submitted without human review") now surfaces as both `agents_banned` for autonomous operation and `agents_disclosure` for the human-led path. An explicit prohibition (nuxt, ripgrep, zed) still stands on its own, and explicit welcome or waiver language (hyperframes welcomes AI help and waives disclosure) never reads as a ban.
 - **Friction JSON states its units.** `friction --json` now carries `outsider_merge_share` (0 to 1 fraction) and `outsider_merge_share_pct` (0 to 100), plus `signals.externalPRMergeRate_pct` next to the existing fraction field. The human-readable output is unchanged.
 
+### v0.13.0: Timeline X-Ray
+
+`greenlight xray` deep-verifies candidate issues against their GitHub timelines: the linked-PR walk (timeline + search) with linkStrength scoring, reporter-owned-PR detection, and a lazy comment-claim scan, at ~4 API calls per issue. `scan --deep` demotes anything the x-ray finds taken before presenting results. New MCP tool `xray_issues`; `scan_repo` gains `deep`. Born from a Bruno focus session where 6 of 7 hand-vetted issues turned out to be secretly taken by timeline-only PRs.
+
 ### v0.12.0: the Claim Protocol GitHub App client
 
 One command claims now: `greenlight claim <issue-url> --via-api` posts through the hosted claim API instead of handing you a comment to paste. `greenlight auth login` runs the GitHub device flow once and stores the token in your OS keychain (or `~/.greenlight/api-token` at 0600 when no keychain is available); `--token` / `GREENLIGHT_API_TOKEN` covers scripts. Before any `--via-api` write, the client checks whether the Greenlight Claims app is installed on the repo: installed means the claim goes through the app backend (durable state recorded via webhooks); not installed means the current direct-API comment path with a printed one-line note saying so. The downgrade is never silent. The flow is honest end to end: a hosted status read runs the TAKEN pre-flight (refuses on another holder unless `--queue-ok`), the posted comment is verified by re-reading the status, and a 401 re-runs the device flow once before printing the manual steps. `greenlight release --via-api` and `greenlight heartbeat --via-api` cover the rest of the lifecycle. The MCP server grows to 23 tools with `api_status`, `claim_via_api`, and `heartbeat_via_api` (all report-mode-safe).
@@ -325,7 +333,7 @@ The same engine is exposed over stdio for coding agents (Claude, Cursor, Cline).
 Tools:
 
 * `check_issue` - verdict for one issue URL
-* `scan_repo` - rank a repo's open issues, GO first (label-tagged starter issues, falling back to recent open unassigned issues)
+* `scan_repo` - rank a repo's open issues, GO first (label-tagged starter issues, falling back to recent open unassigned issues; `deep: true` timeline-x-rays the candidates first)
 * `repo_friction` - friction score for a repo
 * `claim_issue` - verdict-gated claim comment (dry run unless `execute: true`)
 * `prep_issue` - fork and branch check plus a local PREP.md checklist with the repo's learned conventions (dry run unless `execute: true`)
@@ -339,6 +347,7 @@ Tools:
 * `verify_comment` - draft the verified-finding comment for maintainer-only repos (draft only, never posts)
 * `babysit_prs` - watch open PRs and get the one prioritized action list (needs you now, waiting on them, quiet), diffed against stored watermarks; also watches the my-claims registry (linked, healthy-active, heartbeat-due, expiring, unlinked-stale, queue-lost)
 * `evidence_pack` - the Verified PR evidence pack for one PR: guard verdict, CI triage, review triage, protocol status of linked issues, every claim citing its source
+* `xray_issues` - Timeline X-Ray: deep-verify candidate issues against their timelines (hidden in-flight PRs, reporter-owned fix PRs, comment claims); GO / RISKY / TAKEN per issue with PR evidence
 
 Run it locally: `npm run dev` (MCP entry is `src/index.ts`; CLI is `src/cli.ts`).
 
