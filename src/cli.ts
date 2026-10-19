@@ -80,6 +80,8 @@ import {
 } from "./verify-comment.js";
 import { verifyRepo } from "./verify.js";
 import { runCiPrep, formatCiPrepHuman } from "./ci-prep.js";
+import { radarPRs } from "./radar.js";
+import { briefPR } from "./brief.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
 import { runAutopilot, defaultAutopilotStatePath } from "./autopilot.js";
 import { runSync, formatSyncHuman, syncJson } from "./sync.js";
@@ -879,6 +881,71 @@ async function cmdCiPrep(target: string, args: string[]): Promise<void> {
   if (result.verdict === "NO-GO") process.exitCode = 1;
 }
 
+async function cmdRadar(repoRef: string, args: string[]): Promise<void> {
+  const { owner, repo } = parseRepoRef(repoRef);
+  const asJson = args.includes("--json");
+  const limitRaw = flagValue(args, "--limit");
+  const limit = limitRaw !== undefined ? Math.max(1, Math.min(Math.trunc(Number(limitRaw)) || 25, 100)) : 25;
+  const result = await radarPRs(owner, repo, { limit });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(
+    `PR Radar for ${result.repo}: ${result.prsScanned} open PRs scanned, ${result.clusters.length} competing cluster(s), ${result.unclustered.length} unclustered (${result.apiCalls} API calls)`
+  );
+  if (result.clusters.length === 0) {
+    console.log("No competing-PR clusters found. The open queue has no obvious duplicates.");
+    return;
+  }
+  for (const c of result.clusters) {
+    const kindLabel = c.kind === "same-issue" ? "same issue" : "file overlap";
+    const what = c.issue ? `competing on issue #${c.issue.number} (${c.issue.url})` : "no shared linked issue";
+    console.log(`\n[${kindLabel}] ${what}`);
+    for (const ev of c.evidence) console.log(`  - ${ev}`);
+    console.log(`  suggested keep (heuristic): #${c.suggestedKeep} — ${c.suggestedKeepReason}`);
+  }
+}
+
+async function cmdBrief(target: string, args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const result = await briefPR(target);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(`PR Brief: ${result.pr}`);
+  console.log(`  "${result.title}" by @${result.author} — ${result.state}${result.draft ? " (draft)" : ""}, ${result.ageDays}d old`);
+  console.log(
+    `  size: ${result.size.filesChanged} files, +${result.size.additions}/-${result.size.deletions}`
+  );
+  for (const g of result.areas) {
+    console.log(`  ${g.area}: ${g.files.length} file${g.files.length === 1 ? "" : "s"}`);
+  }
+  console.log(`  CI: ${result.ci.verdict}`);
+  for (const check of (result.ci.checks ?? []).filter((c) => c.class !== "pre-existing")) {
+    console.log(`    [${check.class}] ${check.name}: ${check.evidence}`);
+  }
+  const rc = result.review.counts;
+  console.log(
+    `  review: ${result.review.verdict} (real: ${rc.likelyReal}, needs decision: ${rc.needsDecision}, noise: ${rc.likelyNoise})`
+  );
+  for (const f of (result.review.findings ?? []).filter((x) => x.class === "likely-real").slice(0, 5)) {
+    console.log(`    [${f.author}] ${f.summary}${f.path ? ` (${f.path})` : ""}`);
+    console.log(`      why: ${f.reason}`);
+  }
+  console.log(`  tests: ${result.testEvidence.note}`);
+  if (result.blockers.length > 0) {
+    console.log("  BLOCKERS:");
+    for (const b of result.blockers) console.log(`    - ${b}`);
+  }
+  if (result.unverified.length > 0) {
+    console.log("  not verified:");
+    for (const u of result.unverified) console.log(`    - ${u}`);
+  }
+  console.log(`\n  ${result.lookFirst}`);
+}
+
 async function cmdReview(prUrl: string, asJson: boolean): Promise<void> {
   const result = await triageReview(prUrl);
   if (asJson) {
@@ -1468,6 +1535,8 @@ async function main(): Promise<void> {
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "ci-prep" && target) return await cmdCiPrep(target, args);
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
+    if (command === "radar" && target) return await cmdRadar(target, args);
+    if (command === "brief" && target) return await cmdBrief(target, args);
     if (command === "guard" && target) return await cmdGuard(target, args);
     if (command === "digest" && target) return await cmdDigest(target, args);
     if (command === "claim" && (target || args.includes("--import"))) return await cmdClaim(target ?? "--import", args);

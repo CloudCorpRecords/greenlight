@@ -97,6 +97,26 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight review https://github.com/owner/repo/pull/456"],
   },
   {
+    name: "radar",
+    usage: "greenlight radar <owner/repo> [--limit N] [--json]",
+    description: "Maintainer-side duplicate/competing PR radar: cluster open PRs working the same issue or touching the same files.",
+    flags: [
+      "--limit <N> (cap open PRs scanned, default 25)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight radar usebruno/bruno --limit 30"],
+  },
+  {
+    name: "brief",
+    usage: "greenlight brief <pr-url-or-owner/repo#N> [--json]",
+    description: "Verified review brief for any PR: what changed, CI triage, review findings, test evidence, merge blockers.",
+    flags: ["--json (machine-readable output)"],
+    examples: [
+      "greenlight brief https://github.com/usebruno/bruno/pull/9569",
+      "greenlight brief usebruno/bruno#9569",
+    ],
+  },
+  {
     name: "guard",
     usage: "greenlight guard <pr-url> [--json] [--quiet]",
     description: "Maintainer-side: competing fix, prior and protocol claims, missing artifacts. Exit 3 when flagged.",
@@ -428,6 +448,8 @@ export const NEEDS_TARGET: Record<string, string> = {
   ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
   "ci-prep": "a local repo path, e.g. greenlight ci-prep ~/work/bruno",
   review: "a PR URL, e.g. greenlight review https://github.com/owner/repo/pull/456",
+  radar: "a repo, e.g. greenlight radar usebruno/bruno --limit 30",
+  brief: "a PR URL or owner/repo#N, e.g. greenlight brief usebruno/bruno#9569",
   guard: "a PR URL, e.g. greenlight guard https://github.com/owner/repo/pull/456",
   digest: "a repo, e.g. greenlight digest facebook/react",
   claim: "an issue URL, e.g. greenlight claim https://github.com/owner/repo/issues/123",

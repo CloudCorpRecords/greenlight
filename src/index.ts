@@ -24,6 +24,8 @@ import {
 } from "./automate.js";
 import { triagePr } from "./ci-triage.js";
 import { runCiPrep } from "./ci-prep.js";
+import { radarPRs } from "./radar.js";
+import { briefPR } from "./brief.js";
 import { triageReview } from "./review-triage.js";
 import { guardPr, readGuardConfig } from "./guard.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
@@ -632,6 +634,41 @@ server.tool(
   async ({ path, base, use_act, timeout_secs }) => {
     try {
       const result = await runCiPrep(path, { base, useAct: use_act, timeoutSecs: timeout_secs });
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "pr_radar",
+  "Maintainer-side duplicate/competing PR radar for a repo: clusters open PRs working the same issue (closing-strength links) or touching the same files (Jaccard file overlap with title-prefiltered budget). Each cluster reports PR numbers, authors, evidence, and a heuristic suggested-keep pick; unclustered PRs are counted so the picture stays honest. API budget is measured and reported.",
+  {
+    repo: z.string().describe("owner/repo, e.g. usebruno/bruno"),
+    limit: z.number().optional().describe("Cap open PRs scanned (default 25, max 100)."),
+  },
+  async ({ repo, limit }) => {
+    try {
+      const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      const result = await radarPRs(m[1], m[2], { limit: limit ?? 25 });
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "pr_brief",
+  "Verified review brief for ANY pull request (not just your own): what changed grouped by area/risk, CI triage with the base-vs-head classifier, review findings classified real vs false-positive with evidence, test evidence present or explicitly absent, merge-readiness blockers (conflicts, unresolved change requests, missing changesets), ending with a one-line look-at-this-first. Deterministic classifiers only; unverified items are marked as such.",
+  {
+    target: z.string().describe("PR URL or owner/repo#N, e.g. https://github.com/usebruno/bruno/pull/9569 or usebruno/bruno#9569"),
+  },
+  async ({ target }) => {
+    try {
+      const result = await briefPR(target);
       return text(result);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
