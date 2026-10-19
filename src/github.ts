@@ -994,7 +994,10 @@ export function extractTimelineCrossRefPRs(
 /** Count open issues labelled good-first-issue or help-wanted. */
 export async function countStarterIssues(owner: string, repo: string): Promise<number | null> {
   try {
-    const q = encodeURIComponent(`repo:${owner}/${repo} type:issue state:open (label:"good first issue" OR label:"help wanted")`);
+    // Comma-separated labels are GitHub's OR for the label qualifier; the
+    // parenthesized (a OR b) form silently returns zero (found 2026-10-19:
+    // badges/shields has 42 good-first-issues and the OR form found none).
+    const q = encodeURIComponent(`repo:${owner}/${repo} type:issue state:open label:"good first issue","help wanted"`);
     const data = (await apiGet(`/search/issues?q=${q}&per_page=1`)) as { total_count: number };
     return data.total_count ?? null;
   } catch {
@@ -1136,8 +1139,10 @@ export async function listStarterIssues(
   repo: string,
   limit = 25
 ): Promise<ScanCandidate[]> {
+  // Comma-separated labels are GitHub's OR for the label qualifier; the
+  // parenthesized (a OR b) form silently returns zero (found 2026-10-19).
   const q = encodeURIComponent(
-    `repo:${owner}/${repo} type:issue state:open no:assignee (label:"good first issue" OR label:"help wanted")`
+    `repo:${owner}/${repo} type:issue state:open no:assignee label:"good first issue","help wanted"`
   );
   const data = (await apiGet(`/search/issues?q=${q}&per_page=${limit}&sort=updated&order=desc`)) as {
     items: Array<{

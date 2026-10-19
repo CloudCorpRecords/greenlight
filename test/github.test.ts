@@ -573,3 +573,41 @@ describe("v0.9.3 policy file locations", () => {
     assert.deepEqual(sources, []);
   });
 });
+
+describe("starter-issue search queries (v0.16.0)", () => {
+  // 2026-10-19: the parenthesized (label:"good first issue" OR
+  // label:"help wanted") form silently returned zero results against the
+  // live API (badges/shields has 42; the query found none). Comma
+  // separation is GitHub's working OR for the label qualifier.
+  afterEach(() => {
+    setFetchImpl(null);
+  });
+
+  it("countStarterIssues uses the comma label form, never parens", async () => {
+    const { countStarterIssues } = await import("../src/github.js");
+    let seen = "";
+    setFetchImpl((async (url: string | URL | Request) => {
+      seen = String(url);
+      return new Response(JSON.stringify({ total_count: 42, items: [] }), { status: 200 });
+    }) as typeof fetch);
+    assert.equal(await countStarterIssues("o", "r"), 42);
+    assert.ok(seen.includes("label%3A%22good%20first%20issue%22%2C%22help%20wanted%22"), `query was: ${seen}`);
+    assert.ok(!seen.includes("%28label"), `no parenthesized OR in: ${seen}`);
+  });
+
+  it("listStarterIssues uses the comma label form, never parens", async () => {
+    const { listStarterIssues } = await import("../src/github.js");
+    let seen = "";
+    setFetchImpl((async (url: string | URL | Request) => {
+      seen = String(url);
+      return new Response(
+        JSON.stringify({ total_count: 1, items: [{ number: 7, title: "t", html_url: "u", labels: [], updated_at: "x" }] }),
+        { status: 200 }
+      );
+    }) as typeof fetch);
+    const out = await listStarterIssues("o", "r", 5);
+    assert.equal(out.length, 1);
+    assert.ok(seen.includes("label%3A%22good%20first%20issue%22%2C%22help%20wanted%22"), `query was: ${seen}`);
+    assert.ok(!seen.includes("%28label"), `no parenthesized OR in: ${seen}`);
+  });
+});
