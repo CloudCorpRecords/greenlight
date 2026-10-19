@@ -12,6 +12,7 @@ import {
   scanCandidates,
 } from "./github.js";
 import { scoreIssue } from "./verdict.js";
+import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
 import { fetchFrictionSummary } from "./friction.js";
 import { computeIssueStatus, checkIssueWithProtocol } from "./protocol-fetch.js";
 import {
@@ -83,25 +84,77 @@ server.tool(
   "Rank a repo's open issues by verdict, GO first. Starts with label-tagged good-first-issue / help-wanted issues; when the repo does not use those labels, falls back to the most recent open unassigned issues (flagged as fallback). Use this to pick a winnable issue instead of a taken one.",
   {
     repo: z.string().describe("owner/repo, e.g. PrefectHQ/fastmcp"),
+    deep: z.boolean().default(false).describe("Timeline X-Ray the ranked candidates: demotes issues with hidden in-flight PRs (reporter-owned fix PRs, timeline cross-references) before returning."),
   },
-  async ({ repo }) => {
+  async ({ repo, deep }) => {
     try {
       const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
       if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
       const { issues, fallbackUsed } = await scanCandidates(m[1], m[2], { limit: 10 });
-      const results = [];
+      const results: Array<{
+        number: number;
+        url: string;
+        title: string;
+        verdict: string;
+        reasons: string[];
+        flags: string[];
+      }> = [];
       for (const issue of issues) {
         try {
           const snapshot = await buildIssueSnapshot(m[1], m[2], issue.number);
           const scored = scoreIssue(snapshot);
-          results.push({ url: issue.url, title: issue.title, verdict: scored.verdict, reasons: scored.reasons, flags: scored.flags });
+          results.push({ number: issue.number, url: issue.url, title: issue.title, verdict: scored.verdict, reasons: scored.reasons, flags: scored.flags });
         } catch (err) {
-          results.push({ url: issue.url, title: issue.title, verdict: "ERROR", reasons: [err instanceof Error ? err.message : String(err)], flags: [] });
+          results.push({ number: issue.number, url: issue.url, title: issue.title, verdict: "ERROR", reasons: [err instanceof Error ? err.message : String(err)], flags: [] });
         }
       }
       const rank: Record<string, number> = { GO: 0, RISKY: 1, GATED: 2, STALE: 3, TAKEN: 4, ERROR: 5 };
       results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
-      return text({ repo, fallback: fallbackUsed, results });
+      let deepVerified = 0;
+      if (deep) {
+        for (const r of results) {
+          try {
+            const xr = await xrayIssue(m[1], m[2], r.number);
+            deepVerified++;
+            applyXrayDemotion(r, xr);
+          } catch {
+            // X-Ray is best-effort; the scan verdict stands.
+          }
+        }
+        results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
+      }
+      return text({ repo, fallback: fallbackUsed, deep_verified: deep ? `${deepVerified}/${results.length}` : undefined, results });
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "xray_issues",
+  "Timeline X-Ray: deep-verify candidate issues against their GitHub timelines before writing code. Fetches each issue's timeline, classifies every cross-referenced PR with link-strength scoring, and flags reporter-owned fix PRs and comment claims. Returns GO / RISKY / TAKEN per issue with PR evidence (number, state, link strength, URL). List views hide in-flight PRs; run this on scan results first.",
+  {
+    repo: z.string().describe("owner/repo, e.g. usebruno/bruno"),
+    issues: z.string().optional().describe('Comma-separated issue numbers, e.g. "8149,9319". Omit with from_scan.'),
+    from_scan: z.boolean().default(false).describe("X-ray the scan's top candidates instead of listing issue numbers."),
+    limit: z.number().optional().describe("Max issues to x-ray (default 10)."),
+  },
+  async ({ repo, issues, from_scan, limit }) => {
+    try {
+      const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      const lim = Math.max(1, Math.trunc(limit ?? 10));
+      let numbers: number[];
+      if (issues) {
+        numbers = issues.split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
+        if (numbers.length === 0) return text({ error: "issues needs comma-separated issue numbers" });
+      } else {
+        const { issues: cands } = await scanCandidates(m[1], m[2], { limit: lim });
+        numbers = cands.map((c) => c.number);
+        if (numbers.length === 0) return text({ repo, results: [], note: "no candidate issues found" });
+      }
+      const results = sortXrayResults(await xrayIssues(m[1], m[2], numbers.slice(0, lim)));
+      return text({ repo, deep_verified: true, results });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }
