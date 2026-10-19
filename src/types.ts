@@ -207,6 +207,12 @@ export interface RepoSignals {
   medianFirstReviewHours?: number | null;
   maintainerIssueResponseHours?: number | null;
   openGoodFirstIssueCount?: number | null;
+  /**
+   * v0.16.0: behavioral gate from maintainer actions (not policy text).
+   * Set when detectBehavioralGate ran; null when skipped or unavailable.
+   * When detected, scoreFriction applies the documented -20 penalty.
+   */
+  behavioralGate?: import("./behavior.js").BehavioralGate | null;
   note?: string; // e.g. "hand-verified 2026-10-13" or "live"
 }
 
@@ -284,4 +290,11 @@ export interface FrictionReport {
    */
   outsider_merge_share?: number | null;
   outsider_merge_share_pct?: number | null;
+  /**
+   * v0.16.0: behavioral gate verdict (maintainer actions, not policy
+   * text). Consumers like the policy-index rebaseline read this field to
+   * reclassify repos whose written policy is silent but whose practice is
+   * hostile. Null when the pass was skipped or failed.
+   */
+  behavioral_gate?: import("./behavior.js").BehavioralGate | null;
 }

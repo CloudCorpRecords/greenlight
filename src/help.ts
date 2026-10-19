@@ -65,10 +65,28 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "friction",
-    usage: "greenlight friction <owner/repo> [--json]",
-    description: "How hard it is to land an outside PR here, 0-100 (100 = easiest).",
-    flags: ["--json (machine-readable output)"],
+    usage: "greenlight friction <owner/repo> [--json] [--no-behavioral]",
+    description: "How hard it is to land an outside PR here, 0-100 (100 = easiest). Now also catches behavioral gates: maintainers who reject AI-built PRs in practice.",
+    flags: [
+      "--json (machine-readable output, includes behavioral_gate)",
+      "--no-behavioral (skip the maintainer-action pass; saves up to 18 API calls)",
+    ],
     examples: ["greenlight friction vercel/next.js"],
+  },
+  {
+    name: "wave",
+    usage: "greenlight wave [--index <url|path>] [--repos N] [--min-share N] [--stars lo,hi] [--issues-per-repo N] [--min-budget N] [--json]",
+    description: "Build queue in one command: filters the Agent Policy Index for winnable open repos, x-rays starter issues, excludes behavioral gates, skips repos where you already have an open PR.",
+    flags: [
+      "--index <url|path> (policy index; defaults to the live index)",
+      "--repos <N> (candidate repos, default 10)",
+      "--min-share <N> (minimum outsider merge share, default 40)",
+      "--stars <lo,hi> (star band, default 1000,150000)",
+      "--issues-per-repo <N> (starter issues x-rayed per repo, default 3)",
+      "--min-budget <N> (core API floor; the run stops with partial results under it, default 800)",
+      "--json (machine-readable output)",
+    ],
+    examples: ["greenlight wave --repos 5"],
   },
   {
     name: "ci",

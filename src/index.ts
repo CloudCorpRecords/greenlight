@@ -34,6 +34,14 @@ import { runSync, syncJson } from "./sync.js";
 import { runPortfolio, portfolioJson } from "./portfolio.js";
 import { runAutopilot } from "./autopilot.js";
 import { defaultRegistryPath } from "./claims-registry.js";
+import {
+  runWave,
+  liveWaveDeps,
+  loadPolicyIndex,
+  POLICY_INDEX_URL,
+  DEFAULT_WAVE_FILTERS,
+  type WaveFilters,
+} from "./wave.js";
 import { buildEvidencePack } from "./evidence.js";
 import { digestRepo } from "./digest.js";
 import {
@@ -81,6 +89,8 @@ server.tool(
     }
   }
 );
+
+
 
 server.tool(
   "scan_repo",
@@ -176,6 +186,37 @@ server.tool(
       if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
       const report = await fetchFrictionSummary(m[1], m[2]);
       return text(report);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "wave_queue",
+  "Build queue in one call: filters the Agent Policy Index for winnable open repos, timeline x-rays starter issues with the existing xray engine (CLEAR / RISKY / TAKEN with competing PRs named), excludes repos with behavioral gates (maintainers who reject AI-built PRs in practice), and skips repos where you already have an open PR. Stops with partial results under the API budget floor. Use this to pick what to build today instead of hand-vetting repos.",
+  {
+    index_url: z.string().optional().describe("Policy index URL or local file path. Defaults to the live index."),
+    max_repos: z.number().default(10).describe("Candidate repos to process (default 10)."),
+    min_share: z.number().default(40).describe("Minimum outsider merge share 0-100 (default 40)."),
+    min_stars: z.number().default(1000).describe("Star band floor (default 1000)."),
+    max_stars: z.number().default(150000).describe("Star band ceiling (default 150000)."),
+    issues_per_repo: z.number().default(3).describe("Starter issues x-rayed per repo (default 3)."),
+    min_budget: z.number().default(800).describe("Core API floor; the run stops with partial results under it (default 800)."),
+  },
+  async ({ index_url, max_repos, min_share, min_stars, max_stars, issues_per_repo, min_budget }) => {
+    try {
+      const filters: WaveFilters = {
+        minShare: min_share,
+        minStars: min_stars,
+        maxStars: max_stars,
+        maxRepos: max_repos,
+        issuesPerRepo: issues_per_repo,
+        minBudget: min_budget,
+      };
+      const index = await loadPolicyIndex(index_url ?? POLICY_INDEX_URL);
+      const result = await runWave(index, filters, liveWaveDeps());
+      return text(result);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

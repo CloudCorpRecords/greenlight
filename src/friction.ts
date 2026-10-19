@@ -20,6 +20,11 @@
  *     median hours to first review: -min(hours / 24, 14)
  *       (a week of waiting costs 7 points, capped at 14)
  *     maintainer hours to first issue response: -min(hours / 48, 10)
+ *   behavioral gate (v0.16.0, from maintainer actions not policy text):
+ *     detected behavioral gate: -20 (maintainer rejects AI-built PRs in
+ *     practice, e.g. spotDL/spotify-downloader closing submissions as
+ *     "AI slop"). Cost: up to 18 API calls (1-3 list calls plus one comment page per closed-unmerged PR); skip with
+ *     --no-behavioral or the behavioral:false option.
  *   opportunity:
  *     open good-first-issue count: +min(count, 20) * 0.5 (max +10)
  *   clamp to [0, 100], rounded.
@@ -34,6 +39,7 @@ import {
   countStarterIssues,
 } from "./github.js";
 import { fetchMergeVelocity } from "./merge-velocity.js";
+import { detectBehavioralGate } from "./behavior.js";
 
 const GATE_WEIGHTS: Record<string, number> = {
   assignment_required: -25,
@@ -86,6 +92,14 @@ export function scoreFriction(signals: RepoSignals): FrictionReport {
     if (bonus > 0) reasons.push(`${signals.openGoodFirstIssueCount} open good-first-issues (+${bonus.toFixed(1)})`);
   }
 
+  // v0.16.0: a detected behavioral gate is a hard contributor blocker,
+  // read from maintainer actions rather than policy files.
+  if (signals.behavioralGate?.detected) {
+    score += -20;
+    const n = signals.behavioralGate.strength;
+    reasons.push(`behavioral gate: maintainer rejects AI-built PRs in practice (${n} signal${n === 1 ? "" : "s"}) (-20)`);
+  }
+
   // v0.9.3: ratio fields in JSON always ship both units. The fraction
   // keeps its meaning; the _pct sibling is unambiguous.
   const signalsOut: RepoSignals = {
@@ -130,7 +144,8 @@ export function attachOutsiderShare(report: FrictionReport): FrictionReport {
  */
 export async function fetchFrictionSummary(
   owner: string,
-  repo: string
+  repo: string,
+  opts: { behavioral?: boolean } = {}
 ): Promise<FrictionReport> {
   const [sources, policy, starterCount] = await Promise.all([
     fetchPolicySources(owner, repo),
@@ -145,6 +160,17 @@ export async function fetchFrictionSummary(
       evidence: "repo policy: PR creation restricted to collaborators",
     });
   }
+  // Behavioral gate is a signal, best-effort and silent on failure: a
+  // dead pass must never fabricate a hostile verdict, and a missing one
+  // must never hide an actual gate.
+  let behavioralGate: RepoSignals["behavioralGate"] = null;
+  if (opts.behavioral !== false) {
+    try {
+      behavioralGate = await detectBehavioralGate(owner, repo);
+    } catch {
+      behavioralGate = null;
+    }
+  }
   const signals: RepoSignals = {
     owner,
     repo,
@@ -154,9 +180,11 @@ export async function fetchFrictionSummary(
     medianFirstReviewHours: null,
     maintainerIssueResponseHours: null,
     openGoodFirstIssueCount: starterCount,
+    behavioralGate,
     note: "live",
   };
   const report = scoreFriction(signals);
+  report.behavioral_gate = behavioralGate;
   // Merge velocity is a signal, never a score input. Best-effort: silent
   // when it fails.
   try {

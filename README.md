@@ -25,11 +25,11 @@ Three layers, from decide to solve to coordinate:
 
 | Layer | Question it answers | Flagship commands |
 |---|---|---|
-| **Decide** | Is this issue mine to take? Is this repo worth my time? | `check`, `scan`, `friction`, `xray`, `preflight` |
+| **Decide** | Is this issue mine to take? Is this repo worth my time? | `check`, `scan`, `friction`, `xray`, `wave`, `preflight` |
 | **Solve** | Will my PR pass? What broke? What do I do next? | `ci-prep`, `ci`, `review`, `brief`, `verify`, `autopilot`, `babysit`, `evidence` |
 | **Coordinate** | Who is working on what, and who resolves conflicts? | `claim` (+ Claim Protocol), `guard`, `radar`, `digest`, `passport` |
 
-* **Decide.** `check` reads an issue, its comments, linked and mentioned PRs (timeline plus search plus comment references), and the repo's rules, then answers in plain words: GO, RISKY, TAKEN, GATED, or STALE. `scan` ranks a repo's open issues so you pick a winnable one first. `friction` scores a repo 0 to 100 on how hard it really is to get a PR merged, with every gate quoting the file its evidence came from. `xray` (Timeline X-Ray) deep-verifies candidates against their issue timelines before you write a line, catching hidden in-flight PRs including reporter-owned fix PRs; `scan --deep` demotes anything taken before it shows you the list.
+* **Decide.** `check` reads an issue, its comments, linked and mentioned PRs (timeline plus search plus comment references), and the repo's rules, then answers in plain words: GO, RISKY, TAKEN, GATED, or STALE. `scan` ranks a repo's open issues so you pick a winnable one first. `friction` scores a repo 0 to 100 on how hard it really is to get a PR merged, with every gate quoting the file its evidence came from. `xray` (Timeline X-Ray) deep-verifies candidates against their issue timelines before you write a line, catching hidden in-flight PRs including reporter-owned fix PRs; `scan --deep` demotes anything taken before it shows you the list. `wave` turns the Agent Policy Index into a build queue in one command: winnable open repos, x-rayed starter issues, behavioral gates excluded.
 * **Solve.** `ci-prep` runs a repo's own pull-request checks locally before you push (tests, lint, typecheck, plus conventions like changesets, commit format, DCO), so avoidable CI failures never appear in front of a maintainer. `ci` triages red PRs into pre-existing vs likely-yours vs external-blocker against base-branch history. `review` classifies every review thread as likely-real, likely-noise, or needs-decision and drafts your replies. `verify` reports the honest red-green test delta of your change. `autopilot` verifies bot findings against the code at head and fixes the mechanical items (DCO surgery, conflict re-merges, formatting) itself. `brief` assembles a verified one-screen brief for any PR: change shape by area and risk, CI triaged against base-branch history, findings classified real vs false-positive with evidence, test evidence present or explicitly marked absent, merge blockers, and a one-line look-at-this-first. `babysit` watches your open PRs and reports one prioritized action list.
 * **Coordinate.** `claim` posts a protocol claim (expiring lease, public queue, heartbeats; full spec in [`protocol/SPEC.md`](protocol/SPEC.md)), with a hosted app client option via `--via-api`. `guard` analyzes an incoming PR for a maintainer: competing fix, prior claims, missing artifacts, first-time contributor. `digest` reports a repo's PR races, claimed-by-other conflicts, stale claims, and assignment-gate conflicts. `radar` scans the whole open-PR queue and clusters competing or duplicate PRs with evidence per cluster and a suggested keep, labeled a heuristic, never a verdict. `passport` renders a contributor's merged work plus claim record.
 
@@ -38,7 +38,7 @@ Every verdict and every report cites its evidence: the quoted policy line, the c
 ## Who it is for
 
 * **Contributors (human).** Run `check` before you spend an evening on an issue. Run `scan` when you are picking what to work on. Run `ci-prep` before you push.
-* **AI agents and coding tools.** One command (`init --agent claude-code`, also cursor, copilot, windsurf, cline) installs the MCP config plus the one behavior rule: check Greenlight before opening a PR. Agents waste the most tokens fixing already-taken issues; 27 MCP tools make the whole engine available mid-run.
+* **AI agents and coding tools.** One command (`init --agent claude-code`, also cursor, copilot, windsurf, cline) installs the MCP config plus the one behavior rule: check Greenlight before opening a PR. Agents waste the most tokens fixing already-taken issues; 28 MCP tools make the whole engine available mid-run.
 * **Maintainers.** `guard` on each incoming PR, `radar` across the whole open queue, `digest` for the weekly triage, and the roadmap below for the control room: stale-claim sweeps, policy enforcement, AI-PR filtering.
 
 ## Proof, stated plainly
@@ -103,7 +103,7 @@ One command sets it up:
 npx @reneturcios/greenlight init --agent claude-code
 ```
 
-(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 27 tools (see the list below).
+(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 28 tools (see the list below).
 
 ## CLI
 
@@ -283,12 +283,13 @@ The same engine is exposed over stdio for coding agents (Claude, Cursor, Cline).
 }
 ```
 
-Tools (27):
+Tools (28):
 
 * `check_issue` - verdict for one issue URL
 * `scan_repo` - rank a repo's open issues, GO first (label-tagged starter issues, falling back to recent open unassigned issues; `deep: true` timeline-x-rays the candidates first)
 * `xray_issues` - Timeline X-Ray: deep-verify candidate issues against their timelines (hidden in-flight PRs, reporter-owned fix PRs, comment claims); GO / RISKY / TAKEN per issue with PR evidence
 * `repo_friction` - friction score for a repo
+* `wave_queue` - build queue in one call: filters the Agent Policy Index for winnable open repos, x-rays starter issues (CLEAR / RISKY / TAKEN), excludes behavioral gates, skips repos where you already have an open PR
 * `claim_issue` - verdict-gated claim comment (dry run unless `execute: true`)
 * `prep_issue` - fork and branch check plus a local PREP.md checklist with the repo's learned conventions (dry run unless `execute: true`)
 * `open_pr` - DCO-aware PR opening from a fork branch (dry run unless `execute: true`)
@@ -332,7 +333,11 @@ The verdict engine is deterministic (no LLM) and checks, in order:
 11. An open PR referenced in a non-author comment whose title/body mentions the issue number: downgrades an otherwise-GO verdict to **RISKY** with the `comment-mentioned-pr` flag ("may already cover part of this issue"). Neither can produce **TAKEN**; only closing PRs do that. Fix-announcement comments ("/attempt #N" commands or "Submitted fix for ... in <PR url>" narratives, often linking PRs in sibling repos) get the same downgrade under their own reason quoting the PR URL, with the `attempt-linked-pr` flag, even when the PR never names the issue. `/attempt` comments also register as strong claims.
 12. **Partially-addressed**: merged PRs that reference the issue number (comment-mentioned or linked), or maintainer comments signaling part of the work already shipped ("Half addressed by #905, leaving this open for half B", "Shipped in v3.1.0" next to the issue reference). A plain **GO** hides the scoping work this needs, so the flag `partially-addressed` is added, an otherwise-GO verdict is capped at **RISKY** with a reason like "part of this issue already shipped (PR #905, merged); scope your work to what remains". Never **TAKEN**.
 
-Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, paused unsolicited PRs -40, external PRs auto-closed -50, discussion-first -10, claim-first -5, CLA/DCO -5 each), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
+Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, paused unsolicited PRs -40, external PRs auto-closed -50, discussion-first -10, claim-first -5, CLA/DCO -5 each, detected behavioral gate -20), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
+
+A behavioral gate is not a policy file: it is read from what maintainers do. `friction` walks the closed-PR list until it has the 15 most recent closed-unmerged PRs, then reads maintainer-side comments for AI-rejection evidence (AI attribution plus rejection language, explicit phrases like "AI slop" or an invoked "AI policy", with welcoming overrides like "AI-assisted PRs are welcome" suppressing the signal). Two independent PRs mark the repo as behaviorally gated; a single weak signal is carried as a warning, while a single explicit rejection phrase detects on its own. `friction --json` reports it as `behavioral_gate` (`detected`, `strength`, `threshold`, `evidence` with PR numbers, quotes, and URLs, `notes`), so index pipelines like the rebaseline can reclassify repos whose written policy is silent but whose practice is hostile. API cost is bounded at 18 calls: up to 3 list calls to collect 15 closed-unmerged PRs plus one comment page per PR; skip it with `--no-behavioral`.
+
+`wave` turns the Agent Policy Index into a build queue in one command: pure-open repos with outsider merge share, star band, and starter issues are x-rayed with the existing xray engine (CLEAR / RISKY / TAKEN with competing PRs named), repos with detected behavioral gates are excluded, repos where you already have an open PR are skipped, and the run stops with partial results when the core API budget falls under the floor (default 800). Human and `--json` output; every stage reports the API calls it used.
 
 ### Agent-policy gates and triage holds
 

@@ -4,6 +4,7 @@
  *
  *   greenlight check <issue-url> [--json] [--gates-file path]
  *   greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]
+ *   greenlight wave [--index url|path] [--repos N] [--min-share N] [--stars lo,hi] [--issues-per-repo N] [--min-budget N] [--json]
  *   greenlight mcp
  *   greenlight friction <owner/repo> [--json]
  *   greenlight ci <pr-url> [--json]
@@ -85,6 +86,15 @@ import { briefPR } from "./brief.js";
 import { babysit, defaultStatePath, defaultAccountAuthor } from "./babysit.js";
 import { runAutopilot, defaultAutopilotStatePath } from "./autopilot.js";
 import { runSync, formatSyncHuman, syncJson } from "./sync.js";
+import {
+  runWave,
+  liveWaveDeps,
+  loadPolicyIndex,
+  formatWaveHuman,
+  POLICY_INDEX_URL,
+  DEFAULT_WAVE_FILTERS,
+  type WaveFilters,
+} from "./wave.js";
 import { runPortfolio, formatPortfolioHuman, portfolioJson } from "./portfolio.js";
 import { runShipcheck, formatShipcheckHuman } from "./shipcheck.js";
 import { runPreflight, formatPreflightHuman } from "./preflight.js";
@@ -459,12 +469,16 @@ async function cmdXray(repoRef: string, args: string[]): Promise<void> {
   }
 }
 
-async function cmdFriction(repoRef: string, asJson: boolean): Promise<void> {
+async function cmdFriction(repoRef: string, asJson: boolean, args: string[] = []): Promise<void> {
   const { owner, repo } = parseRepoRef(repoRef);
   // v0.9.3: one shared pipeline (fetchFrictionSummary) for the CLI, the
   // MCP repo_friction tool, and preflight, so gates come from the full
   // policy source set everywhere instead of a single CONTRIBUTING read.
-  const report = await fetchFrictionSummary(owner, repo);
+  // v0.16.0: the behavioral gate pass (maintainer actions, not policy
+  // text) is part of the report; --no-behavioral skips its API cost.
+  const report = await fetchFrictionSummary(owner, repo, {
+    behavioral: !args.includes("--no-behavioral"),
+  });
 
   if (asJson) {
     console.log(JSON.stringify(report, null, 2));
@@ -473,9 +487,68 @@ async function cmdFriction(repoRef: string, asJson: boolean): Promise<void> {
   console.log(`Friction for ${owner}/${repo}: ${report.score}/100 (100 = easiest)`);
   for (const reason of report.reasons) console.log(`  - ${reason}`);
   if (report.reasons.length === 0) console.log("  - no gates or penalties detected");
+  if (report.behavioral_gate?.detected) {
+    const n = report.behavioral_gate.strength;
+    console.log(`  BEHAVIORAL GATE: maintainer rejects AI-built PRs in practice (${n} signal${n === 1 ? "" : "s"})`);
+    for (const ev of report.behavioral_gate.evidence) {
+      console.log(`    - PR #${ev.pr} by @${ev.author}: "${ev.quote}" (${ev.url})`);
+    }
+  } else if (report.behavioral_gate && report.behavioral_gate.evidence.length > 0) {
+    console.log(`  behavioral note: ${report.behavioral_gate.note}`);
+  }
   const starterCount = report.signals.openGoodFirstIssueCount ?? null;
   if (starterCount !== null) console.log(`  open starter issues: ${starterCount}`);
   if (report.mergeVelocity) console.log(`  merge velocity: ${describeMergeVelocity(report.mergeVelocity)}`);
+}
+
+/**
+ * v0.16.0: turn the Agent Policy Index into a build queue in one command.
+ * Filters pure-open repos, x-rays starter issues with the existing xray
+ * engine, excludes behavioral gates, and skips repos where you already
+ * have an open PR. Stops with partial results under the budget floor.
+ */
+async function cmdWave(args: string[]): Promise<void> {
+  const numFlag = (name: string): number | undefined => {
+    const v = flagValue(args, name);
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const starsRaw = flagValue(args, "--stars");
+  let minStars = DEFAULT_WAVE_FILTERS.minStars;
+  let maxStars = DEFAULT_WAVE_FILTERS.maxStars;
+  if (starsRaw) {
+    const [lo, hi] = starsRaw.split(",").map(Number);
+    if (Number.isFinite(lo) && Number.isFinite(hi) && lo <= hi) {
+      minStars = lo;
+      maxStars = hi;
+    }
+  }
+  const filters: WaveFilters = {
+    minShare: numFlag("--min-share") ?? DEFAULT_WAVE_FILTERS.minShare,
+    minStars,
+    maxStars,
+    maxRepos: numFlag("--repos") ?? DEFAULT_WAVE_FILTERS.maxRepos,
+    issuesPerRepo: numFlag("--issues-per-repo") ?? DEFAULT_WAVE_FILTERS.issuesPerRepo,
+    minBudget: numFlag("--min-budget") ?? DEFAULT_WAVE_FILTERS.minBudget,
+  };
+  const indexSource = flagValue(args, "--index") ?? POLICY_INDEX_URL;
+  const asJson = args.includes("--json");
+  let index;
+  try {
+    index = await loadPolicyIndex(indexSource);
+  } catch (err) {
+    console.error(`Error: could not load the policy index from ${indexSource}: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
+  const result = await runWave(index, filters, liveWaveDeps());
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(formatWaveHuman(result));
+  if (result.partial) process.exitCode = 2;
 }
 
 function flagValue(args: string[], name: string): string | undefined {
@@ -1531,7 +1604,8 @@ async function main(): Promise<void> {
     if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "xray" && target) return await cmdXray(target, args);
-    if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
+    if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"), args);
+    if (command === "wave") return await cmdWave(args);
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "ci-prep" && target) return await cmdCiPrep(target, args);
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
