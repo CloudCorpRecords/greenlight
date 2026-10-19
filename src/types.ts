@@ -44,6 +44,11 @@ export interface LinkedPR {
   /** How strongly the PR is tied to the issue. Only "closing" PRs take an issue. */
   linkStrength: "closing" | "mention";
   /**
+   * PR author's login (v0.13.0, for Timeline X-Ray's reporter-owned-PR
+   * rule). Empty/absent on cache entries written before v0.13.0.
+   */
+  author?: string;
+  /**
    * Where the link was found: "timeline" for GitHub's own
    * cross-referenced timeline events (the strongest race signal; a PR in
    * flight against the issue even when its body never says "closes #N"),
