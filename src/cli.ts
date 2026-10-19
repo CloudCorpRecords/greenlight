@@ -32,7 +32,9 @@ import {
   scanCandidates,
   RateLimitError,
   fetchComments,
+  apiCallsUsed,
 } from "./github.js";
+import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
 import { CLAIM_MARKER } from "./protocol.js";
 import { llmEnabled, llmModelId } from "./llm-claims.js";
 import type { LlmLayerStatus } from "./types.js";
@@ -306,6 +308,7 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   }
   const externalGates = loadExternalGates(args);
   const results: Array<{
+    number: number;
     url: string;
     title: string;
     verdict: string;
@@ -325,6 +328,7 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     try {
       const { merged } = await checkIssueWithProtocol(owner, repo, issue.number, { externalGates });
       results.push({
+        number: issue.number,
         url: issue.url,
         title: issue.title,
         verdict: merged.verdict,
@@ -334,6 +338,7 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
       });
     } catch (err) {
       results.push({
+        number: issue.number,
         url: issue.url,
         title: issue.title,
         verdict: "ERROR",
@@ -346,11 +351,33 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   const rank: Record<string, number> = { GO: 0, RISKY: 1, GATED: 2, STALE: 3, TAKEN: 4, ERROR: 5 };
   results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
 
+  // v0.13.0 --deep: Timeline X-Ray over the ranked candidates. The check
+  // pipeline already reads timelines, but X-Ray adds the reporter-owned-PR
+  // strengthening (a mention-strength PR by the issue reporter is the
+  // classic hidden trap) and per-PR evidence. Anything the x-ray finds
+  // worse than the check verdict demotes the issue before presentation.
+  let deepVerified = 0;
+  if (args.includes("--deep") && results.length > 0) {
+    for (const r of results) {
+      try {
+        const xr = await xrayIssue(owner, repo, r.number);
+        deepVerified++;
+        applyXrayDemotion(r, xr);
+      } catch {
+        // X-Ray is best-effort; the check verdict stands.
+      }
+    }
+    results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
+  }
+
   if (asJson) {
     console.log(JSON.stringify({ repo: `${owner}/${repo}`, fallback: fallbackUsed, results }, null, 2));
     return;
   }
   console.log(`Scan of ${owner}/${repo}: ${results.length} candidate issues, GO first`);
+  if (args.includes("--deep")) {
+    console.log(`  timeline x-ray: deep-verified ${deepVerified}/${results.length} (reporter-owned PRs + per-PR evidence)`);
+  }
   // v0.9.2: say whether the AI claim layer ran on this scan. Per-issue
   // statuses ride in the JSON; the human line states the environment.
   console.log(
@@ -365,6 +392,65 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     console.log(`\n${SYMBOL[r.verdict] ?? "[?]"} ${r.title}`);
     console.log(`  ${r.url}`);
     console.log(`  - ${r.reasons[0] ?? "no reason"}`);
+    if (r.flags.length > 0) console.log(`  flags: ${r.flags.join(", ")}`);
+  }
+}
+
+async function cmdXray(repoRef: string, args: string[]): Promise<void> {
+  const { owner, repo } = parseRepoRef(repoRef);
+  const asJson = args.includes("--json");
+  const issuesFlag = flagValue(args, "--issues");
+  const limitRaw = flagValue(args, "--limit");
+  const limit = limitRaw !== undefined ? Math.max(1, Math.trunc(Number(limitRaw)) || 10) : 10;
+  let numbers: number[] = [];
+  if (issuesFlag) {
+    numbers = issuesFlag
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (numbers.length === 0) {
+      console.error("Error: --issues needs comma-separated issue numbers, e.g. --issues 8149,9319");
+      process.exitCode = 1;
+      return;
+    }
+  } else {
+    // --from-scan or default: x-ray the scan's top candidates.
+    const { issues } = await scanCandidates(owner, repo, {
+      fallback: !args.includes("--no-fallback"),
+      limit,
+    });
+    numbers = issues.map((i) => i.number);
+    if (numbers.length === 0) {
+      console.log(`No candidate issues found in ${owner}/${repo}.`);
+      return;
+    }
+  }
+  numbers = numbers.slice(0, limit);
+  const callsBefore = apiCallsUsed();
+  const results = sortXrayResults(await xrayIssues(owner, repo, numbers));
+  const totalCalls = apiCallsUsed() - callsBefore;
+
+  if (asJson) {
+    console.log(
+      JSON.stringify({ repo: `${owner}/${repo}`, deep_verified: true, api_calls: totalCalls, results }, null, 2)
+    );
+    return;
+  }
+  console.log(
+    `Timeline X-Ray of ${owner}/${repo}: ${results.length} issues deep-verified (${totalCalls} API calls)`
+  );
+  for (const r of results) {
+    console.log(`\n${SYMBOL[r.verdict] ?? "[?]"} #${r.number} ${r.title}`);
+    console.log(`  ${r.url}`);
+    for (const reason of r.reasons) console.log(`  - ${reason}`);
+    if (r.linkedPRs.length > 0) {
+      console.log(`  linked PRs:`);
+      for (const pr of r.linkedPRs) {
+        console.log(
+          `    #${pr.number} [${pr.state}/${pr.linkStrength}${pr.via ? `/${pr.via}` : ""}]${pr.reporterOwned ? " reporter's own" : ""} ${pr.url}`
+        );
+      }
+    }
     if (r.flags.length > 0) console.log(`  flags: ${r.flags.join(", ")}`);
   }
 }
@@ -1317,12 +1403,12 @@ function usage(): void {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import", "--via-api", "--queue-ok", "--browser", "--reaction"]);
+  const flags = new Set(["--json", "--yes", "--force", "--no-fallback", "--quiet", "--fail-on-race", "--allow-dirty", "--mine", "--labels-dry-run", "--dry-run", "--list", "--write", "--register", "--claims-only", "--import", "--via-api", "--queue-ok", "--browser", "--reaction", "--deep", "--from-scan"]);
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (flags.has(a)) continue;
-    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as" || a === "--ledger-user" || a === "--urls" || a === "--port" || a === "--concurrency" || a === "--token" || a === "--api-base" || a === "--client-id") {
+    if (a === "--dir" || a === "--title" || a === "--branch" || a === "--gates-file" || a === "--limit" || a === "--plan" || a === "--eta-days" || a === "--from-file" || a === "--claim" || a === "--env" || a === "--repro" || a === "--observed" || a === "--expected" || a === "--root-cause" || a === "--fix" || a === "--ran" || a === "--by" || a === "--base" || a === "--cmd" || a === "--parser" || a === "--timeout-secs" || a === "--prs" || a === "--repos" || a === "--repos-file" || a === "--state" || a === "--out" || a === "--verify-json" || a === "--agent" || a === "--campaign" || a === "--budget" || a === "--scan-limit" || a === "--keep" || a === "--as" || a === "--ledger-user" || a === "--urls" || a === "--port" || a === "--concurrency" || a === "--token" || a === "--api-base" || a === "--client-id" || a === "--issues") {
       i++; // skip the value with its flag
       continue;
     }
@@ -1358,6 +1444,7 @@ async function main(): Promise<void> {
     if (command === "check" && target) return await cmdCheck(target, args.includes("--json"), args);
     if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
+    if (command === "xray" && target) return await cmdXray(target, args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"));
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));
     if (command === "review" && target) return await cmdReview(target, args.includes("--json"));
