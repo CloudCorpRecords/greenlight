@@ -350,6 +350,7 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
     let linkStrength: LinkStrength = "mention";
     let title = cand.title;
     let state = cand.state;
+    let prAuthor = "";
     try {
       const detail = (await apiGet(`/repos/${owner}/${repo}/pulls/${cand.number}`)) as {
         title?: unknown;
@@ -357,7 +358,13 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
         state?: unknown;
         merged_at?: unknown;
         head?: { ref?: unknown };
+        user?: { login?: unknown };
       };
+      // v0.13.0 (xray): capture the PR author so Timeline X-Ray can spot
+      // the reporter's own fix PR (mention-strength, search-discovered).
+      prAuthor = String(
+        (detail.user as { login?: unknown } | undefined)?.login ?? ""
+      );
       title = String(detail.title ?? cand.title);
       // The individual PR fetch is authoritative on state (covers
       // timeline-only PRs the search pass never saw).
@@ -372,7 +379,7 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
     } catch {
       linkStrength = "mention"; // could not read the PR; treat as a weak reference
     }
-    prs.push({ number: cand.number, state, title, url: cand.url, linkStrength, via: cand.via });
+    prs.push({ number: cand.number, state, title, url: cand.url, linkStrength, via: cand.via, author: prAuthor });
   }
 
   cacheSet("issue", [owner, repo, String(number), "prs"], prs);

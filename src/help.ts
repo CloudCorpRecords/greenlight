@@ -38,14 +38,30 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "scan",
-    usage: "greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]",
+    usage: "greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path] [--deep]",
     description: "Rank a repo's open starter issues by verdict, GO first.",
     flags: [
       "--json (machine-readable output)",
       "--no-fallback (skip the recent-unassigned fallback pass)",
       "--gates-file <path> (use a committed contribution-gates.json)",
+      "--deep (timeline x-ray the ranked candidates: demotes issues with hidden in-flight PRs)",
     ],
-    examples: ["greenlight scan facebook/react"],
+    examples: ["greenlight scan facebook/react", "greenlight scan usebruno/bruno --deep"],
+  },
+  {
+    name: "xray",
+    usage: "greenlight xray <owner/repo> [--issues 1,2,3 | --from-scan] [--limit N] [--json]",
+    description: "Timeline X-Ray: deep-verify candidate issues against their timelines (hidden in-flight PRs).",
+    flags: [
+      "--issues <n,...> (x-ray exactly these issue numbers)",
+      "--from-scan (x-ray the scan's top candidates; the default when --issues is absent)",
+      "--limit <N> (cap issues x-rayed, default 10)",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight xray usebruno/bruno --issues 8149,9319",
+      "greenlight xray usebruno/bruno --from-scan --limit 5",
+    ],
   },
   {
     name: "friction",
@@ -395,6 +411,7 @@ export const NEEDS_TARGET: Record<string, string> = {
   check: "an issue URL, e.g. greenlight check https://github.com/owner/repo/issues/123",
   status: "an issue URL, e.g. greenlight status https://github.com/owner/repo/issues/123",
   scan: "a repo, e.g. greenlight scan facebook/react",
+  xray: "a repo, e.g. greenlight xray usebruno/bruno --issues 8149,9319",
   friction: "a repo, e.g. greenlight friction vercel/next.js",
   ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
   review: "a PR URL, e.g. greenlight review https://github.com/owner/repo/pull/456",
