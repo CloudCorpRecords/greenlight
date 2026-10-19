@@ -232,4 +232,19 @@ describe("runWave", () => {
     assert.equal(result.queue.length, 1);
     assert.equal(result.queue[0].repo, "o/one");
   });
+
+  it("degrades to partial when a search call is rate limited", async () => {
+    const { RateLimitError } = await import("../src/github.js");
+    const deps = fixtureDeps({
+      starters: { "o/one": [{ number: 1, title: "t", url: "u" }] },
+      xrays: { "o/one#1": xray("GO", { number: 1 }) },
+    });
+    deps.starterIssues = async () => {
+      throw new RateLimitError("GitHub rate limit hit (403). Secondary limit.");
+    };
+    const result = await runWave([entry("o/one", { stars: 9000 })], filters, deps);
+    assert.equal(result.partial, true);
+    assert.ok(result.partialReason?.includes("rate limited"));
+    assert.equal(result.queue.length, 0);
+  });
 });

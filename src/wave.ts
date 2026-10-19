@@ -21,8 +21,10 @@
  * Budget honesty: every stage reports the GitHub API calls it used, and
  * the run stops with partial results (marked partial) when the core
  * budget falls under the floor, so a wave never strands the rate limit.
+ * Search-side throttling (GitHub's secondary rate limits) degrades to
+ * partial results the same way instead of failing the whole run.
  */
-import { apiGet, apiCallsUsed, listStarterIssues } from "./github.js";
+import { apiGet, apiCallsUsed, listStarterIssues, RateLimitError } from "./github.js";
 import { xrayIssue, type XrayResult } from "./xray.js";
 import { detectBehavioralGate, type BehavioralGate } from "./behavior.js";
 
@@ -172,75 +174,105 @@ export async function runWave(
   };
 
   const candidates = filterWaveRepos(index, filters);
-  if ((await deps.remainingBudget()) < filters.minBudget) {
-    return finish(
-      [],
-      true,
-      `core budget under the ${filters.minBudget} floor before the run started`
-    );
+  const rateLimited = (err: unknown): WaveResult | null =>
+    err instanceof RateLimitError
+      ? finish([], true, `rate limited: ${err.message}`)
+      : null;
+
+  try {
+    if ((await deps.remainingBudget()) < filters.minBudget) {
+      return finish(
+        [],
+        true,
+        `core budget under the ${filters.minBudget} floor before the run started`
+      );
+    }
+  } catch (err) {
+    const partial = rateLimited(err);
+    if (partial) return partial;
+    throw err;
   }
 
-  const login = await deps.getLogin();
-  const ownPrs = await deps.ownOpenPrRepos(login);
+  let login: string;
+  let ownPrs: Set<string>;
+  try {
+    login = await deps.getLogin();
+    ownPrs = await deps.ownOpenPrRepos(login);
+  } catch (err) {
+    const partial = rateLimited(err);
+    if (partial) return partial;
+    throw err;
+  }
   const repos: WaveRepo[] = [];
 
   for (const entry of candidates) {
-    if ((await deps.remainingBudget()) < filters.minBudget) {
-      return finish(
-        repos,
-        true,
-        `core budget fell under the ${filters.minBudget} floor at ${entry.repo}`
-      );
-    }
-    const [owner, repoName] = entry.repo.split("/");
-    const base: WaveRepo = {
-      repo: entry.repo,
-      url: entry.url ?? `https://github.com/${entry.repo}`,
-      stars: entry.stars ?? 0,
-      issues: [],
-    };
-    if (ownPrs.has(entry.repo.toLowerCase())) {
-      repos.push({ ...base, excluded: "you already have an open PR here" });
-      continue;
-    }
-    const starters = await deps.starterIssues(owner, repoName, filters.issuesPerRepo);
-    if (starters.length === 0) {
-      repos.push({ ...base, excluded: "no starter issues found via the label search" });
-      continue;
-    }
-    const issues: WaveIssue[] = [];
-    for (const s of starters) {
-      const xr = await deps.xray(owner, repoName, s.number);
-      const competingPRs = xr.linkedPRs
-        .filter((p) => p.state === "open")
-        .map((p) => ({ number: p.number, url: p.url, state: p.state }));
-      issues.push({
+    try {
+      if ((await deps.remainingBudget()) < filters.minBudget) {
+        return finish(
+          repos,
+          true,
+          `core budget fell under the ${filters.minBudget} floor at ${entry.repo}`
+        );
+      }
+      const [owner, repoName] = entry.repo.split("/");
+      const base: WaveRepo = {
         repo: entry.repo,
-        number: s.number,
-        title: s.title,
-        url: s.url,
-        verdict: mapXrayVerdict(xr.verdict),
-        reasons: xr.reasons,
-        flags: xr.flags,
-        competingPRs,
-        apiCalls: xr.apiCalls,
-      });
-    }
-    const repoEntry: WaveRepo = { ...base, issues };
-    const hasClear = issues.some((i) => i.verdict === "CLEAR");
-    if (hasClear) {
-      const gate = await deps.behavioral(owner, repoName);
-      repoEntry.behavioralGate = gate;
-      if (gate.detected) {
-        repos.push({
-          ...repoEntry,
-          excluded: `behavioral gate: maintainer rejects AI-built PRs in practice (${gate.strength} signals)`,
-          issues: [],
-        });
+        url: entry.url ?? `https://github.com/${entry.repo}`,
+        stars: entry.stars ?? 0,
+        issues: [],
+      };
+      if (ownPrs.has(entry.repo.toLowerCase())) {
+        repos.push({ ...base, excluded: "you already have an open PR here" });
         continue;
       }
+      const starters = await deps.starterIssues(owner, repoName, filters.issuesPerRepo);
+      if (starters.length === 0) {
+        repos.push({ ...base, excluded: "no starter issues found via the label search" });
+        continue;
+      }
+      const issues: WaveIssue[] = [];
+      for (const s of starters) {
+        const xr = await deps.xray(owner, repoName, s.number);
+        const competingPRs = xr.linkedPRs
+          .filter((p) => p.state === "open")
+          .map((p) => ({ number: p.number, url: p.url, state: p.state }));
+        issues.push({
+          repo: entry.repo,
+          number: s.number,
+          title: s.title,
+          url: s.url,
+          verdict: mapXrayVerdict(xr.verdict),
+          reasons: xr.reasons,
+          flags: xr.flags,
+          competingPRs,
+          apiCalls: xr.apiCalls,
+        });
+      }
+      const repoEntry: WaveRepo = { ...base, issues };
+      const hasClear = issues.some((i) => i.verdict === "CLEAR");
+      if (hasClear) {
+        const gate = await deps.behavioral(owner, repoName);
+        repoEntry.behavioralGate = gate;
+        if (gate.detected) {
+          repos.push({
+            ...repoEntry,
+            excluded: `behavioral gate: maintainer rejects AI-built PRs in practice (${gate.strength} signal${gate.strength === 1 ? "" : "s"})`,
+            issues: [],
+          });
+          continue;
+        }
+      }
+      repos.push(repoEntry);
+    } catch (err) {
+      if (err instanceof RateLimitError) {
+        return finish(
+          repos,
+          true,
+          `rate limited at ${entry.repo}: ${err.message}`
+        );
+      }
+      throw err;
     }
-    repos.push(repoEntry);
   }
   return finish(repos, false);
 }
