@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.1 (2026-10-18)
+
+- **PR Radar precision fix.** Our own maintainer-seeding runs caught radar hallucinating issue links from branch numbers: 6 false-positive same-issue clusters across 4 repos, all one root cause. GitHub web-UI branches (`patch-1`, `inian-patch-1`) were parsed as issue #1; HTTP status codes in branches (`fix-mcp-oauth-500`, `...-500-missing-variants`) as issue #500; a version string (`shorten-changelog-prior-to-1.0`) and a bot task counter (`claude/task-22584764486-1`) as issue #1; a batch counter (`bundle-size-3-migrate`) as issue #3. A branch number now counts as an issue reference only under a defensible convention: an explicit `#N` marker, an issue-prefix token (`fix-9483-wsdl`, `issue-61`), issue-first segment start (`feat/61-resume-block`), a trailing number after a word (`...-newlines-6435`), or a bare 3+ digit token (`pay-852-...`). Never from `patch-N` names, versions, numeric sub-counters, unmarked status codes, or bare 1-2 digit counters (`-try-2`). All 9 genuine seeding clusters still cluster (including bruno #5016/#5074 on #5011 and the file-overlap pairs, which never used branch numbers). Each false positive is pinned by a regression test naming its source repo.
+- **Guard example workflow pin refreshed.** `examples/guard-workflow.yml` now pins `CloudCorpRecords/greenlight@v0.15.0` (was v0.12.0).
+
 ## 0.15.0 (2026-10-18)
 
 - **PR Radar (`greenlight radar` / MCP `pr_radar`).** Maintainer-side duplicate/competing PR detection: clusters a repo's open PRs by closing-strength links to the same issue (reusing the linkStrength machinery from the check pipeline and Timeline X-Ray) or by high changed-file overlap (Jaccard file similarity, with a title-token pre-filter so file lists are fetched only for plausible pairs). Each cluster reports PR numbers, authors, evidence, and a heuristic suggested-keep pick (earliest opened, then most files, then greenest CI; always labeled heuristic, never a verdict). The maintainer control-room wedge: which open PRs are doing the same work.
