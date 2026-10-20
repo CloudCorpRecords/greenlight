@@ -262,3 +262,44 @@ describe("v0.17.1 behavioral recency bound (item 18)", () => {
     assert.equal(r.newestClosedAt, "2024-06-01T00:00:00Z");
   });
 });
+
+describe("v0.18.0 behavioral evidence from reviews and review comments (item 5)", () => {
+  const rev = (
+    prNumber: number,
+    author: string,
+    body: string,
+    source: "review" | "review_comment" = "review"
+  ): BehavioralMaintainerComment => ({
+    pr: prNumber,
+    author,
+    association: "OWNER",
+    body,
+    url: `https://github.com/o/r/pull/${prNumber}#review-1`,
+    source,
+  });
+
+  it("a maintainer review carrying an explicit rejection phrase fires, with its source on the evidence", () => {
+    const gate = detectBehavioralGateFromData(
+      [pr(1, "outsider"), pr(2, "outsider")],
+      [
+        rev(1, "maintainer", "AI slop. Closing this."),
+        rev(2, "maintainer", "This looks AI-generated. We do not accept those here.", "review_comment"),
+      ]
+    );
+    assert.equal(gate.detected, true);
+    assert.equal(gate.strength, 2);
+    assert.ok(gate.evidence.some((e) => e.source === "review"), "review evidence labeled");
+    assert.ok(gate.evidence.some((e) => e.source === "review_comment"), "review comment evidence labeled");
+  });
+
+  it("an empty review body is meaningless on its own but never fabricates a signal", () => {
+    // Empty bodies are skipped by the live fetcher; the pure core only
+    // sees texts, so assert the matcher never fires on whitespace.
+    const gate = detectBehavioralGateFromData(
+      [pr(1, "outsider")],
+      [{ pr: 1, author: "maintainer", association: "OWNER", body: "  ", url: "u", source: "review" }]
+    );
+    assert.equal(gate.strength, 0);
+    assert.equal(gate.detected, false);
+  });
+});

@@ -611,3 +611,16 @@ describe("starter-issue search queries (v0.16.0)", () => {
     assert.ok(!seen.includes("%28label"), `no parenthesized OR in: ${seen}`);
   });
 });
+
+describe("v0.18.0 repo rename resolution (item 15)", () => {
+  it("resolveCanonicalRepo keeps an unrenamed name untouched", async () => {
+    const { resolveCanonicalRepo } = await import("../src/github.js");
+    // dbt-labs/dbt is the canonical name; the resolver must not invent
+    // a rename for it. (Runs against the configured API base: the test
+    // environment resolves public repos anonymously, so failure to
+    // fetch also returns the input unchanged by design.)
+    const r = await resolveCanonicalRepo("dbt-labs", "dbt");
+    assert.equal(r.fullName, "dbt-labs/dbt");
+    assert.equal(r.renamed, false);
+  });
+});

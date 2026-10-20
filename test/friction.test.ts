@@ -150,3 +150,31 @@ describe("v0.17.1 canonical behavioral_gate location (item 12)", () => {
     assert.equal(report.signals.behavioralGate, null);
   });
 });
+
+describe("v0.18.0 external merge-rate score term (item 11)", () => {
+  const gated = () => gatesOn(["collaborators_only"]);
+
+  it("a high outsider merge rate scores above an identical zero-outsider repo", () => {
+    const high = scoreFriction(base({ gates: gated(), externalPRMergeRate: 0.9 }));
+    const low = scoreFriction(base({ gates: gated(), externalPRMergeRate: 0.0 }));
+    assert.equal(high.score, 50 + (0.9 - 0.5) * 40, "100 - 50 + 16");
+    assert.equal(low.score, 50 + (0.0 - 0.5) * 40, "100 - 50 - 20");
+    assert.ok(high.score > low.score);
+  });
+
+  it("the term is exposed in the JSON with its percent sibling", () => {
+    const r = scoreFriction(base({ externalPRMergeRate: 0.75 }));
+    assert.equal(r.signals.externalPRMergeRate, 0.75);
+    assert.equal(r.signals.externalPRMergeRate_pct, 75);
+    assert.ok(
+      r.reasons.some((x) => x.includes("external PR merge rate 75%") && x.includes("+10.0")),
+      "the reason quotes the term contribution"
+    );
+  });
+
+  it("null rate keeps the old neutral behavior", () => {
+    const r = scoreFriction(base());
+    assert.equal(r.score, 100);
+    assert.ok(!r.reasons.some((x) => x.includes("external PR merge rate")));
+  });
+});
