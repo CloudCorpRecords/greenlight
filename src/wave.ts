@@ -16,7 +16,8 @@
  *      repos that produced at least one CLEAR issue: a detected
  *      behavioral gate excludes the repo with the reason named.
  *   5. A repo is also skipped when the authenticated user already has an
- *      open PR there (one search call, not one per repo).
+ *      open PR there (one paginated search, not one call per repo; an
+ *      unreadable login aborts the run rather than matching nothing).
  *
  * Budget honesty: every stage reports the GitHub API calls it used, and
  * the run stops with partial results (marked partial) when the core
@@ -29,6 +30,35 @@ import { xrayIssue, type XrayResult } from "./xray.js";
 import { detectBehavioralGate, type BehavioralGate } from "./behavior.js";
 
 export const POLICY_INDEX_URL = "https://cloudcorprecords.github.io/greenlight/policy.json";
+
+/** GitHub search hard cap: no search returns more than 1000 results. */
+export const SEARCH_RESULT_CAP = 1000;
+
+/**
+ * Pure pagination driver for the search API (item 13): keep fetching
+ * 100-result pages until the reported total is covered or a short page
+ * ends the results. The reported total is clamped to the search cap so
+ * a runaway total cannot page forever. Tests drive this with fixtures.
+ */
+export async function collectSearchPages<T>(
+  fetchPage: (page: number) => Promise<{ total_count?: number; items?: T[] }>
+): Promise<T[]> {
+  const out: T[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+  while (out.length < total) {
+    const data = await fetchPage(page);
+    if (typeof data.total_count === "number") {
+      total = Math.min(data.total_count, SEARCH_RESULT_CAP);
+    }
+    const items = data.items ?? [];
+    if (items.length === 0) break;
+    out.push(...items);
+    if (items.length < 100) break;
+    page++;
+  }
+  return out;
+}
 
 /** One entry of the Agent Policy Index (the fields wave filters on). */
 export interface PolicyIndexEntry {
@@ -98,7 +128,11 @@ export interface WaveRepo {
 
 export interface WaveResult {
   repos: WaveRepo[];
-  /** Ranked queue: CLEAR first, then RISKY; repo star order within a tier. */
+  /**
+   * Ranked queue: CLEAR first, then RISKY. Within a tier the order is
+   * the candidate order from filterWaveRepos (winnability by default;
+   * stars with --sort stars).
+   */
   queue: WaveIssue[];
   apiCalls: number;
   partial: boolean;
@@ -225,6 +259,15 @@ export async function runWave(
   let ownPrs: Set<string>;
   try {
     login = await deps.getLogin();
+    if (!login) {
+      // Item 25: an unreadable login must never degrade to an empty
+      // exclusion set: the wave would silently double-book repos the
+      // user already occupies. Abort loudly instead.
+      throw new Error(
+        "wave: could not determine the authenticated GitHub login (GET /user returned no login); " +
+          "refusing to run with an empty own-PR exclusion"
+      );
+    }
     ownPrs = await deps.ownOpenPrRepos(login);
   } catch (err) {
     const partial = rateLimited(err);
@@ -335,11 +378,22 @@ export function liveWaveDeps(): WaveDeps {
       return String(me.login ?? "");
     },
     async ownOpenPrRepos(login: string) {
-      const data = (await apiGet(
-        `/search/issues?q=${encodeURIComponent(`author:${login} type:pr state:open`)}&per_page=100`
-      )) as { items?: Array<{ repository_url?: string }> };
+      // Item 13: paginate the exclusion. The old single-page call
+      // silently stopped working past 100 open PRs; the campaign is
+      // past 90 authored, so this would have started double-booking
+      // repos within weeks. The search API caps at 1000 results; the
+      // wave exclusion is exact up to that cap (documented in help).
+      const items = await collectSearchPages<{ repository_url?: string }>(
+        (page) =>
+          apiGet(
+            `/search/issues?q=${encodeURIComponent(`author:${login} type:pr state:open`)}&per_page=100&page=${page}`
+          ) as Promise<{
+            total_count?: number;
+            items?: Array<{ repository_url?: string }>;
+          }>
+      );
       const set = new Set<string>();
-      for (const item of data.items ?? []) {
+      for (const item of items) {
         const m = /\/repos\/([^/]+\/[^/]+)$/.exec(item.repository_url ?? "");
         if (m) set.add(m[1].toLowerCase());
       }

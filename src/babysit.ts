@@ -38,11 +38,12 @@ import { dirname, join } from "node:path";
 export const STUCK_CHECK_MINUTES = 120;
 
 /**
- * Default bound on concurrent per-PR fetches (v0.9.1): a 15-PR sweep was
- * ~9 minutes serial. Override per run with BabysitRunOptions.concurrency
- * or the CLI --concurrency flag.
+ * Default bound on concurrent per-PR fetches (v0.9.1: 5; lowered to 3 in
+ * v0.17.1: 43-PR sweeps at the old default wedged the shared proxy, and
+ * field runs needed --concurrency 2-3 to stay healthy). Override per run
+ * with BabysitRunOptions.concurrency or the CLI --concurrency flag.
  */
-export const BABYSIT_CONCURRENCY = 5;
+export const BABYSIT_CONCURRENCY = 3;
 
 /** How many times to attempt one PR's network reads before calling it a transient failure. */
 export const BABYSIT_RETRIES = 2;

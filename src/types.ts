@@ -313,6 +313,10 @@ export interface FrictionReport {
    * text). Consumers like the policy-index rebaseline read this field to
    * reclassify repos whose written policy is silent but whose practice is
    * hostile. Null when the pass was skipped or failed.
+   *
+   * v0.17.1 (item 12): this top-level field is the CANONICAL location.
+   * `signals.behavioralGate` is kept as a mirror for index-pipeline
+   * compatibility; both always carry the same value.
    */
   behavioral_gate?: import("./behavior.js").BehavioralGate | null;
 }

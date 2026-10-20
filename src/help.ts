@@ -23,6 +23,7 @@ export const COMMANDS: CommandHelp[] = [
     flags: [
       "--json (machine-readable output)",
       "--gates-file <path> (use a committed contribution-gates.json)",
+      "API budget: ~20-40 core calls (issue, timeline x-ray, one behavioral pass bounded at 18)",
       "FIREWORKS_API_KEY (optional: AI claim-intent detection; off by default, flags only)",
       "GREENLIGHT_LLM_MODEL (default: accounts/fireworks/models/glm-5p3-flash)",
       "GREENLIGHT_LLM_BASE_URL (default: https://api.fireworks.ai/inference/v1)",
@@ -45,6 +46,7 @@ export const COMMANDS: CommandHelp[] = [
       "--no-fallback (skip the recent-unassigned fallback pass)",
       "--gates-file <path> (use a committed contribution-gates.json)",
       "--deep (timeline x-ray the ranked candidates: demotes issues with hidden in-flight PRs)",
+      "API budget: ~3-6 core calls per issue looked at, plus one behavioral pass per repo (bounded at 18); --deep adds x-ray calls per candidate",
     ],
     examples: ["greenlight scan facebook/react", "greenlight scan usebruno/bruno --deep"],
   },
@@ -70,6 +72,7 @@ export const COMMANDS: CommandHelp[] = [
     flags: [
       "--json (machine-readable output, includes behavioral_gate)",
       "--no-behavioral (skip the maintainer-action pass; saves up to 18 API calls)",
+      "API budget: ~40 core calls typical (policy sources, starter count, merge velocity, behavioral pass); ~22 without the behavioral pass",
     ],
     examples: ["greenlight friction vercel/next.js"],
   },
@@ -86,6 +89,7 @@ export const COMMANDS: CommandHelp[] = [
       "--min-budget <N> (core API floor; the run stops with partial results under it, default 800)",
       "--sort winnability|stars (candidate ranking; winnability ranks by outsider merge share, then friction, then stars. Default winnability)",
       "--json (machine-readable output)",
+      "API budget: wave --repos 3 measured at 47 core calls; grows with --repos and --issues-per-repo. The own-PR exclusion is exact to the 1000-result search cap",
     ],
     examples: ["greenlight wave --repos 5"],
   },
@@ -311,9 +315,10 @@ export const COMMANDS: CommandHelp[] = [
       "--account (discover ALL your open PRs account-wide, including ones opened by other agents)",
       "--author <login> (account for --account/--mine; default GREENLIGHT_GITHUB_USER or CloudCorpRecords)",
       "--claims-only (skip the PR scan; show only the claims section)",
-      "--concurrency <N> (parallel PR fetches; default 5)",
+      "--concurrency <N> (parallel PR fetches; default 3, lowered from 5 in v0.17.1 for proxy health)",
       "--fail-on-action (exit 3 when the needs-you-now list is non-empty)",
       "--json (machine-readable output)",
+      "API budget: ~4-8 core calls per PR watched",
     ],
     examples: [
       "greenlight babysit --mine --repos acme/widgets",
@@ -333,6 +338,7 @@ export const COMMANDS: CommandHelp[] = [
       "--max-fixes <N> (cap fixes per run; default 5)",
       "--state <path> (watermark file; default ~/.greenlight/autopilot.json)",
       "--json (machine-readable output)",
+      "API budget: ~10-20 core calls per PR (reviews, comments, checks, one compare per PR for branch health)",
     ],
     examples: [
       "greenlight autopilot --author CloudCorpRecords",

@@ -124,6 +124,23 @@ export function scoreFriction(signals: RepoSignals): FrictionReport {
 }
 
 /**
+ * Canonicalize the behavioral gate location (v0.17.1, item 12): the
+ * top-level `behavioral_gate` field is THE canonical location
+ * consumers should read. `signals.behavioralGate` stays as a
+ * documented mirror this release because the Agent Policy Index
+ * scanner consumes friction output; removing it would break the
+ * index pipeline. Both fields always carry the same value.
+ */
+export function attachBehavioralGate(
+  report: FrictionReport,
+  gate: RepoSignals["behavioralGate"]
+): FrictionReport {
+  report.behavioral_gate = gate;
+  report.signals = { ...report.signals, behavioralGate: gate };
+  return report;
+}
+
+/**
  * Attach the outsider merge share to a friction report with an explicit
  * unit contract (v0.9.3): the fraction and the 0..100 percent side by
  * side, so no consumer can mistake one for the other again.
@@ -187,8 +204,7 @@ export async function fetchFrictionSummary(
     behavioralGate,
     note: "live",
   };
-  const report = scoreFriction(signals);
-  report.behavioral_gate = behavioralGate;
+  const report = attachBehavioralGate(scoreFriction(signals), behavioralGate);
   // Merge velocity is a signal, never a score input. Best-effort: silent
   // when it fails.
   try {

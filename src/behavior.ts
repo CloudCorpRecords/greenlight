@@ -11,7 +11,10 @@
  * closed-unmerged PRs.
  *
  * Design (deliberately conservative; read before changing):
- *   - Scope: the 15 most recent CLOSED-UNMERGED PRs. The closed-PR list is
+ *   - Scope: the 15 most recent CLOSED-UNMERGED PRs within a 12-month
+ *     recency bound (v0.17.1; stale closures are excluded before any
+ *     comment fetch, with a "stale signal" note when the newest closure
+ *     itself is older than the bound). The closed-PR list is
  *     walked (newest first, up to 3 pages of 30) until 15 unmerged PRs are
  *     collected, because merged PRs carry no closure evidence and an
  *     active repo's unmerged closures can sit pages deep. Comment fetches
@@ -80,6 +83,47 @@ export interface BehavioralGate {
 
 /** Maximum closed-unmerged PRs examined per repo. Keeps the pass bounded. */
 export const BEHAVIORAL_MAX_PRS = 15;
+
+/**
+ * Recency bound (v0.17.1): closures older than this many months are
+ * excluded from evidence. Maintainer posture changes; a two-year-old
+ * rejection spree is history, not a current behavioral gate, and a
+ * quiet repo should not pay 18 calls for stale signal.
+ */
+export const BEHAVIORAL_RECENCY_MONTHS = 12;
+
+/**
+ * Pure: split closed-unmerged PRs (newest first) at the recency cutoff.
+ * A PR with an unparseable closedAt is kept (missing data must never
+ * silently discard evidence). `newestClosedAt` reports the newest
+ * closure seen, stale or not, so callers can flag stale-signal repos.
+ */
+export function partitionByRecency(
+  prs: BehavioralClosedPR[],
+  nowMs: number,
+  months: number = BEHAVIORAL_RECENCY_MONTHS
+): { fresh: BehavioralClosedPR[]; staleCount: number; newestClosedAt: string | null } {
+  const cutoff = nowMs - months * 30.44 * 24 * 60 * 60 * 1000;
+  const fresh: BehavioralClosedPR[] = [];
+  let staleCount = 0;
+  let newestClosedAt: string | null = null;
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const p of prs) {
+    const t = Date.parse(p.closedAt);
+    if (Number.isFinite(t)) {
+      if (t > newestMs) {
+        newestMs = t;
+        newestClosedAt = p.closedAt;
+      }
+      if (t < cutoff) {
+        staleCount++;
+        continue;
+      }
+    }
+    fresh.push(p);
+  }
+  return { fresh, staleCount, newestClosedAt };
+}
 /**
  * API cost contract: 1-3 calls to walk the closed-PR list (stops early
  * once 15 unmerged PRs are found) plus at most one comment page per
@@ -205,8 +249,10 @@ interface CommentListItem {
  */
 export async function detectBehavioralGate(
   owner: string,
-  repo: string
+  repo: string,
+  opts: { now?: number } = {}
 ): Promise<BehavioralGate> {
+  const nowMs = opts.now ?? Date.now();
   const callsBefore = apiCallsUsed();
   const closedUnmerged: BehavioralClosedPR[] = [];
   for (let page = 1; page <= 3 && closedUnmerged.length < BEHAVIORAL_MAX_PRS; page++) {
@@ -228,8 +274,12 @@ export async function detectBehavioralGate(
     if (items.length < 30) break;
   }
 
+  // v0.17.1: drop stale closures before paying comment calls for them.
+  const recency = partitionByRecency(closedUnmerged, nowMs);
+  const live = recency.fresh;
+
   const comments: BehavioralMaintainerComment[] = [];
-  for (const pr of closedUnmerged) {
+  for (const pr of live) {
     const list = (await apiGet(
       `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`
     )) as CommentListItem[];
@@ -243,7 +293,24 @@ export async function detectBehavioralGate(
       });
     }
   }
-  const gate = detectBehavioralGateFromData(closedUnmerged, comments);
+  const gate = detectBehavioralGateFromData(live, comments);
+  if (recency.staleCount > 0) {
+    gate.notes.push(
+      `excluded ${recency.staleCount} closed-unmerged PR${recency.staleCount === 1 ? "" : "s"} older than the ${BEHAVIORAL_RECENCY_MONTHS}-month recency bound`
+    );
+  }
+  if (recency.newestClosedAt !== null) {
+    const newestMs = Date.parse(recency.newestClosedAt);
+    if (
+      Number.isFinite(newestMs) &&
+      newestMs < nowMs - BEHAVIORAL_RECENCY_MONTHS * 30.44 * 24 * 60 * 60 * 1000
+    ) {
+      gate.notes.push(
+        `stale signal: newest closed-unmerged PR closed ${recency.newestClosedAt.slice(0, 10)}, ` +
+          `older than the ${BEHAVIORAL_RECENCY_MONTHS}-month bound; behavioral evidence may be stale`
+      );
+    }
+  }
   gate.notes.push(`API calls used: ${apiCallsUsed() - callsBefore}`);
   return gate;
 }
