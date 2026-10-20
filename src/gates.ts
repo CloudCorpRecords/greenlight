@@ -45,6 +45,27 @@ const SCOPED_BAN_REGEXES: RegExp[] = [
   /ai[-\s]?generated (code|content).{0,40}(without|with no).{0,40}review.{0,60}(blocked|closed|rejected)/i,
 ];
 
+/**
+ * v0.17.0 scoped-pause patterns, shared between the scoped_prs_paused
+ * decide scoped vs blanket through the negative lookahead below.
+ */
+const SCOPED_PAUSE_REGEXES: RegExp[] = [
+  /not (currently |actively )?accepting (pull requests?|prs?|contributions?)( that| which)? (add|introduce|implement|propose|change|modify).{0,80}/i,
+  /not accepting new (features?|options?|formatting options?|endpoints?|commands?|rules?)/i,
+];
+
+/**
+ * v0.17.0: the tail a scoped refusal carries after "not accepting <X>".
+ * The blanket "not accepting pull requests" pattern must not fire on a
+ * scoped sentence (prettier's "not accepting pull requests that add new
+ * formatting options"), so it carries this negative lookahead. The
+ * leading s? covers the requests? backtrack ("pull request" matching
+ * with the plural s unconsumed).
+ */
+const SCOPED_PAUSE_TAIL =
+  "s?\\b(?: (?:that|which) (?:add|introduce|implement|propose|change|modify)\\b" +
+  "| new (?:features?|options?|formatting options?|endpoints?|commands?|rules?)\\b)";
+
 const RULES: GateRule[] = [
   {
     kind: "assignment_required",
@@ -126,9 +147,27 @@ const RULES: GateRule[] = [
     kind: "unsolicited_prs_paused",
     regexes: [
       /paused.{0,60}(unsolicited|solicited|external)? ?(pull requests?|prs?)/i,
-      /not accepting (external )?(contributions|pull requests?)/i,
+      // v0.17.0: the negative lookahead keeps a scoped refusal ("not
+      // accepting pull requests that add new formatting options") from
+      // scoring as a blanket pause.
+      new RegExp(
+        "not accepting (external )?(contributions|pull requests?)" +
+          `(?!(?:${SCOPED_PAUSE_TAIL}))`,
+        "i"
+      ),
       /unsolicited pull requests?/i,
     ],
+  },
+  {
+    // v0.17.0: scoped intake pause. Field case prettier: "We are not
+    // accepting pull requests that add new formatting options". Only the
+    // named category is refused; the repo stays open to everything else,
+    // so this carries a lighter weight (friction -20 vs the blanket -40)
+    // and never gates a verdict. The blanket "not accepting pull
+    // requests" pattern above carries a negative lookahead so it never
+    // fires on this shaped sentence.
+    kind: "scoped_prs_paused",
+    regexes: SCOPED_PAUSE_REGEXES,
   },
   {
     // The automation end of the same policy: prose that says outside PRs
@@ -378,7 +417,7 @@ export function parseGatesFromSources(sources: PolicySource[]): Gate[] {
 }
 
 /**
- * Parse contributing text into a gate list. Always returns all eleven gates
+ * Parse contributing text into a gate list. Always returns all twelve gates
  * with detected true/false, plus an evidence snippet when detected.
  */
 export function parseGates(text: string | undefined, options: ParseOptions = {}): Gate[] {
@@ -482,6 +521,7 @@ export function gateLabel(kind: GateKind): string {
     case "discussion_first": return "discussion first";
     case "collaborators_only": return "PR creation restricted to collaborators";
     case "unsolicited_prs_paused": return "unsolicited PRs paused";
+    case "scoped_prs_paused": return "scoped PR pause (only some PR kinds refused)";
     case "external_prs_closed": return "external PRs closed by automation";
     case "agents_banned": return "agent contributions banned";
     case "agents_disclosure": return "AI disclosure required";

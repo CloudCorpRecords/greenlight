@@ -98,9 +98,31 @@ export interface PrWatermark {
   checkConclusions: Record<string, string>;
 }
 
+/**
+ * v0.17.0: one row of the standing branch-health board. Persisted in the
+ * autopilot state between runs so the board shows the last known health
+ * of every watched PR, not just the PRs this run touched.
+ */
+export interface PrBranchHealth {
+  owner: string;
+  repo: string;
+  number: number;
+  url: string;
+  title: string;
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  baseRef: string;
+  baseSha: string;
+  headSha: string;
+  /** Commits the base branch is ahead of the PR head; null if unknown. */
+  behindBy: number | null;
+  updatedAt: string;
+}
+
 export interface AutopilotState {
   version: number;
   prs: Record<string, PrWatermark>;
+  branchHealth: Record<string, PrBranchHealth>;
 }
 
 export function defaultAutopilotStatePath(): string {
@@ -154,9 +176,11 @@ function emptyWatermark(): PrWatermark {
 export function loadAutopilotState(path: string): AutopilotState {
   try {
     const raw = JSON.parse(readFileSync(path, "utf8")) as AutopilotState;
-    if (raw && typeof raw === "object" && raw.prs) return { version: 1, prs: raw.prs };
+    if (raw && typeof raw === "object" && raw.prs) {
+      return { version: 2, prs: raw.prs, branchHealth: raw.branchHealth ?? {} };
+    }
   } catch { /* first run */ }
-  return { version: 1, prs: {} };
+  return { version: 2, prs: {}, branchHealth: {} };
 }
 
 export function saveAutopilotState(path: string, state: AutopilotState): void {
@@ -238,6 +262,12 @@ export interface AutopilotDeps {
   fetchFileAtHead?: (owner: string, repo: string, headSha: string, path: string) => Promise<string | null>;
   /** PR commit SHAs, oldest first. Defaults to the pulls/commits endpoint. */
   fetchPrCommits?: (owner: string, repo: string, number: number) => Promise<string[]>;
+  /**
+   * v0.17.0: how many commits the base branch is ahead of the PR head.
+   * Defaults to the compare endpoint; null when unknown. Used for the
+   * standing branch-health board.
+   */
+  fetchBehind?: (owner: string, repo: string, baseRef: string, headSha: string) => Promise<number | null>;
   gitOps?: GitOps;
   gitRunner?: GitRunner;
   runInDir?: (cwd: string, label: string) => Promise<void>;
@@ -303,6 +333,69 @@ async function defaultFetchPr(owner: string, repo: string, number: number): Prom
     forkBranch: strOf(p.head?.ref),
     forkCloneUrl: strOf(headRepo?.clone_url),
   };
+}
+
+/**
+ * v0.17.0: how many commits the base branch is ahead of the PR head.
+ * Best-effort; null when the compare call fails (fork deleted, API
+ * error), so one broken repo never stops the board from rendering.
+ */
+async function defaultFetchBehind(owner: string, repo: string, baseRef: string, headSha: string): Promise<number | null> {
+  try {
+    const cmp = (await apiGet(
+      `/repos/${owner}/${repo}/compare/${encodeURIComponent(baseRef)}...${encodeURIComponent(headSha)}`
+    )) as { behind_by?: unknown };
+    return typeof cmp.behind_by === "number" ? cmp.behind_by : null;
+  } catch {
+    return null;
+  }
+}
+
+/** v0.17.0: record one PR's branch health into the standing state. */
+export function recordBranchHealth(
+  state: AutopilotState,
+  pr: AutopilotPull,
+  behindBy: number | null,
+  now: string = new Date().toISOString()
+): void {
+  state.branchHealth[pr.url] = {
+    owner: pr.owner,
+    repo: pr.repo,
+    number: pr.number,
+    url: pr.url,
+    title: pr.title,
+    mergeable: pr.mergeable,
+    mergeableState: pr.mergeableState,
+    baseRef: pr.baseRef,
+    baseSha: pr.baseSha,
+    headSha: pr.headSha,
+    behindBy,
+    updatedAt: now,
+  };
+}
+
+/**
+ * v0.17.0: the standing branch-health board. One line per watched PR:
+ * conflicted, behind, or clean, from the state the last run persisted.
+ */
+export function formatAutopilotBoard(state: AutopilotState): string {
+  const rows = Object.values(state.branchHealth).sort(
+    (a, b) => a.owner.localeCompare(b.owner) || a.repo.localeCompare(b.repo) || a.number - b.number
+  );
+  const lines: string[] = ["## Branch health board", ""];
+  if (rows.length === 0) {
+    lines.push("No PRs recorded yet.");
+    return lines.join("\n");
+  }
+  for (const r of rows) {
+    const merge = r.mergeable === true ? "clean" : r.mergeable === false ? "CONFLICTED" : "unknown";
+    const stateWord = r.mergeableState ?? "unknown";
+    const behind = r.behindBy === null ? "behind: unknown" : r.behindBy === 0 ? "up to date" : `behind by ${r.behindBy}`;
+    lines.push(
+      `- ${r.owner}/${r.repo}#${r.number} "${r.title}": ${merge} (mergeable_state: ${stateWord}), ${behind}, base ${r.baseRef}@${r.baseSha.slice(0, 8)}`
+    );
+  }
+  return lines.join("\n");
 }
 
 async function defaultFetchReviewSources(
@@ -958,7 +1051,7 @@ const KIND_LABEL: Record<FeedbackKind, string> = {
   other: "Other",
 };
 
-export function autopilotMarkdown(run: { perPr: PrReport[]; summary: AutopilotSummary }): string {
+function renderAutopilotMarkdownBody(run: { perPr: PrReport[]; summary: AutopilotSummary }): string {
   const v = defaultPackageVersion();
   const lines: string[] = [];
   lines.push(`# Autopilot report`);
@@ -1000,7 +1093,19 @@ export function autopilotMarkdown(run: { perPr: PrReport[]; summary: AutopilotSu
   return lines.join("\n");
 }
 
-export function autopilotJson(run: { perPr: PrReport[]; summary: AutopilotSummary }): Record<string, unknown> {
+export function autopilotMarkdown(
+  run: { perPr: PrReport[]; summary: AutopilotSummary },
+  state?: AutopilotState
+): string {
+  const base = renderAutopilotMarkdownBody(run);
+  if (!state) return base;
+  return `${base}\n\n${formatAutopilotBoard(state)}`;
+}
+
+export function autopilotJson(
+  run: { perPr: PrReport[]; summary: AutopilotSummary },
+  state?: AutopilotState
+): Record<string, unknown> {
   return {
     perPr: run.perPr.map((r) => ({
       url: r.url,
@@ -1021,6 +1126,9 @@ export function autopilotJson(run: { perPr: PrReport[]; summary: AutopilotSummar
     })),
     summary: run.summary,
     version: defaultPackageVersion(),
+    // v0.17.0: the standing branch-health board (records + rendered view).
+    branch_health: state ? Object.values(state.branchHealth) : [],
+    branch_board: state ? formatAutopilotBoard(state) : null,
   };
 }
 
@@ -1063,12 +1171,20 @@ export async function runAutopilot(opts: AutopilotRunOptions): Promise<Autopilot
   urls = urls.slice(0, maxPrs);
 
   const fetchPr = deps.fetchPr ?? defaultFetchPr;
+  const fetchBehind = deps.fetchBehind ?? defaultFetchBehind;
 
   const perPr = await pool(urls, opts.concurrency ?? 3, async (url) => {
     try {
       const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/.exec(url);
       if (!m) return { pr: null, url, skipped: "not a PR url", items: [], fixes: [], plans: [], replyDrafts: 0 } as PrReport;
       const pr = await fetchPr(m[1], m[2], Number(m[3]));
+      // v0.17.0: persist branch health for the standing board, even when
+      // the rest of the run errors later; best-effort on the compare call.
+      try {
+        recordBranchHealth(state, pr, await fetchBehind(pr.owner, pr.repo, pr.baseRef, pr.headSha));
+      } catch {
+        recordBranchHealth(state, pr, null);
+      }
       const watermark = state.prs[url] ?? emptyWatermark();
       const report = await runAutopilotOnPr(pr, watermark, opts, { ...deps, fetchPr }, capabilities, capsPath, state, expectedForkOwner);
       const drafts = (report as PrReport & { __drafts?: ReplyDraft[] }).__drafts ?? [];
@@ -1122,7 +1238,7 @@ export async function runAutopilot(opts: AutopilotRunOptions): Promise<Autopilot
   }
 
   const run = { perPr, summary };
-  return { perPr, summary, json: autopilotJson(run), markdown: autopilotMarkdown(run) };
+  return { perPr, summary, json: autopilotJson(run, state), markdown: autopilotMarkdown(run, state) };
 }
 
 // Re-export for callers that only need the author kind helper.

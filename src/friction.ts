@@ -9,6 +9,7 @@
  *     vouch_required       -35
  *     collaborators_only   -50
  *     unsolicited_prs_paused -40
+ *     scoped_prs_paused    -20 (v0.17.0: only a named PR category refused)
  *     external_prs_closed  -50
  *     discussion_first     -10
  *     claim_first           -5
@@ -46,6 +47,9 @@ const GATE_WEIGHTS: Record<string, number> = {
   vouch_required: -35,
   collaborators_only: -50,
   unsolicited_prs_paused: -40,
+  // v0.17.0: scoped intake pause. Only a named category of PRs is
+  // refused, so it costs half the blanket pause.
+  scoped_prs_paused: -20,
   external_prs_closed: -50,
   discussion_first: -10,
   claim_first: -5,

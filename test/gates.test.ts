@@ -96,7 +96,7 @@ describe("parseGates", () => {
 
   it("returns all gates (now eleven) with false when nothing matches", () => {
     const gates = parseGates("Thanks for contributing! Just open a PR.");
-    assert.equal(gates.length, 11);
+    assert.equal(gates.length, 12);
     assert.ok(gates.every((g) => !g.detected));
   });
 
@@ -173,7 +173,7 @@ describe("parseGatesFromSources", () => {
 
   it("returns all eleven kinds even when nothing matches", () => {
     const gates = parseGatesFromSources([{ file: "AGENTS.md", text: "Run the linter." }]);
-    assert.equal(gates.length, 11);
+    assert.equal(gates.length, 12);
     assert.ok(gates.every((g) => g.detected === false));
   });
 });
@@ -277,7 +277,7 @@ describe("agent policy gates (v0.9.0)", () => {
 
   it("stays byte-identical quiet when no agent policy exists", () => {
     const gates = parseGates("# Contributing\n\nFork, branch, and open a PR. Tests must pass.");
-    assert.equal(gates.length, 11);
+    assert.equal(gates.length, 12);
     for (const g of gates) {
       assert.equal(g.detected, false, g.kind);
       assert.equal(g.evidence, "");
@@ -363,5 +363,46 @@ describe("gate pattern round 2 (v0.16.2 field cases)", () => {
       "user-facing change. Generate a changeset with the CLI before opening the PR."
     );
     assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+});
+
+describe("scoped intake pause (v0.17.0)", () => {
+  it("detects prettier's scoped pause and demotes the blanket pause", () => {
+    const gates = parseGatesFromSources([
+      { file: "CONTRIBUTING.md", text: "We are not accepting pull requests that add new formatting options." },
+    ]);
+    const scoped = gates.find((g) => g.kind === "scoped_prs_paused")!;
+    const blanket = gates.find((g) => g.kind === "unsolicited_prs_paused")!;
+    assert.equal(scoped.detected, true);
+    assert.equal(gateLabel("scoped_prs_paused"), "scoped PR pause (only some PR kinds refused)");
+    assert.equal(blanket.detected, false);
+    assert.ok(!hardGates(gates).some((g) => g.kind === "unsolicited_prs_paused"));
+  });
+
+  it("detects a blanket pause (streamlit shape) without the scoped kind", () => {
+    const gates = parseGatesFromSources([
+      { file: "CONTRIBUTING.md", text: "We've temporarily paused unsolicited pull requests from outside the core team until further notice." },
+    ]);
+    assert.equal(gates.find((g) => g.kind === "unsolicited_prs_paused")!.detected, true);
+    assert.equal(gates.find((g) => g.kind === "scoped_prs_paused")!.detected, false);
+  });
+
+  it("keeps both kinds when a file has a blanket and a scoped sentence", () => {
+    const gates = parseGatesFromSources([
+      {
+        file: "CONTRIBUTING.md",
+        text: "Unsolicited pull requests are paused for now. Also, we are not accepting new features this quarter.",
+      },
+    ]);
+    assert.equal(gates.find((g) => g.kind === "unsolicited_prs_paused")!.detected, true);
+    assert.equal(gates.find((g) => g.kind === "scoped_prs_paused")!.detected, true);
+  });
+
+  it("does not fire either pause on a welcoming guide", () => {
+    const gates = parseGatesFromSources([
+      { file: "CONTRIBUTING.md", text: "We welcome all pull requests; new features included. Please read the style guide first." },
+    ]);
+    assert.equal(gates.find((g) => g.kind === "unsolicited_prs_paused")!.detected, false);
+    assert.equal(gates.find((g) => g.kind === "scoped_prs_paused")!.detected, false);
   });
 });

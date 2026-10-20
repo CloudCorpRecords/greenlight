@@ -161,6 +161,17 @@ export type GateKind =
    */
   | "unsolicited_prs_paused"
   /**
+   * v0.17.0: a scoped intake pause. The repo refuses PRs in a named
+   * category while staying open to everything else (prettier: "we are not
+   * accepting pull requests that add new formatting options"). Lighter
+   * weight than the blanket pause above: friction scores it at half the
+   * penalty and check/scan caps the verdict at RISKY (a scope to read,
+   * not a block). Named against the index scanner's paused/scoped
+   * taxonomy, where "paused" is the blanket kind and "scoped" is the
+   * category-limited one.
+   */
+  | "scoped_prs_paused"
+  /**
    * A repo workflow closes external PRs automatically ("Close external
    * PRs" style), the sharp end of the paused-PR policy above.
    */

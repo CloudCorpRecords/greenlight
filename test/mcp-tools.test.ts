@@ -1,5 +1,5 @@
 /**
- * End-to-end MCP tests: the stdio server lists 28 tools
+ * End-to-end MCP tests: the stdio server lists 31 tools
  * (including scout_campaign, my_claims, sync_campaign, campaign_portfolio,
  * wave_queue) and the new tools answer.
  * Spawns the built server (dist/cli.js mcp) and speaks JSON-RPC over
@@ -82,12 +82,15 @@ async function listTools(): Promise<{ proc: ChildProcess; tools: RpcResult["tool
   }
 }
 
-describe("mcp tools (v0.16.0)", () => {
-  it("lists 28 tools including the claim-api client trio", async () => {
+describe("mcp tools (v0.17.0)", () => {
+  it("lists 31 tools including the claim-api client trio and the verify/shipcheck/passport trio", async () => {
     const { proc, tools } = await listTools();
     try {
       const names = tools.map((t) => t.name);
-      assert.equal(names.length, 28, `expected 28 tools, got ${names.length}: ${names.join(",")}`);
+      assert.equal(names.length, 31, `expected 31 tools, got ${names.length}: ${names.join(",")}`);
+      assert.ok(names.includes("verify"), "verify listed");
+      assert.ok(names.includes("shipcheck"), "shipcheck listed");
+      assert.ok(names.includes("passport"), "passport listed");
       assert.ok(names.includes("scout_campaign"), "scout_campaign listed");
       assert.ok(names.includes("my_claims"), "my_claims listed");
       assert.ok(names.includes("sync_campaign"), "sync_campaign listed");

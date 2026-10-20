@@ -14,6 +14,7 @@ import {
   runAutopilot,
   loadAutopilotState,
   recordAutopilotFixOutcome,
+  formatAutopilotBoard,
   type AutopilotPull,
   type AutopilotDeps,
 } from "../src/autopilot.js";
@@ -246,5 +247,66 @@ describe("runAutopilot --apply", () => {
     // Capability outcome recorded.
     const caps = loadCapabilities(p.caps);
     assert.ok(caps.entries.some((c) => c.action === "autopilot_fix:dco" && c.outcome === "ok"));
+  });
+});
+
+describe("standing branch-health board (v0.17.0)", () => {
+  function healthDeps(): AutopilotDeps {
+    const d = deps();
+    d.fetchBehind = async (_o, _r, _b, _h) => 0;
+    return d;
+  }
+
+  it("records conflicted, behind, and clean states and renders the board", async () => {
+    const p = tmpPaths();
+    const clean1 = pull({ number: 1, url: "https://github.com/o/r/pull/1", title: "Clean PR", mergeable: true, mergeableState: "clean" });
+    const conflicted = pull({ number: 2, url: "https://github.com/o/r/pull/2", title: "Conflicted PR", mergeable: false, mergeableState: "dirty" });
+    const behind = pull({ number: 3, url: "https://github.com/o/r/pull/3", title: "Behind PR", mergeable: true, mergeableState: "behind" });
+    const d = healthDeps();
+    d.discoverPrs = async () => [clean1, conflicted, behind].map((x) => ({ owner: "o", repo: "r", number: x.number, url: x.url, title: x.title, state: "open" as const, merged: false, author: "CloudCorpRecords", createdAt: "", updatedAt: "" }));
+    const byUrl = new Map([clean1, conflicted, behind].map((x) => [x.url, x]));
+    d.fetchPr = async (o, r, n) => byUrl.get(`https://github.com/${o}/${r}/pull/${n}`)!;
+    d.fetchBehind = async (_o, _r, _b, _h) => 5;
+    const run = await runAutopilot({ statePath: p.state, repliesPath: p.replies, capsPath: p.caps, deps: d });
+
+    const state = loadAutopilotState(p.state);
+    assert.equal(Object.keys(state.branchHealth).length, 3);
+    assert.equal(state.branchHealth[clean1.url].mergeable, true);
+    assert.equal(state.branchHealth[conflicted.url].mergeableState, "dirty");
+    assert.equal(state.branchHealth[behind.url].behindBy, 5);
+
+    const board = formatAutopilotBoard(state);
+    assert.ok(board.includes("o/r#1"));
+    assert.ok(board.includes("clean"));
+    assert.ok(board.includes("CONFLICTED"));
+    assert.ok(board.includes("behind by 5"));
+
+    // The board rides along in the MCP tool's JSON and the markdown output.
+    const health = run.json.branch_health as Array<{ number: number }>;
+    assert.equal(health.length, 3);
+    assert.ok(String(run.json.branch_board).includes("Branch health board"));
+    assert.ok(run.markdown.includes("Branch health board"));
+  });
+
+  it("the board survives between runs (standing state)", async () => {
+    const p = tmpPaths();
+    const d = healthDeps();
+    await runAutopilot({ statePath: p.state, repliesPath: p.replies, capsPath: p.caps, deps: d });
+    // A second run with no PRs still reads the persisted board.
+    const d2 = healthDeps();
+    d2.discoverPrs = async () => [];
+    const run2 = await runAutopilot({ statePath: p.state, repliesPath: p.replies, capsPath: p.caps, deps: d2 });
+    assert.ok(run2.markdown.includes("o/r#1"));
+  });
+
+  it("records unknown health when the compare call fails", async () => {
+    const p = tmpPaths();
+    const d = healthDeps();
+    d.fetchBehind = async () => { throw new Error("compare 404"); };
+    await runAutopilot({ statePath: p.state, repliesPath: p.replies, capsPath: p.caps, deps: d });
+    const state = loadAutopilotState(p.state);
+    const key = "https://github.com/o/r/pull/1";
+    assert.equal(state.branchHealth[key].behindBy, null);
+    assert.ok(formatAutopilotBoard(state).includes("behind: unknown"));
   });
 });

@@ -33,6 +33,9 @@ import { scoutCampaign, SCOUT_DEFAULT_BUDGET } from "./scout.js";
 import { runSync, syncJson } from "./sync.js";
 import { runPortfolio, portfolioJson } from "./portfolio.js";
 import { runAutopilot } from "./autopilot.js";
+import { verifyRepo } from "./verify.js";
+import { runShipcheck } from "./shipcheck.js";
+import { buildPassport } from "./passport.js";
 import { defaultRegistryPath } from "./claims-registry.js";
 import {
   runWave,
@@ -219,6 +222,78 @@ server.tool(
       const index = await loadPolicyIndex(index_url ?? POLICY_INDEX_URL);
       const result = await runWave(index, filters, liveWaveDeps());
       return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "verify",
+  "Honest base-vs-head verification for a checked-out repo: runs the detected test suite at the base ref and at HEAD and reports the red-first delta (newly failing, newly passing), never raw counts. Refuses a dirty working tree unless asked. Agent-callable surface of `greenlight verify`; run it before and after a fix to prove the fix did the work.",
+  {
+    dir: z.string().optional().describe("Repo checkout to verify. Defaults to the server's working directory."),
+    base: z.string().optional().describe("Base ref for the comparison (default: merge-base with upstream, or origin/main)."),
+    cmd: z.string().optional().describe("Override the detected test command."),
+    parser: z.string().optional().describe("Override the result parser (e.g. node:test, pytest)."),
+    timeout_secs: z.number().optional().describe("Per-run timeout in seconds."),
+    allow_dirty: z.boolean().optional().describe("Run even when the working tree has uncommitted changes."),
+  },
+  async ({ dir, base, cmd, parser, timeout_secs, allow_dirty }) => {
+    try {
+      const result = verifyRepo(dir ?? process.cwd(), {
+        base,
+        cmd,
+        parser,
+        timeoutSecs: timeout_secs,
+        allowDirty: allow_dirty,
+      });
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "shipcheck",
+  "Release-readiness check for a shipped release: confirms the GitHub release exists, the npm package version is live, the MCP Registry record is active, and the GHCR image tag is published, returning a GO / NO-GO verdict per surface. Agent-callable surface of `greenlight shipcheck`.",
+  {
+    repo: z.string().describe("owner/repo of the release."),
+    version: z.string().describe("Release version without the v prefix, e.g. 0.17.0."),
+    npm_package: z.string().optional().describe("npm package name; defaults from package.json, then the API."),
+    mcp_name: z.string().optional().describe("MCP registry server name; defaults from server.json, then the API."),
+  },
+  async ({ repo, version, npm_package, mcp_name }) => {
+    try {
+      const m = /^([^/]+)\/([^/]+)$/.exec(repo);
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      const result = await runShipcheck({
+        owner: m[1],
+        repo: m[2],
+        version,
+        npmPackage: npm_package,
+        mcpName: mcp_name,
+      });
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "passport",
+  "Contributor passport for a GitHub login: the claim-ledger account profile, merged PR count, honor ratio, and open claims, returned as markdown plus structured JSON. Agent-callable surface of `greenlight passport`.",
+  {
+    login: z.string().describe("GitHub login (a leading @ is fine)."),
+  },
+  async ({ login }) => {
+    try {
+      const clean = login.replace(/^@/, "");
+      if (!/^[A-Za-z0-9-]+$/.test(clean)) return text({ error: `Expected a GitHub login, got: ${login}` });
+      const passport = await buildPassport(clean);
+      return text({ markdown: passport.markdown, ...passport.json });
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

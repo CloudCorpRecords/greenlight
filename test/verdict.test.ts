@@ -659,3 +659,55 @@ describe("behavioral gate caps verdicts at GATED (v0.16.2)", () => {
     assert.equal(result.verdict, "GO");
   });
 });
+
+describe("scoped intake pause (v0.17.0)", () => {
+  function clean(): IssueSnapshot {
+    const base = load("pdfcn-58.json");
+    return {
+      ...base,
+      comments: [],
+      linkedPRs: [],
+      commentMentionedPRs: [],
+      contributing: undefined,
+      updatedAt: NOW.toISOString(),
+    };
+  }
+
+  it("caps a clean issue at RISKY with the refused scope quoted", () => {
+    const snapshot = clean();
+    const result = scoreIssue(
+      {
+        ...snapshot,
+        houseRules: [
+          {
+            file: "CONTRIBUTING.md",
+            text: "We are not accepting pull requests that add new formatting options.",
+          },
+        ],
+      },
+      NOW
+    );
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("scoped-pause"));
+    assert.ok(result.reasons.some((r) => r.includes("scoped intake pause")));
+    assert.ok(result.reasons.some((r) => r.includes("formatting options")));
+  });
+
+  it("a blanket pause still gates (scoped demotion does not leak)", () => {
+    const snapshot = clean();
+    const result = scoreIssue(
+      {
+        ...snapshot,
+        houseRules: [
+          {
+            file: "CONTRIBUTING.md",
+            text: "We've temporarily paused unsolicited pull requests from outside the core team.",
+          },
+        ],
+      },
+      NOW
+    );
+    assert.equal(result.verdict, "GATED");
+    assert.ok(!result.flags.includes("scoped-pause"));
+  });
+});

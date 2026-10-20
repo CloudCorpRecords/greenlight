@@ -109,3 +109,13 @@ describe("v0.9.3 outsider share unit contract", () => {
     assert.equal(report.outsider_merge_share_pct, null);
   });
 });
+
+describe("scoped intake pause (v0.17.0)", () => {
+  it("a scoped pause costs half the blanket pause", () => {
+    const scoped = scoreFriction(base({ gates: gatesOn(["scoped_prs_paused"]) }));
+    const blanket = scoreFriction(base({ gates: gatesOn(["unsolicited_prs_paused"]) }));
+    assert.equal(scoped.score, 100 - 20);
+    assert.equal(blanket.score, 100 - 40);
+    assert.ok(scoped.reasons.some((x) => x.includes("-20")));
+  });
+});

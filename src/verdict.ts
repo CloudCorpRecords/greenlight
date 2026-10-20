@@ -52,6 +52,11 @@
  *     external PRs" workflow that auto-closed two finished PRs within
  *     about a minute), nuxt/nuxt (AGENTS.md bans autonomous agent
  *     contributions outright).
+ *  7b. A detected behavioral gate -> GATED with the evidence quoted
+ *     (v0.16.2; spotDL).
+ *  7c. A scoped intake pause never gates: it flags and caps at RISKY
+ *     with the refused scope quoted (v0.17.0; prettier), lighter than
+ *     the blanket pause.
  *  8. No activity for 180+ days -> STALE. The issue is probably abandoned,
  *     the repro may not even hold on current code.
  *  9. Soft claim-first gate (comment before starting, shadcn-labs/pdfcn
@@ -391,6 +396,21 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   if (claimFirst) {
     reasons.push(claimFirstNote);
     flags.push("claim_first");
+    verdict = "RISKY";
+  }
+
+  // Rule 10b (v0.17.0): scoped intake pause. Only a named category of
+  // PRs is refused (prettier: "not accepting pull requests that add new
+  // formatting options"), so this never gates: the blanket
+  // unsolicited_prs_paused would have been a false block for an issue
+  // outside the refused category. Flag it and cap at RISKY with the
+  // refused scope quoted, so the reader checks scope before building.
+  const scopedPause = gates.find((g) => g.kind === "scoped_prs_paused" && g.detected);
+  if (scopedPause) {
+    flags.push("scoped-pause");
+    reasons.push(
+      `scoped intake pause: ${scopedPause.evidence ? `"${scopedPause.evidence}"; ` : ""}only that category of PR is refused; check this issue's scope before building`
+    );
     verdict = "RISKY";
   }
 

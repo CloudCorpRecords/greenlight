@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.0 (2026-10-19)
+
+- **Capability items from the 2026-10-19 iteration audit.** 10 new tests, 1026 green. The server now carries 31 tools.
+- **Scoped intake pause (item 3).** A repo that refuses a named category of PRs while staying open to everything else (prettier: "not accepting pull requests that add new formatting options") is now its own gate kind, `scoped_prs_paused`, named against the Agent Policy Index scanner's paused/scoped taxonomy. It costs half the blanket pause in friction (-20 vs -40) and never gates a verdict: check and scan flag it and cap at RISKY with the refused scope quoted. The blanket "not accepting pull requests" pattern carries a negative lookahead so a scoped sentence never scores as a blanket pause.
+- **Autopilot branch-health board (item 14).** Autopilot now persists per-PR mergeable, mergeable_state, base SHA, and behind-count in its state between runs (state version 2, backward compatible) and renders a standing board in the run output: conflicted, behind-by-n, and clean rows for every watched PR, also exposed as branch_health and branch_board in the autopilot_report MCP tool JSON.
+- **MCP tools for verify, shipcheck, and passport (item 22).** The three CLI commands are now agent-callable in the repo's established tool pattern: verify (honest base-vs-head test delta for a checkout), shipcheck (release, npm, registry, GHCR readiness), passport (ledger profile, merged PR count, honor ratio). Tool list and every count updated to 31.
+
+
 ## 0.16.2 (2026-10-19)
 
 - **Live bugs and quick wins from the 2026-10-19 iteration audit.**
