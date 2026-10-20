@@ -17,6 +17,7 @@
  *   greenlight ci-prep <path> [--base <ref>] [--json] [--act]
  *   greenlight babysit [--prs urls] [--mine --repos o/r] [--account] [--claims-only] [--json]
  *   greenlight autopilot [--author login] [--prs urls] [--max-prs N] [--apply] [--max-fixes N] [--json]
+ *   greenlight bounty <issue-url> [--json]
  *   greenlight sync [--author login] [--tracker csv|json] [--stale-days N] [--write] [--json]
  *   greenlight portfolio [--author login] [--json]
  *   greenlight init [--agent <tool>...] [--dry-run] [--force]
@@ -35,6 +36,7 @@ import {
   RateLimitError,
   fetchComments,
   apiCallsUsed,
+  resolveCanonicalRepo,
 } from "./github.js";
 import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
 import { CLAIM_MARKER } from "./protocol.js";
@@ -112,6 +114,7 @@ import {
 } from "./claim-api.js";
 import { buildEvidencePack } from "./evidence.js";
 import { buildPassport } from "./passport.js";
+import { detectBountyForIssue } from "./bounty.js";
 import { renderLabelsDryRun } from "./guard.js";
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -210,7 +213,14 @@ function loadExternalGates(args: string[]): Gate[] | undefined {
 }
 
 async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Promise<void> {
-  const { owner, repo, number } = parseIssueUrl(issueUrl);
+  const parsed = parseIssueUrl(issueUrl);
+  // v0.18.0 (item 15): resolve renames before any name-based fetch.
+  const canon = await resolveCanonicalRepo(parsed.owner, parsed.repo);
+  const { owner, repo } = canon;
+  const number = parsed.number;
+  const renameNote = canon.renamed
+    ? `repo renamed: ${parsed.owner}/${parsed.repo} -> ${canon.fullName}`
+    : null;
   // The check pipeline merges the legacy verdict with the Claim Protocol
   // state: a protocol claim verdict overrides legacy claim inference, but
   // never gates or cross-referenced PR evidence (see mergeProtocolVerdict).
@@ -255,6 +265,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
           llm_claims: merged.llm_claims ?? [],
           llm_status: merged.llm_status ?? null,
           suggestion,
+          renamedFrom: renameNote ? `${parsed.owner}/${parsed.repo}` : null,
         },
         null,
         2
@@ -262,6 +273,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
     );
     return;
   }
+  if (renameNote) console.log(renameNote);
   printVerdict(snapshot, result, false);
   for (const line of merged.protocolLines) console.log(`  ${line}`);
   if (suggestion) console.log(`  ${suggestion}`);
@@ -318,7 +330,13 @@ async function cmdStatus(issueUrl: string, asJson: boolean): Promise<void> {
 }
 
 async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promise<void> {
-  const { owner, repo } = parseRepoRef(repoRef);
+  const parsed = parseRepoRef(repoRef);
+  // v0.18.0 (item 15): the old name 422s the candidate search; resolve
+  // first and say so in the output.
+  const canon = await resolveCanonicalRepo(parsed.owner, parsed.repo);
+  const { owner, repo } = canon;
+  const scanRenameNote = canon.renamed ? `repo renamed: ${parsed.owner}/${parsed.repo} -> ${canon.fullName}` : null;
+  if (scanRenameNote && !asJson) console.log(scanRenameNote);
   const { issues, fallbackUsed } = await scanCandidates(owner, repo, {
     fallback: !args.includes("--no-fallback"),
     limit: 10,
@@ -400,7 +418,7 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   }
 
   if (asJson) {
-    console.log(JSON.stringify({ repo: `${owner}/${repo}`, fallback: fallbackUsed, results }, null, 2));
+    console.log(JSON.stringify({ repo: `${owner}/${repo}`, renamedFrom: canon.renamed ? `${parsed.owner}/${parsed.repo}` : null, fallback: fallbackUsed, results }, null, 2));
     return;
   }
   console.log(`Scan of ${owner}/${repo}: ${results.length} candidate issues, GO first`);
@@ -499,7 +517,8 @@ async function cmdFriction(repoRef: string, asJson: boolean, args: string[] = []
     console.log(JSON.stringify(report, null, 2));
     return;
   }
-  console.log(`Friction for ${owner}/${repo}: ${report.score}/100 (100 = easiest)`);
+  console.log(`Friction for ${report.owner}/${report.repo}: ${report.score}/100 (100 = easiest)`);
+  if (report.resolvedFrom) console.log(`  repo renamed: ${report.resolvedFrom} -> ${report.owner}/${report.repo}`);
   for (const reason of report.reasons) console.log(`  - ${reason}`);
   if (report.reasons.length === 0) console.log("  - no gates or penalties detected");
   if (report.behavioral_gate?.detected) {
@@ -1384,6 +1403,37 @@ async function cmdPassport(login: string, args: string[]): Promise<void> {
   }
 }
 
+/**
+ * `greenlight bounty <issue-url>` (v0.18.0, item 23): is the bounty this
+ * issue advertises actually alive? The classifier never raises a
+ * verdict: bounties are context, not landability. What it kills is
+ * chasing a dead platform (algora has been dead since 2025; thousands
+ * of issues still wear its labels).
+ */
+async function cmdBounty(issueUrl: string, args: string[]): Promise<void> {
+  const { owner, repo, number } = parseIssueUrl(issueUrl);
+  const result = await detectBountyForIssue(owner, repo, number);
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (!result.signal) {
+    console.log(`No bounty advertised on ${result.repo}#${number} ("${result.title}").`);
+    return;
+  }
+  const s = result.signal;
+  const head = s.amount ? `Bounty: ${s.amount}` : "Bounty advertised";
+  const via = s.platform ? ` via ${s.platform}` : " (no platform named)";
+  console.log(`${head}${via} on ${result.repo}#${number}`);
+  if (s.flag === "bounty-platform-dead") {
+    console.log(`  DEAD PLATFORM: ${s.evidence}`);
+  } else if (s.flag === "bounty-unverified") {
+    console.log(`  UNVERIFIED: ${s.evidence}`);
+  } else {
+    console.log(`  platform is named and not known-dead; verify terms on the platform before counting on payment`);
+  }
+}
+
 async function cmdDigest(repoRef: string, args: string[]): Promise<void> {
   const asJson = args.includes("--json");
   const limitRaw = flagValue(args, "--limit");
@@ -1647,6 +1697,7 @@ async function main(): Promise<void> {
     if (command === "preflight" && target) return await cmdPreflight(target, args);
     if (command === "evidence" && target) return await cmdEvidence(target, args);
     if (command === "passport" && target) return await cmdPassport(target, args);
+    if (command === "bounty" && target) return await cmdBounty(target, args);
     if (command && NEEDS_TARGET[command]) {
       // Known command with a missing argument: name the need and show its
       // help, instead of the generic overview.

@@ -26,6 +26,40 @@ const DEAD_PLATFORMS: Record<string, string> = {
   algora: "algora.io 404s and its public API returns zero items (dead since 2025)",
 };
 
+import { apiGet, resolveCanonicalRepo } from "./github.js";
+
+/** Live: fetch the issue and classify its bounty advertising (v0.18.0, item 23). */
+export async function detectBountyForIssue(
+  owner: string,
+  repo: string,
+  number: number
+): Promise<{
+  issueUrl: string;
+  repo: string;
+  labels: string[];
+  title: string;
+  signal: BountySignal | null;
+}> {
+  const canon = await resolveCanonicalRepo(owner, repo);
+  const data = (await apiGet(
+    `/repos/${canon.owner}/${canon.repo}/issues/${number}`
+  )) as {
+    labels?: Array<{ name?: string }>;
+    title?: string;
+    body?: string;
+    html_url?: string;
+  };
+  const labels = (data.labels ?? []).map((l) => String(l.name ?? ""));
+  const title = String(data.title ?? "");
+  return {
+    issueUrl: String(data.html_url ?? ""),
+    repo: canon.fullName,
+    labels,
+    title,
+    signal: detectBounty({ labels, title, body: String(data.body ?? "") }),
+  };
+}
+
 const PLATFORM_RE = /(algora|opire|issuehunt|polar|gitcoin|oss[-.]?hunter|bountysource)/i;
 
 function normalizePlatform(name: string): string {

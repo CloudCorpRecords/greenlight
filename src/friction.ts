@@ -24,7 +24,7 @@
  *   behavioral gate (v0.16.0, from maintainer actions not policy text):
  *     detected behavioral gate: -20 (maintainer rejects AI-built PRs in
  *     practice, e.g. spotDL/spotify-downloader closing submissions as
- *     "AI slop"). Cost: up to 18 API calls (1-3 list calls plus one comment page per closed-unmerged PR); skip with
+ *     "AI slop"). Cost: up to 48 API calls (1-3 list calls plus up to 3 evidence pages per closed-unmerged PR); skip with
  *     --no-behavioral or the behavioral:false option.
  *   opportunity:
  *     open good-first-issue count: +min(count, 20) * 0.5 (max +10)
@@ -38,6 +38,7 @@ import {
   fetchPolicySources,
   detectRepoPolicy,
   countStarterIssues,
+  resolveCanonicalRepo,
 } from "./github.js";
 import { fetchMergeVelocity } from "./merge-velocity.js";
 import { detectBehavioralGate } from "./behavior.js";
@@ -168,10 +169,23 @@ export async function fetchFrictionSummary(
   repo: string,
   opts: { behavioral?: boolean } = {}
 ): Promise<FrictionReport> {
-  const [sources, policy, starterCount] = await Promise.all([
+  // v0.18.0 (item 15): renamed repos (dbt-labs/dbt-core -> dbt-labs/dbt)
+  // 422 search and confuse every name-based flow; resolve once, use the
+  // canonical name everywhere below, and carry the old name in
+  // resolvedFrom for transparency.
+  const canon = await resolveCanonicalRepo(owner, repo);
+  const resolvedFrom = canon.renamed ? `${owner}/${repo}` : undefined;
+  owner = canon.owner;
+  repo = canon.repo;
+  const [sources, policy, starterCount, mergeVelocity] = await Promise.all([
     fetchPolicySources(owner, repo),
     detectRepoPolicy(owner, repo),
     countStarterIssues(owner, repo),
+    // v0.18.0 (item 11): merge velocity feeds the documented external
+    // merge-rate score term (see the formula in the module header).
+    // Best-effort: a failed fetch leaves the term null and unscored,
+    // never fabricated.
+    fetchMergeVelocity(owner, repo).catch(() => null),
   ]);
   const gates = parseGatesFromSources(sources);
   if (policy.collaboratorsOnly && !gates.some((g) => g.kind === "collaborators_only" && g.detected)) {
@@ -196,7 +210,7 @@ export async function fetchFrictionSummary(
     owner,
     repo,
     gates,
-    externalPRMergeRate: null,
+    externalPRMergeRate: mergeVelocity?.externalShare ?? null,
     externalPRMergeRate_pct: null,
     medianFirstReviewHours: null,
     maintainerIssueResponseHours: null,
@@ -205,12 +219,7 @@ export async function fetchFrictionSummary(
     note: "live",
   };
   const report = attachBehavioralGate(scoreFriction(signals), behavioralGate);
-  // Merge velocity is a signal, never a score input. Best-effort: silent
-  // when it fails.
-  try {
-    report.mergeVelocity = await fetchMergeVelocity(owner, repo);
-  } catch {
-    report.mergeVelocity = null;
-  }
+  report.mergeVelocity = mergeVelocity;
+  if (resolvedFrom) report.resolvedFrom = resolvedFrom;
   return attachOutsiderShare(report);
 }

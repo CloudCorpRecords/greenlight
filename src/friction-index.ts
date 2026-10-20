@@ -6,6 +6,10 @@
  * when the API is unreachable or rate-limited it falls back to the
  * hand-verified gate list below and labels the entry accordingly.
  *
+ * Since v0.18.0 (item 11) each entry also fetches merge velocity so the
+ * published index scores with the same external merge-rate term the CLI
+ * uses; a failed velocity fetch leaves the term null, unscored.
+ *
  * Rule: fields we cannot compute live stay null with a note. We never
  * fabricate numbers.
  */
@@ -14,8 +18,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FrictionReport, Gate } from "./types.js";
 import { parseGates, hardGates } from "./gates.js";
-import { scoreFriction } from "./friction.js";
+import { scoreFriction, attachOutsiderShare } from "./friction.js";
 import { fetchContributing } from "./github.js";
+import { fetchMergeVelocity } from "./merge-velocity.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -137,16 +142,22 @@ async function main(): Promise<void> {
 
     const liveGates = parseGates(contributing);
     const gates = mergeGates(entry.gates, liveGates);
-    const report = scoreFriction({
-      owner: entry.owner,
-      repo: entry.repo,
-      gates,
-      externalPRMergeRate: null,
-      medianFirstReviewHours: null,
-      maintainerIssueResponseHours: null,
-      openGoodFirstIssueCount: null,
-      note: liveNote,
-    });
+    // v0.18.0 (item 11): score with the real merge-rate term, the same
+    // machinery the CLI friction pipeline uses.
+    const mergeVelocity = await fetchMergeVelocity(entry.owner, entry.repo).catch(() => null);
+    const report = attachOutsiderShare(
+      scoreFriction({
+        owner: entry.owner,
+        repo: entry.repo,
+        gates,
+        externalPRMergeRate: mergeVelocity?.externalShare ?? null,
+        medianFirstReviewHours: null,
+        maintainerIssueResponseHours: null,
+        openGoodFirstIssueCount: null,
+        note: liveNote,
+      })
+    );
+    report.mergeVelocity = mergeVelocity;
     // Surface the hard gates in reasons even when score math already did.
     const hard = hardGates(gates);
     if (hard.length > 0) report.reasons.unshift(`HARD GATE: ${hard.map((g) => g.kind).join(", ")}`);

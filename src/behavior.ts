@@ -17,9 +17,10 @@
  *     itself is older than the bound). The closed-PR list is
  *     walked (newest first, up to 3 pages of 30) until 15 unmerged PRs are
  *     collected, because merged PRs carry no closure evidence and an
- *     active repo's unmerged closures can sit pages deep. Comment fetches
- *     (first page, per_page=100) run only for those unmerged PRs, so the
- *     total cost is 1-3 list calls + up to 15 comment calls (18 max).
+ *     active repo's unmerged closures can sit pages deep. Evidence fetches
+ *     (first page, per_page=100) run only for those unmerged PRs, on all
+ *     three surfaces (issue comments, reviews, review comments), so the
+ *     total cost is 1-3 list calls + up to 3 pages x 15 PRs (48 max).
  *   - Maintainer-side only: comment author_association must be OWNER,
  *     MEMBER, or COLLABORATOR, and the comment author must not be the PR
  *     author (a maintainer closing their own PR is not evidence against
@@ -50,12 +51,19 @@ export interface BehavioralClosedPR {
   closedAt: string;
 }
 
+/**
+ * One maintainer-authored text blob on a closed-unmerged PR.
+ * v0.18.0 (item 5): maintainer rejections often live in review bodies
+ * and line comments, not issue comments, so all three surfaces feed the
+ * same matcher. `source` defaults to "comment" for older callers.
+ */
 export interface BehavioralMaintainerComment {
   pr: number;
   author: string;
   association: string;
   body: string;
   url: string;
+  source?: "comment" | "review" | "review_comment";
 }
 
 export interface BehavioralSignal {
@@ -66,6 +74,8 @@ export interface BehavioralSignal {
   url: string;
   /** True for explicit phrases like "AI slop"; weaker signals can still count toward strength. */
   strong: boolean;
+  /** Which surface carried the evidence: "comment" | "review" | "review_comment". */
+  source?: "comment" | "review" | "review_comment";
 }
 
 export interface BehavioralGate {
@@ -125,11 +135,12 @@ export function partitionByRecency(
   return { fresh, staleCount, newestClosedAt };
 }
 /**
- * API cost contract: 1-3 calls to walk the closed-PR list (stops early
- * once 15 unmerged PRs are found) plus at most one comment page per
- * closed-unmerged PR.
+ * API cost contract (v0.18.0, item 5): 1-3 calls to walk the closed-PR
+ * list (stops early once 15 unmerged PRs are found) plus up to three
+ * evidence pages per closed-unmerged PR (issue comments, reviews,
+ * review comments).
  */
-export const BEHAVIORAL_MAX_API_CALLS = 3 + BEHAVIORAL_MAX_PRS;
+export const BEHAVIORAL_MAX_API_CALLS = 3 + 3 * BEHAVIORAL_MAX_PRS;
 
 const AI_TERMS =
   /\b(ai|a\.i\.|llm|llms|chatgpt|copilot|Muse|gemini|gpt-?4|gpt-?3|generated|slop)\b/i;
@@ -183,7 +194,7 @@ export function detectBehavioralGateFromData(
   const prsWithSignal = new Set<number>();
   const notes: string[] = [];
   notes.push(
-    `scanned ${prs.length} closed-unmerged PRs, ${comments.length} maintainer comments on them`
+    `scanned ${prs.length} closed-unmerged PRs, ${comments.length} maintainer-authored texts on them (issue comments, reviews, review comments)`
   );
 
   for (const c of comments) {
@@ -200,6 +211,7 @@ export function detectBehavioralGateFromData(
       quote: truncateQuote(c.body),
       url: c.url,
       strong,
+      source: c.source ?? "comment",
     });
     prsWithSignal.add(c.pr);
   }
@@ -278,18 +290,49 @@ export async function detectBehavioralGate(
   const recency = partitionByRecency(closedUnmerged, nowMs);
   const live = recency.fresh;
 
+  // v0.18.0 (item 5): maintainer rejections live on three surfaces.
+  // One bounded page each: issue comments, reviews, review comments.
   const comments: BehavioralMaintainerComment[] = [];
   for (const pr of live) {
-    const list = (await apiGet(
+    const issueComments = (await apiGet(
       `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`
     )) as CommentListItem[];
-    for (const c of list ?? []) {
+    for (const c of issueComments ?? []) {
       comments.push({
         pr: pr.number,
         author: String(c.user?.login ?? ""),
         association: String(c.author_association ?? ""),
         body: String(c.body ?? ""),
         url: c.html_url,
+        source: "comment",
+      });
+    }
+    const reviews = (await apiGet(
+      `/repos/${owner}/${repo}/pulls/${pr.number}/reviews?per_page=100`
+    )) as CommentListItem[];
+    for (const r of reviews ?? []) {
+      const body = String(r.body ?? "").trim();
+      if (!body) continue; // bare APPROVE/REQUEST_CHANGES votes carry no text
+      comments.push({
+        pr: pr.number,
+        author: String(r.user?.login ?? ""),
+        association: String(r.author_association ?? ""),
+        body,
+        url: r.html_url,
+        source: "review",
+      });
+    }
+    const reviewComments = (await apiGet(
+      `/repos/${owner}/${repo}/pulls/${pr.number}/comments?per_page=100`
+    )) as CommentListItem[];
+    for (const c of reviewComments ?? []) {
+      comments.push({
+        pr: pr.number,
+        author: String(c.user?.login ?? ""),
+        association: String(c.author_association ?? ""),
+        body: String(c.body ?? ""),
+        url: c.html_url,
+        source: "review_comment",
       });
     }
   }

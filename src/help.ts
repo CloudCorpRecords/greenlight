@@ -71,8 +71,8 @@ export const COMMANDS: CommandHelp[] = [
     description: "How hard it is to land an outside PR here, 0-100 (100 = easiest). Now also catches behavioral gates: maintainers who reject AI-built PRs in practice.",
     flags: [
       "--json (machine-readable output, includes behavioral_gate)",
-      "--no-behavioral (skip the maintainer-action pass; saves up to 18 API calls)",
-      "API budget: ~40 core calls typical (policy sources, starter count, merge velocity, behavioral pass); ~22 without the behavioral pass",
+      "--no-behavioral (skip the maintainer-action pass; saves up to 48 API calls)",
+      "API budget: ~40-70 core calls typical (policy sources, starter count, merge velocity, behavioral pass up to 48); ~22 without the behavioral pass",
     ],
     examples: ["greenlight friction vercel/next.js"],
   },
@@ -439,6 +439,16 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight passport CloudCorpRecords"],
   },
   {
+    name: "bounty",
+    usage: "greenlight bounty <issue-url> [--json]",
+    description: "Bounty-liveness check for one issue: is the advertised bounty backed by a live platform, an unverifiable claim, or a dead platform (like algora, dead since 2025)? Context for the contributor, never a verdict.",
+    flags: [
+      "--json (machine-readable output)",
+      "API budget: 2 core calls (repo resolution + issue fetch)",
+    ],
+    examples: ["greenlight bounty https://github.com/owner/repo/issues/123"],
+  },
+  {
     name: "help",
     usage: "greenlight help [command]",
     description: "Show help: the overview, or one command's flags and examples. Also '<cmd> --help'.",
@@ -486,6 +496,7 @@ export const NEEDS_TARGET: Record<string, string> = {
   "verify-comment": "an issue URL, e.g. greenlight verify-comment https://github.com/owner/repo/issues/123",
   evidence: "a PR URL, e.g. greenlight evidence https://github.com/owner/repo/pull/456",
   passport: "a GitHub login, e.g. greenlight passport CloudCorpRecords",
+  bounty: "an issue URL, e.g. greenlight bounty https://github.com/owner/repo/issues/123",
   shipcheck: "a repo plus --version, e.g. greenlight shipcheck CloudCorpRecords/greenlight --version 0.10.1",
   preflight: "a repo, e.g. greenlight preflight actualbudget/actual",
 };

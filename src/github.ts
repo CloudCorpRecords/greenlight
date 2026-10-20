@@ -204,6 +204,39 @@ export async function apiGet(path: string): Promise<unknown> {
   return res.json();
 }
 
+export interface CanonicalRepo {
+  owner: string;
+  repo: string;
+  /** "owner/repo" as GitHub knows it today. */
+  fullName: string;
+  /** True when the input differed from the canonical name (a rename redirect). */
+  renamed: boolean;
+}
+
+/**
+ * Resolve a repo to its canonical name (v0.18.0, item 15). GitHub's
+ * repo endpoint follows rename redirects, so dbt-labs/dbt-core comes
+ * back as dbt-labs/dbt. Search-dependent flows (scan, wave starter
+ * counts, friction) 422 or return nothing on the old name, so every
+ * entry point resolves before searching. Failures keep the input
+ * name: a genuinely missing repo fails downstream with its real
+ * error, never with a rename-resolution one.
+ */
+export async function resolveCanonicalRepo(owner: string, repo: string): Promise<CanonicalRepo> {
+  const input = { owner, repo, fullName: `${owner}/${repo}`, renamed: false };
+  try {
+    const data = (await apiGet(`/repos/${owner}/${repo}`)) as { full_name?: unknown };
+    const full = String(data.full_name ?? "");
+    const m = /^([^/]+)\/([^/]+)$/.exec(full);
+    if (m && (m[1] !== owner || m[2] !== repo)) {
+      return { owner: m[1], repo: m[2], fullName: full, renamed: true };
+    }
+    return { owner, repo, fullName: full || input.fullName, renamed: false };
+  } catch {
+    return input;
+  }
+}
+
 /** POST helper for write operations (automation commands). Read paths use apiGet. */
 export async function apiPost(path: string, body: unknown): Promise<unknown> {
   const headers: Record<string, string> = {

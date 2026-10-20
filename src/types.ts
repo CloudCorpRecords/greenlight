@@ -294,11 +294,19 @@ export interface FrictionReport {
   reasons: string[];
   signals: RepoSignals;
   /**
-   * Merge velocity, when computed (signal only, never a score input):
-   * share of recent merged PRs authored by non-collaborators and the
-   * median days to merge. Absent when it could not be computed.
+   * Merge velocity, when computed: share of recent merged PRs authored
+   * by non-collaborators and the median days to merge. Since v0.18.0
+   * (item 11) the share also feeds the documented external merge-rate
+   * score term via signals.externalPRMergeRate. Absent when it could
+   * not be computed.
    */
   mergeVelocity?: import("./merge-velocity.js").MergeVelocityStats | null;
+  /**
+   * v0.18.0 (item 15): set when the requested repo name was an old
+   * (renamed) name; carries "owner/repo" as given. owner/repo on the
+   * report are always the canonical names.
+   */
+  resolvedFrom?: string;
   /**
    * v0.9.3: outsider merge share with an explicit unit contract, because
    * an implicit fraction was once rendered as a percent downstream.

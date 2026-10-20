@@ -36,6 +36,7 @@ import { runAutopilot } from "./autopilot.js";
 import { verifyRepo } from "./verify.js";
 import { runShipcheck } from "./shipcheck.js";
 import { buildPassport } from "./passport.js";
+import { detectBountyForIssue } from "./bounty.js";
 import { defaultRegistryPath } from "./claims-registry.js";
 import {
   runWave,
@@ -260,7 +261,7 @@ server.tool(
   "Release-readiness check for a shipped release: confirms the GitHub release exists, the npm package version is live, the MCP Registry record is active, and the GHCR image tag is published, returning a GO / NO-GO verdict per surface. Agent-callable surface of `greenlight shipcheck`.",
   {
     repo: z.string().describe("owner/repo of the release."),
-    version: z.string().describe("Release version without the v prefix, e.g. 0.17.1."),
+    version: z.string().describe("Release version without the v prefix, e.g. 0.18.0."),
     npm_package: z.string().optional().describe("npm package name; defaults from package.json, then the API."),
     mcp_name: z.string().optional().describe("MCP registry server name; defaults from server.json, then the API."),
   },
@@ -294,6 +295,24 @@ server.tool(
       if (!/^[A-Za-z0-9-]+$/.test(clean)) return text({ error: `Expected a GitHub login, got: ${login}` });
       const passport = await buildPassport(clean);
       return text({ markdown: passport.markdown, ...passport.json });
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
+  "bounty_check",
+  "Bounty-liveness check for one issue: is the advertised bounty backed by a live platform, an unverifiable claim with no named payer, or a dead platform (algora has been dead since 2025 while thousands of issues still wear its labels)? Returns the classification with its evidence. Context for the contributor, never a verdict. Agent-callable surface of `greenlight bounty`.",
+  {
+    issue_url: z.string().describe("Full GitHub issue URL, e.g. https://github.com/owner/repo/issues/123"),
+  },
+  async ({ issue_url }) => {
+    try {
+      const m = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/i.exec(issue_url);
+      if (!m) return text({ error: `Expected a GitHub issue URL, got: ${issue_url}` });
+      const result = await detectBountyForIssue(m[1], m[2], Number(m[3]));
+      return text(result);
     } catch (err) {
       return text({ error: err instanceof Error ? err.message : String(err) });
     }

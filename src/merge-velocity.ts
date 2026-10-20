@@ -1,7 +1,9 @@
 /**
- * Merge velocity: how fast outside PRs land in a repo. Signal only, never
- * a verdict input: resend merges outsiders same-day while crewAI's
- * buildable issues were all claimed by a cohort, and only the share of
+ * Merge velocity: how fast outside PRs land in a repo. Its externalShare
+ * feeds friction's documented external merge-rate score term (v0.18.0,
+ * item 11); it is still never a verdict input on its own. The contrast
+ * it draws is resend merging outsiders same-day while crewAI's buildable
+ * issues were all claimed by a cohort: only the share of
  * non-collaborator merges tells those stories apart.
  *
  * Economical by design: a single /pulls call (author_association comes
