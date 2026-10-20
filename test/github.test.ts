@@ -624,3 +624,31 @@ describe("v0.18.0 repo rename resolution (item 15)", () => {
     assert.equal(r.renamed, false);
   });
 });
+
+describe("v0.19.0 starter candidate estimate (item 16)", () => {
+  it("queries open unassigned issues under the expanded starter label set", async () => {
+    const { countStarterCandidates } = await import("../src/github.js");
+    let query = "";
+    const n = await countStarterCandidates("acme", "widget", {
+      searchCount: async (q: string) => {
+        query = q;
+        return 7;
+      },
+    });
+    assert.equal(n, 7);
+    assert.ok(query.includes("repo:acme/widget"), query);
+    assert.ok(query.includes("type:issue state:open"), query);
+    assert.ok(query.includes("no:assignee"), query);
+    assert.ok(query.includes('"beginner friendly"'), query);
+    assert.ok(query.includes('"first-timers-only"'), query);
+    assert.ok(!query.includes('"good first issue"'), `fallback must not recount the classic labels: ${query}`);
+  });
+
+  it("returns null when the estimate search is unavailable", async () => {
+    const { countStarterCandidates } = await import("../src/github.js");
+    assert.equal(
+      await countStarterCandidates("acme", "widget", { searchCount: async () => null }),
+      null
+    );
+  });
+});

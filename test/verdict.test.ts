@@ -711,3 +711,130 @@ describe("scoped intake pause (v0.17.0)", () => {
     assert.ok(!result.flags.includes("scoped-pause"));
   });
 });
+
+describe("staleness decay (v0.19.0, item 17)", () => {
+  function clean(): IssueSnapshot {
+    const base = load("pdfcn-58.json");
+    return {
+      ...base,
+      comments: [],
+      linkedPRs: [],
+      commentMentionedPRs: [],
+      contributing: undefined,
+      updatedAt: NOW.toISOString(),
+    };
+  }
+  function withComments(comments: Array<{ author: string; body: string; createdAt?: string }>): IssueSnapshot {
+    const snap = clean();
+    snap.comments = comments.map((c) => ({
+      author: c.author,
+      body: c.body,
+      createdAt: c.createdAt ?? "2026-10-12T10:00:00Z",
+    }));
+    return snap;
+  }
+  // NOW is 2026-10-13T12:00:00Z: 2026-03-27 is exactly 200 days before,
+  // 2024-11-27 is exactly 685 days before, 2026-04-16 is exactly 180.
+  const D200 = "2026-03-27T12:00:00Z";
+  const D685 = "2024-11-27T12:00:00Z";
+  const D180 = "2026-04-16T12:00:00Z";
+
+  it("STALE_SIGNAL_DAYS is the documented 180-day threshold", async () => {
+    const { STALE_SIGNAL_DAYS } = await import("../src/verdict.js");
+    assert.equal(STALE_SIGNAL_DAYS, 180);
+  });
+
+  it("two strong claims aged 200 days with no PRs do not form a claim race (a)", () => {
+    const result = scoreIssue(withComments([
+      { author: "dev1", body: "I would like to work on this issue.", createdAt: D200 },
+      { author: "dev2", body: "Please assign this to me.", createdAt: D200 },
+    ]), NOW);
+    assert.notEqual(result.verdict, "TAKEN");
+    assert.ok(!result.reasons.some((r) => r.includes("claim race")), `reasons: ${result.reasons.join(" | ")}`);
+    assert.ok(result.flags.includes("stale-signal"));
+    assert.ok(result.reasons.some((r) => r.includes("stale signal: claim by dev1 200 day(s) ago") && r.includes("down-weighted")));
+    assert.ok(result.reasons.some((r) => r.includes("stale signal: claim by dev2 200 day(s) ago") && r.includes("down-weighted")));
+    assert.ok(!result.flags.includes("claimed"));
+    assert.equal(result.verdict, "GO");
+  });
+
+  it("a single strong claim aged 685 days does not downgrade a clean issue (b, llama.cpp field case)", () => {
+    const result = scoreIssue(withComments([
+      { author: "ancient-claimer", body: "I would like to work on this issue.", createdAt: D685 },
+    ]), NOW);
+    assert.equal(result.verdict, "GO");
+    assert.ok(result.flags.includes("stale-signal"));
+    assert.ok(!result.flags.includes("stale_claim"));
+    assert.ok(
+      result.reasons.some((r) => r.includes("stale signal: claim by ancient-claimer 685 day(s) ago") && r.includes("down-weighted")),
+      `reasons: ${result.reasons.join(" | ")}`
+    );
+  });
+
+  it("a fresh 3-day-old claim is unchanged: RISKY with the claimed flag (c)", () => {
+    const result = scoreIssue(withComments([
+      { author: "dev1", body: "I would like to work on this issue.", createdAt: "2026-10-10T12:00:00Z" },
+    ]), NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("claimed"));
+    assert.ok(!result.flags.includes("stale-signal"));
+    assert.ok(result.reasons.some((r) => r.includes("claimed by dev1 3 day(s) ago")));
+  });
+
+  it("a claim aged 200 days with an open closing PR takes the PR path, no stale-signal (d)", () => {
+    const snap = withComments([
+      { author: "dev1", body: "I would like to work on this issue.", createdAt: D200 },
+    ]);
+    snap.linkedPRs = [
+      { number: 700, state: "open", title: "fix: the thing", url: "https://github.com/shadcn-labs/pdfcn/pull/700", linkStrength: "closing" },
+    ];
+    const result = scoreIssue(snap, NOW);
+    assert.equal(result.verdict, "TAKEN");
+    assert.ok(result.reasons[0].includes("closes this issue"));
+    assert.ok(!result.flags.includes("stale-signal"));
+  });
+
+  it("a claim at exactly 180 days is not decayed: the stale_claim band still applies", () => {
+    const result = scoreIssue(withComments([
+      { author: "dev1", body: "I would like to work on this issue.", createdAt: D180 },
+    ]), NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("stale_claim"));
+    assert.ok(!result.flags.includes("stale-signal"));
+    assert.ok(result.reasons.some((r) => r.includes("stale claim by dev1 180 day(s) ago")));
+  });
+
+  it("a stale partial claim aged 200 days decays too: no partial-claim RISKY", () => {
+    const result = scoreIssue(withComments([
+      { author: "dev1", body: "Taking the remaining fallback ask.", createdAt: D200 },
+    ]), NOW);
+    assert.equal(result.verdict, "GO");
+    assert.ok(result.flags.includes("stale-signal"));
+    assert.ok(!result.flags.includes("partial-claim"));
+    assert.ok(!result.flags.includes("stale_claim"));
+    assert.ok(result.reasons.some((r) => r.includes("stale signal: claim by dev1 200 day(s) ago")));
+  });
+
+  it("a decayed soft claim loses the weak-claim treatment and keeps only the disclosure", () => {
+    const result = scoreIssue(withComments([
+      { author: "dev1", body: "I'm going to take a look at this one.", createdAt: D200 },
+    ]), NOW);
+    assert.equal(result.verdict, "GO");
+    assert.ok(result.flags.includes("stale-signal"));
+    assert.ok(!result.flags.includes("weak-claim"));
+    assert.ok(result.reasons.some((r) => r.includes("stale signal: claim by dev1 200 day(s) ago")));
+  });
+
+  it("a fresh claim still wins alongside an ancient one, and the ancient one is disclosed", () => {
+    const result = scoreIssue(withComments([
+      { author: "old-timer", body: "I would like to work on this issue.", createdAt: D200 },
+      { author: "fresh-dev", body: "Please assign this to me.", createdAt: "2026-10-10T12:00:00Z" },
+    ]), NOW);
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("claimed"));
+    assert.ok(result.flags.includes("stale-signal"));
+    assert.ok(!result.reasons.some((r) => r.includes("claim race")));
+    assert.ok(result.reasons.some((r) => r.includes("claimed by fresh-dev 3 day(s) ago")));
+    assert.ok(result.reasons.some((r) => r.includes("stale signal: claim by old-timer 200 day(s) ago")));
+  });
+});

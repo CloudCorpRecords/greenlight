@@ -178,3 +178,23 @@ describe("v0.18.0 external merge-rate score term (item 11)", () => {
     assert.ok(!r.reasons.some((x) => x.includes("external PR merge rate")));
   });
 });
+
+describe("starter candidate estimate is never scored (item 16)", () => {
+  it("a large estimate with a zero label count changes nothing", () => {
+    const withEst = scoreFriction(
+      base({ openGoodFirstIssueCount: 0, starterLabelCount: 0, starterCandidateEstimate: 42 })
+    );
+    const without = scoreFriction(
+      base({ openGoodFirstIssueCount: 0, starterLabelCount: 0, starterCandidateEstimate: null })
+    );
+    assert.equal(withEst.score, without.score);
+    assert.equal(withEst.score, 100);
+    assert.ok(!withEst.reasons.some((x) => x.includes("estimate")));
+  });
+
+  it("the label count still carries both fields through to the report", () => {
+    const r = scoreFriction(base({ openGoodFirstIssueCount: 4, starterLabelCount: 4, starterCandidateEstimate: null }));
+    assert.equal(r.signals.starterLabelCount, 4);
+    assert.equal(r.signals.openGoodFirstIssueCount, 4);
+  });
+});

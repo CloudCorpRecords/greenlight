@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { scanCandidates, toScanCandidates, type ScanCandidate } from "../src/github.js";
+import {
+  scanCandidates,
+  toScanCandidates,
+  scanBudgetExceeded,
+  DEFAULT_SCAN_MAX_TIME_SEC,
+  type ScanCandidate,
+} from "../src/github.js";
 
 function cand(n: number): ScanCandidate {
   return {
@@ -93,5 +99,23 @@ describe("scanCandidates", () => {
     );
     assert.equal(res.issues.length, 10);
     assert.equal(res.issues[0].number, 100);
+  });
+});
+
+describe("scan wall-time budget (v0.19.0, item 17)", () => {
+  it("defaults the scan budget to 600 seconds", () => {
+    assert.equal(DEFAULT_SCAN_MAX_TIME_SEC, 600);
+  });
+
+  it("scanBudgetExceeded is false before the budget and true at and past it", () => {
+    const start = 1_000_000;
+    assert.equal(scanBudgetExceeded(start, 600, start + 599_999), false);
+    assert.equal(scanBudgetExceeded(start, 600, start + 600_000), true);
+    assert.equal(scanBudgetExceeded(start, 600, start + 900_000), true);
+  });
+
+  it("scanBudgetExceeded measures from the recorded start, not from the epoch", () => {
+    assert.equal(scanBudgetExceeded(5000, 10, 14_999), false);
+    assert.equal(scanBudgetExceeded(5000, 10, 15_000), true);
   });
 });
