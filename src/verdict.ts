@@ -42,7 +42,10 @@
  *     knows for sure (seen on modelcontextprotocol/python-sdk#3287,
  *     claimed 2026-08-11, never opened a PR). A closing PR, open or not,
  *     counts as "a PR was opened" here; a mere mention does not. Stale
- *     partial claims get the same treatment, scoped.
+ *     partial claims get the same treatment, scoped. Claims older than
+ *     STALE_SIGNAL_DAYS (180) with no closing PR are decayed instead:
+ *     disclosed with the "stale-signal" flag, but never blocking on their
+ *     own.
  *  7. Any hard gate (assignment / vouch / collaborators_only /
  *     unsolicited_prs_paused / external_prs_closed / agents_banned) with
  *     no assignee -> GATED. The code might be welcome, but the ritual
@@ -108,6 +111,19 @@ import { extractPRReferences } from "./github.js";
 
 const FRESH_CLAIM_DAYS = 45;
 const STALE_INACTIVITY_DAYS = 180;
+
+/**
+ * Stale-signal threshold in days (v0.19.0, item 17): a claim whose author
+ * has been silent for 180+ days with no closing PR in snapshot.linkedPRs
+ * is DECAYED. Maintainer reality is that the claimant walked away; the
+ * signal is disclosed, not hidden (the "stale-signal" flag and a
+ * down-weighting reason ride along on whatever verdict the remaining
+ * rules produce), but it stops blocking: no TAKEN from an all-ancient
+ * claim race, and no stale-claim RISKY from an ancient single claim by
+ * itself. Behavior at or below 180 days is unchanged, including the
+ * 45-to-180-day stale-claim band and the fresh claim band below it.
+ */
+export const STALE_SIGNAL_DAYS = 180;
 
 function daysSince(iso: string, now: Date): number {
   return Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / (1000 * 60 * 60 * 24)));
@@ -234,7 +250,31 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   );
   if (openMentionPRs.length > 0) flags.push("weak-pr-mention");
 
-  const strong = strongClaimants(claims);
+  // Staleness decay (v0.19.0, item 17): a claim whose author went silent
+  // 180+ days ago (STALE_SIGNAL_DAYS) with no closing PR in
+  // snapshot.linkedPRs has no live claimant behind it. The signal is
+  // disclosed, not hidden: the "stale-signal" flag and a down-weighting
+  // reason are collected here, before rules 4-6, in the same early
+  // collection pattern as the attempt-linked evidence below, so every
+  // later return (including the gate-rule early returns) carries the
+  // disclosure. Decayed claims leave the claim-rule sets, so an
+  // all-ancient claim race is not TAKEN and an ancient single claim is
+  // not a stale-claim RISKY on its own. Soft claims get the same
+  // treatment in the warning section below.
+  const hasClosingPR = snapshot.linkedPRs.some(isClosingPR);
+  const decayedClaims = new Set(
+    claims.filter((c) => c.ageDays > STALE_SIGNAL_DAYS && !hasClosingPR)
+  );
+  if (decayedClaims.size > 0) {
+    flags.push("stale-signal");
+    for (const c of decayedClaims) {
+      reasons.push(
+        `stale signal: claim by ${c.author} ${c.ageDays} day(s) ago exceeds the ${STALE_SIGNAL_DAYS}-day staleness threshold with no PR opened; down-weighted`
+      );
+    }
+  }
+
+  const strong = strongClaimants(claims).filter((c) => !decayedClaims.has(c));
   // Whole-issue claims compete for the whole issue; scoped claims leave part
   // of the work open, so only whole-issue claims can form a claim race.
   const fullStrong = strong.filter((c) => c.scope !== "partial");
@@ -345,7 +385,10 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
   // Soft claims carry their comment date so a months-old soft claim weighs
   // differently from yesterday's: actualbudget/actual#6643's "I'm going
   // to take a look at this one" sat two months with nothing landing.
-  const softClaims = claims.filter((c) => c.strength === "soft");
+  // Decayed soft claims (180+ days, no closing PR) lose this
+  // weak-claim treatment: their stale-signal disclosure was collected
+  // with the other decayed claims before rule 4.
+  const softClaims = claims.filter((c) => c.strength === "soft" && !decayedClaims.has(c));
   if (softClaims.length > 0) {
     const c = softClaims[0];
     flags.push("weak-claim");

@@ -226,6 +226,18 @@ export interface RepoSignals {
   maintainerIssueResponseHours?: number | null;
   openGoodFirstIssueCount?: number | null;
   /**
+   * v0.19.0 (item 16): starter-issue counts with an explicit contract.
+   * starterLabelCount is the count under the classic starter labels
+   * (good first issue, help wanted); it mirrors openGoodFirstIssueCount
+   * and is the only starter number the score uses.
+   * starterCandidateEstimate is set only when the label count is
+   * exactly 0: a bounded fallback count of open, unassigned issues
+   * under a wider starter label set. It is an estimate for humans,
+   * never scored and never merged into the label count.
+   */
+  starterLabelCount?: number | null;
+  starterCandidateEstimate?: number | null;
+  /**
    * v0.16.0: behavioral gate from maintainer actions (not policy text).
    * Set when detectBehavioralGate ran; null when skipped or unavailable.
    * When detected, scoreFriction applies the documented -20 penalty.
@@ -285,6 +297,23 @@ export interface RepoConventions {
   exampleCommit?: string;
 }
 
+/**
+ * v0.19.0: read provenance for one policy-source probe. Friction
+ * distinguishes "the repo has no such policy file" (absent) from "the
+ * fetch itself failed" (error): only a real fetch failure should be
+ * retried, and a repo whose policy could not be read must never be
+ * reported as a repo with no policy.
+ */
+export interface PolicySourceProvenance {
+  /** Path probed, e.g. "CONTRIBUTING.md" or "AI_POLICY.md (org astral-sh)". */
+  file: string;
+  /** "repo" for the repo's own policy files, "org" for the org-level AI policy. */
+  scope: "repo" | "org";
+  status: "read" | "absent" | "error";
+  /** Short kind string when status is "error" (e.g. "rate limited", "http 500"). */
+  error?: string;
+}
+
 /** A scored repo, stored in data/friction-index.json. */
 export interface FrictionReport {
   owner: string;
@@ -316,6 +345,19 @@ export interface FrictionReport {
    */
   outsider_merge_share?: number | null;
   outsider_merge_share_pct?: number | null;
+  /**
+   * v0.19.0: policy-source read provenance: one entry per probed
+   * basename plus the org policy, each read, absent, or error. Always
+   * present on reports built by fetchFrictionSummary.
+   */
+  policy_provenance?: PolicySourceProvenance[];
+  /**
+   * v0.19.0: true only for lite friction (friction --lite): policy-file
+   * gates only, all outcome signals null, behavioral pass skipped. The
+   * gates and score fields keep the full-friction shape so index
+   * pipelines can adopt lite as the single friction-lite computation.
+   */
+  lite?: boolean;
   /**
    * v0.16.0: behavioral gate verdict (maintainer actions, not policy
    * text). Consumers like the policy-index rebaseline read this field to

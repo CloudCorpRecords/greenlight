@@ -261,7 +261,7 @@ server.tool(
   "Release-readiness check for a shipped release: confirms the GitHub release exists, the npm package version is live, the MCP Registry record is active, and the GHCR image tag is published, returning a GO / NO-GO verdict per surface. Agent-callable surface of `greenlight shipcheck`.",
   {
     repo: z.string().describe("owner/repo of the release."),
-    version: z.string().describe("Release version without the v prefix, e.g. 0.18.0."),
+    version: z.string().describe("Release version without the v prefix, e.g. 0.19.0."),
     npm_package: z.string().optional().describe("npm package name; defaults from package.json, then the API."),
     mcp_name: z.string().optional().describe("MCP registry server name; defaults from server.json, then the API."),
   },

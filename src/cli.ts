@@ -3,10 +3,10 @@
  * Greenlight CLI.
  *
  *   greenlight check <issue-url> [--json] [--gates-file path]
- *   greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path]
+ *   greenlight scan <owner/repo> [--json] [--no-fallback] [--gates-file path] [--deep] [--max-time seconds]
  *   greenlight wave [--index url|path] [--repos N] [--min-share N] [--stars lo,hi] [--issues-per-repo N] [--min-budget N] [--json]
  *   greenlight mcp
- *   greenlight friction <owner/repo> [--json]
+ *   greenlight friction <owner/repo> [--json] [--lite] [--no-behavioral]
  *   greenlight ci <pr-url> [--json]
  *   greenlight review <pr-url> [--json]
  *   greenlight claim <issue-url> [--yes] [--force] [--json]
@@ -37,11 +37,13 @@ import {
   fetchComments,
   apiCallsUsed,
   resolveCanonicalRepo,
+  scanBudgetExceeded,
+  DEFAULT_SCAN_MAX_TIME_SEC,
 } from "./github.js";
 import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
 import { CLAIM_MARKER } from "./protocol.js";
 import { llmEnabled, llmModelId } from "./llm-claims.js";
-import type { LlmLayerStatus } from "./types.js";
+import type { LlmLayerStatus, PolicySourceProvenance } from "./types.js";
 import {
   checkPacing,
   pacingConfigFromEnv,
@@ -330,6 +332,16 @@ async function cmdStatus(issueUrl: string, asJson: boolean): Promise<void> {
 }
 
 async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promise<void> {
+  // v0.19.0 (item 17): wall-time bound (--max-time <seconds>, default
+  // DEFAULT_SCAN_MAX_TIME_SEC). Mega-backlog scans ran about 25 minutes;
+  // when the budget runs out the scan stops with marked partial results
+  // instead of running open-ended.
+  const startedAt = Date.now();
+  const maxTimeRaw = flagValue(args, "--max-time");
+  const maxTimeSec =
+    maxTimeRaw !== undefined
+      ? Math.max(1, Math.trunc(Number(maxTimeRaw)) || DEFAULT_SCAN_MAX_TIME_SEC)
+      : DEFAULT_SCAN_MAX_TIME_SEC;
   const parsed = parseRepoRef(repoRef);
   // v0.18.0 (item 15): the old name 422s the candidate search; resolve
   // first and say so in the output.
@@ -371,7 +383,13 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   // check pipeline's LLM layer was built to catch. The protocol state
   // costs extra API calls per issue; the scan's 10-issue cap and the
   // budget notes in help keep that visible.
+  let partial = false;
+  let partialDuringDeep = false;
   for (const issue of issues) {
+    if (scanBudgetExceeded(startedAt, maxTimeSec, Date.now())) {
+      partial = true;
+      break;
+    }
     try {
       const { merged } = await checkIssueWithProtocol(owner, repo, issue.number, { externalGates, behavioralGate });
       results.push({
@@ -406,6 +424,11 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   let deepVerified = 0;
   if (args.includes("--deep") && results.length > 0) {
     for (const r of results) {
+      if (scanBudgetExceeded(startedAt, maxTimeSec, Date.now())) {
+        partial = true;
+        partialDuringDeep = true;
+        break;
+      }
       try {
         const xr = await xrayIssue(owner, repo, r.number);
         deepVerified++;
@@ -417,8 +440,28 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     results.sort((a, b) => (rank[a.verdict] ?? 9) - (rank[b.verdict] ?? 9));
   }
 
+  // v0.19.0 (item 17): a partial scan is valid, labeled output: same
+  // honest-partial contract as the wave command, still exit 0. When the
+  // budget is never hit these fields stay absent, byte-identical to
+  // before.
+  const partialReason = partial
+    ? `scan time budget ${maxTimeSec}s reached; evaluated ${results.length} of ${issues.length} candidates` +
+      (partialDuringDeep ? `; deep-verified ${deepVerified} of ${results.length} before stopping` : "")
+    : null;
   if (asJson) {
-    console.log(JSON.stringify({ repo: `${owner}/${repo}`, renamedFrom: canon.renamed ? `${parsed.owner}/${parsed.repo}` : null, fallback: fallbackUsed, results }, null, 2));
+    const out: Record<string, unknown> = {
+      repo: `${owner}/${repo}`,
+      renamedFrom: canon.renamed ? `${parsed.owner}/${parsed.repo}` : null,
+      fallback: fallbackUsed,
+      results,
+    };
+    if (partialReason) {
+      out.partial = true;
+      out.partial_reason = partialReason;
+      out.evaluated = results.length;
+      out.candidates = issues.length;
+    }
+    console.log(JSON.stringify(out, null, 2));
     return;
   }
   console.log(`Scan of ${owner}/${repo}: ${results.length} candidate issues, GO first`);
@@ -440,6 +483,9 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     console.log(`  ${r.url}`);
     console.log(`  - ${r.reasons[0] ?? "no reason"}`);
     if (r.flags.length > 0) console.log(`  flags: ${r.flags.join(", ")}`);
+  }
+  if (partialReason) {
+    console.log(`\nPartial scan: ${partialReason}; results above cover the evaluated candidates only`);
   }
 }
 
@@ -502,6 +548,22 @@ async function cmdXray(repoRef: string, args: string[]): Promise<void> {
   }
 }
 
+/**
+ * v0.19.0: one-line read provenance for a friction report, e.g.
+ * "policy sources: 2 read (CONTRIBUTING.md, AGENTS.md), 3 absent, 0 fetch errors".
+ * Fetch errors are counted separately so "no policy here" is never
+ * confused with "the policy fetch failed".
+ */
+function formatPolicyProvenance(provenance: PolicySourceProvenance[] | undefined): string {
+  const prov = provenance ?? [];
+  const read = prov.filter((p) => p.status === "read");
+  const absent = prov.filter((p) => p.status === "absent").length;
+  const errors = prov.filter((p) => p.status === "error").length;
+  const readPart =
+    read.length > 0 ? `${read.length} read (${read.map((p) => p.file).join(", ")})` : "0 read";
+  return `policy sources: ${readPart}, ${absent} absent, ${errors} fetch errors`;
+}
+
 async function cmdFriction(repoRef: string, asJson: boolean, args: string[] = []): Promise<void> {
   const { owner, repo } = parseRepoRef(repoRef);
   // v0.9.3: one shared pipeline (fetchFrictionSummary) for the CLI, the
@@ -509,8 +571,11 @@ async function cmdFriction(repoRef: string, asJson: boolean, args: string[] = []
   // policy source set everywhere instead of a single CONTRIBUTING read.
   // v0.16.0: the behavioral gate pass (maintainer actions, not policy
   // text) is part of the report; --no-behavioral skips its API cost.
+  // v0.19.0: --lite computes policy-file gates only (the canonical
+  // lightweight friction); --json carries lite: true in that mode.
   const report = await fetchFrictionSummary(owner, repo, {
     behavioral: !args.includes("--no-behavioral"),
+    lite: args.includes("--lite"),
   });
 
   if (asJson) {
@@ -518,6 +583,8 @@ async function cmdFriction(repoRef: string, asJson: boolean, args: string[] = []
     return;
   }
   console.log(`Friction for ${report.owner}/${report.repo}: ${report.score}/100 (100 = easiest)`);
+  if (report.lite) console.log("mode: lite (policy gates only)");
+  console.log(`  ${formatPolicyProvenance(report.policy_provenance)}`);
   if (report.resolvedFrom) console.log(`  repo renamed: ${report.resolvedFrom} -> ${report.owner}/${report.repo}`);
   for (const reason of report.reasons) console.log(`  - ${reason}`);
   if (report.reasons.length === 0) console.log("  - no gates or penalties detected");
@@ -531,7 +598,11 @@ async function cmdFriction(repoRef: string, asJson: boolean, args: string[] = []
     console.log(`  behavioral note: ${report.behavioral_gate.note}`);
   }
   const starterCount = report.signals.openGoodFirstIssueCount ?? null;
-  if (starterCount !== null) console.log(`  open starter issues: ${starterCount}`);
+  const candidateEstimate = report.signals.starterCandidateEstimate ?? null;
+  if (starterCount !== null && candidateEstimate !== null) {
+    // v0.19.0 (item 16): both numbers shown, never merged.
+    console.log(`  open starter issues: ${starterCount} by label; candidate estimate (expanded labels, unassigned): ~${candidateEstimate}`);
+  } else if (starterCount !== null) console.log(`  open starter issues: ${starterCount}`);
   if (report.mergeVelocity) console.log(`  merge velocity: ${describeMergeVelocity(report.mergeVelocity)}`);
 }
 

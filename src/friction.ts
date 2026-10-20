@@ -28,6 +28,8 @@
  *     --no-behavioral or the behavioral:false option.
  *   opportunity:
  *     open good-first-issue count: +min(count, 20) * 0.5 (max +10)
+ *     (v0.19.0: only the label count scores; the candidate estimate
+ *     reported when the label count is 0 is display-only)
  *   clamp to [0, 100], rounded.
  *
  * Null signals are simply skipped: the index never fabricates numbers.
@@ -35,12 +37,13 @@
 import type { FrictionReport, RepoSignals } from "./types.js";
 import { gateLabel, parseGatesFromSources } from "./gates.js";
 import {
-  fetchPolicySources,
+  fetchPolicySourcesWithProvenance,
   detectRepoPolicy,
   countStarterIssues,
+  countStarterCandidates,
   resolveCanonicalRepo,
 } from "./github.js";
-import { fetchMergeVelocity } from "./merge-velocity.js";
+import { fetchMergeVelocity, type MergeVelocityStats } from "./merge-velocity.js";
 import { detectBehavioralGate } from "./behavior.js";
 
 const GATE_WEIGHTS: Record<string, number> = {
@@ -162,13 +165,26 @@ export function attachOutsiderShare(report: FrictionReport): FrictionReport {
  * and docs/, plus the org-level AI_POLICY.md), starter-issue count, and
  * merge velocity as a best-effort signal. Shared by the CLI, the MCP
  * repo_friction tool, and the protocol preflight (which pairs it with
- * the issue status).
+ * the issue status). Every report carries policy_provenance: whether
+ * each policy source was read, absent, or a fetch error.
+ *
+ * v0.19.0 lite mode (opts.lite, friction --lite) is the canonical
+ * lightweight computation: policy gates ONLY. It runs the policy-source
+ * fetch plus parseGatesFromSources (and the collaboratorsOnly push from
+ * detectRepoPolicy, which is free), and scores with scoreFriction using
+ * all outcome signals null and behavioralGate null, so the score is
+ * 100 + gate weights, clamped, with the same GATE_WEIGHTS. It skips the
+ * behavioral pass, merge velocity, and the starter-issue count, marks
+ * the report lite: true, and sets signals.note to "lite". Repo rename
+ * resolution stays: it is one cheap call and name correctness matters
+ * for the scanner.
  */
 export async function fetchFrictionSummary(
   owner: string,
   repo: string,
-  opts: { behavioral?: boolean } = {}
+  opts: { behavioral?: boolean; lite?: boolean } = {}
 ): Promise<FrictionReport> {
+  const lite = opts.lite === true;
   // v0.18.0 (item 15): renamed repos (dbt-labs/dbt-core -> dbt-labs/dbt)
   // 422 search and confuse every name-based flow; resolve once, use the
   // canonical name everywhere below, and carry the old name in
@@ -177,16 +193,24 @@ export async function fetchFrictionSummary(
   const resolvedFrom = canon.renamed ? `${owner}/${repo}` : undefined;
   owner = canon.owner;
   repo = canon.repo;
-  const [sources, policy, starterCount, mergeVelocity] = await Promise.all([
-    fetchPolicySources(owner, repo),
-    detectRepoPolicy(owner, repo),
-    countStarterIssues(owner, repo),
-    // v0.18.0 (item 11): merge velocity feeds the documented external
-    // merge-rate score term (see the formula in the module header).
-    // Best-effort: a failed fetch leaves the term null and unscored,
-    // never fabricated.
-    fetchMergeVelocity(owner, repo).catch(() => null),
-  ]);
+  const [sourcesResult, policy, starterCount, mergeVelocity] = lite
+    ? await Promise.all([
+        fetchPolicySourcesWithProvenance(owner, repo),
+        detectRepoPolicy(owner, repo),
+        Promise.resolve<number | null>(null),
+        Promise.resolve<MergeVelocityStats | null>(null),
+      ])
+    : await Promise.all([
+        fetchPolicySourcesWithProvenance(owner, repo),
+        detectRepoPolicy(owner, repo),
+        countStarterIssues(owner, repo),
+        // v0.18.0 (item 11): merge velocity feeds the documented external
+        // merge-rate score term (see the formula in the module header).
+        // Best-effort: a failed fetch leaves the term null and unscored,
+        // never fabricated.
+        fetchMergeVelocity(owner, repo).catch(() => null),
+      ]);
+  const sources = sourcesResult.sources;
   const gates = parseGatesFromSources(sources);
   if (policy.collaboratorsOnly && !gates.some((g) => g.kind === "collaborators_only" && g.detected)) {
     gates.push({
@@ -197,13 +221,25 @@ export async function fetchFrictionSummary(
   }
   // Behavioral gate is a signal, best-effort and silent on failure: a
   // dead pass must never fabricate a hostile verdict, and a missing one
-  // must never hide an actual gate.
+  // must never hide an actual gate. Lite mode skips it entirely.
   let behavioralGate: RepoSignals["behavioralGate"] = null;
-  if (opts.behavioral !== false) {
+  if (!lite && opts.behavioral !== false) {
     try {
       behavioralGate = await detectBehavioralGate(owner, repo);
     } catch {
       behavioralGate = null;
+    }
+  }
+  // v0.19.0 (item 16): when the classic starter labels read exactly 0,
+  // one bounded fallback estimates open unassigned candidates under a
+  // wider label set. The estimate is reported next to the label count,
+  // never merged into it and never scored.
+  let starterCandidateEstimate: number | null = null;
+  if (starterCount === 0) {
+    try {
+      starterCandidateEstimate = await countStarterCandidates(owner, repo);
+    } catch {
+      starterCandidateEstimate = null;
     }
   }
   const signals: RepoSignals = {
@@ -215,11 +251,16 @@ export async function fetchFrictionSummary(
     medianFirstReviewHours: null,
     maintainerIssueResponseHours: null,
     openGoodFirstIssueCount: starterCount,
+    starterLabelCount: starterCount,
+    starterCandidateEstimate,
     behavioralGate,
-    note: "live",
+    note: lite ? "lite" : "live",
   };
   const report = attachBehavioralGate(scoreFriction(signals), behavioralGate);
   report.mergeVelocity = mergeVelocity;
+  // v0.19.0 (item 7): every report says how its policy sources were obtained.
+  report.policy_provenance = sourcesResult.provenance;
+  if (lite) report.lite = true;
   if (resolvedFrom) report.resolvedFrom = resolvedFrom;
   return attachOutsiderShare(report);
 }

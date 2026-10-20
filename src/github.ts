@@ -10,7 +10,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, Gate, MentionedPR, DuplicateTarget } from "./types.js";
+import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, Gate, MentionedPR, DuplicateTarget, PolicySourceProvenance } from "./types.js";
 import { classifyLinkStrength, type LinkStrength } from "./linkstrength.js";
 import { detectWorkflowGates, type WorkflowFile } from "./gates.js";
 import { isBotAuthor } from "./claims.js";
@@ -461,10 +461,36 @@ export const HOUSE_RULE_FILES = [
 ] as const;
 
 export interface HouseRuleDeps {
-  /** Test seam: fetch a repo-root file's raw text, or undefined when absent. */
+  /**
+   * Test seam: fetch a repo-root file's raw text, or undefined when absent.
+   * v0.19.0: a fetchRaw that throws surfaces as a provenance "error" (with
+   * the error as the kind string), never as "absent".
+   */
   fetchRaw?: (file: string) => Promise<string | undefined>;
   /** Test seam: fetch the org's AI_POLICY.md text, or undefined when absent. */
   fetchOrgPolicy?: (owner: string) => Promise<string | undefined>;
+}
+
+/**
+ * v0.19.0: the detailed outcome of one raw policy-file fetch. The old
+ * fetchRawFile collapsed "no such file" and "the fetch failed" into the
+ * same undefined, so friction could not tell a repo with no policy from
+ * a repo whose policy read broke. "error" carries a short kind string
+ * (e.g. "rate limited", "http 500", "network error").
+ */
+export type RawFileFetchStatus =
+  | { status: "read"; text: string }
+  | { status: "absent" }
+  | { status: "error"; error: string };
+
+/** Short kind string for a policy-file fetch failure (never the full stack). */
+function classifyFetchError(err: unknown): string {
+  if (err instanceof RateLimitError) return "rate limited";
+  if (err instanceof RequestTimeoutError) return "timeout";
+  if (err instanceof Error && err.message) {
+    return err.message.length > 120 ? err.message.slice(0, 120) : err.message;
+  }
+  return "fetch error";
 }
 
 /**
@@ -474,40 +500,89 @@ export interface HouseRuleDeps {
  * CONTRIBUTING only links to mastodon/.github's AI_POLICY.md). Probed
  * once per org and cached under its own key so a sweep over N repos from
  * one org costs one fetch, not N.
+ *
+ * v0.19.0: the cache entry now carries the full detailed outcome
+ * (read/absent/error); entries written before v0.19.0 (a bare text or
+ * empty string) are treated as a miss and re-fetched.
  */
-export async function fetchOrgAiPolicy(
+export async function fetchOrgAiPolicyDetailed(
   owner: string,
   deps: HouseRuleDeps = {}
-): Promise<string | undefined> {
+): Promise<{ file: string; outcome: RawFileFetchStatus }> {
+  const file = `AI_POLICY.md (org ${owner})`;
   if (!deps.fetchOrgPolicy) {
-    const cached = cacheGet("org-ai-policy", [owner.toLowerCase()]) as string | undefined;
-    if (cached !== undefined) return cached || undefined;
+    const cached = cacheGet("org-ai-policy", [owner.toLowerCase()]) as
+      | RawFileFetchStatus
+      | string
+      | undefined;
+    if (cached !== undefined && typeof cached === "object") return { file, outcome: cached };
   }
   const headers: Record<string, string> = { "User-Agent": "greenlight-cli" };
   const token = githubToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const fetchOrgPolicy =
-    deps.fetchOrgPolicy ??
-    ((o: string): Promise<string | undefined> => fetchRawFile(o, ".github", "AI_POLICY.md", headers));
-  const text = await fetchOrgPolicy(owner);
-  if (!deps.fetchOrgPolicy) cacheSet("org-ai-policy", [owner.toLowerCase()], text ?? "");
-  return text;
+  let outcome: RawFileFetchStatus;
+  if (deps.fetchOrgPolicy) {
+    try {
+      const text = await deps.fetchOrgPolicy(owner);
+      outcome = text ? { status: "read", text } : { status: "absent" };
+    } catch (err) {
+      outcome =
+        err instanceof ApiNotFoundError
+          ? { status: "absent" }
+          : { status: "error", error: classifyFetchError(err) };
+    }
+  } else {
+    outcome = await fetchRawFileDetailed(owner, ".github", "AI_POLICY.md", headers);
+  }
+  if (!deps.fetchOrgPolicy) cacheSet("org-ai-policy", [owner.toLowerCase()], outcome);
+  return { file, outcome };
+}
+
+/** Org-level AI policy text, or undefined when absent or unreadable. */
+export async function fetchOrgAiPolicy(
+  owner: string,
+  deps: HouseRuleDeps = {}
+): Promise<string | undefined> {
+  const { outcome } = await fetchOrgAiPolicyDetailed(owner, deps);
+  return outcome.status === "read" ? outcome.text : undefined;
 }
 
 /**
  * v0.9.3: the full policy source set for gate detection: house-rules
  * files (first hit per filename across root, .github/, docs/) plus the
  * org-level AI_POLICY.md when the org publishes one.
+ *
+ * v0.19.0: fetchPolicySourcesWithProvenance adds the read provenance
+ * friction reports; this plain variant delegates and returns the sources
+ * alone, so its callers do not change.
  */
+export async function fetchPolicySourcesWithProvenance(
+  owner: string,
+  repo: string,
+  deps: HouseRuleDeps = {}
+): Promise<{ sources: { file: string; text: string }[]; provenance: PolicySourceProvenance[] }> {
+  const [{ sources, provenance }, { file, outcome }] = await Promise.all([
+    fetchHouseRulesDetailed(owner, repo, deps),
+    fetchOrgAiPolicyDetailed(owner, deps),
+  ]);
+  if (outcome.status === "read") sources.push({ file, text: outcome.text });
+  provenance.push(
+    outcome.status === "read"
+      ? { file, scope: "org", status: "read" }
+      : outcome.status === "error"
+        ? { file, scope: "org", status: "error", error: outcome.error }
+        : { file, scope: "org", status: "absent" }
+  );
+  return { sources, provenance };
+}
+
 export async function fetchPolicySources(
   owner: string,
   repo: string,
   deps: HouseRuleDeps = {}
 ): Promise<{ file: string; text: string }[]> {
-  const rules = await fetchHouseRules(owner, repo, deps);
-  const orgPolicy = await fetchOrgAiPolicy(owner, deps);
-  if (orgPolicy) rules.push({ file: `AI_POLICY.md (org ${owner})`, text: orgPolicy });
-  return rules;
+  const { sources } = await fetchPolicySourcesWithProvenance(owner, repo, deps);
+  return sources;
 }
 
 /**
@@ -515,14 +590,19 @@ export async function fetchPolicySources(
  * override. In proxy mode (GREENLIGHT_GITHUB_BASE_URL set) the raw host
  * is unreachable with the surrogate credential, so policy files are read
  * through the contents API instead; otherwise the raw host is used as
- * before. Returns undefined when the file does not exist.
+ * before.
+ *
+ * v0.19.0: fetchRawFileDetailed distinguishes three outcomes: read,
+ * absent (the file genuinely is not there), and error (the fetch
+ * failed). fetchRawFile stays as a thin wrapper that returns the text
+ * only when the fetch read, so its callers do not change.
  */
-async function fetchRawFile(
+export async function fetchRawFileDetailed(
   owner: string,
   repo: string,
   file: string,
   headers: Record<string, string>
-): Promise<string | undefined> {
+): Promise<RawFileFetchStatus> {
   if (githubApiBase() !== DEFAULT_API) {
     try {
       const data = (await apiGet(`/repos/${owner}/${repo}/contents/${file}`)) as {
@@ -530,16 +610,117 @@ async function fetchRawFile(
         encoding?: unknown;
       };
       if (typeof data.content === "string" && data.encoding === "base64") {
-        return Buffer.from(data.content, "base64").toString("utf8");
+        return { status: "read", text: Buffer.from(data.content, "base64").toString("utf8") };
       }
-    } catch { /* absent */ }
-    return undefined;
+      return { status: "absent" };
+    } catch (err) {
+      if (err instanceof ApiNotFoundError) return { status: "absent" };
+      return { status: "error", error: classifyFetchError(err) };
+    }
   }
   try {
-    const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/${file}`, { headers });
-    if (res.ok) return await res.text();
-  } catch { /* try next */ }
-  return undefined;
+    const res = await activeFetch()(`${RAW}/${owner}/${repo}/HEAD/${file}`, { headers });
+    if (res.ok) return { status: "read", text: await res.text() };
+    if (res.status === 404) return { status: "absent" };
+    return { status: "error", error: `http ${res.status}` };
+  } catch (err) {
+    return { status: "error", error: classifyFetchError(err) };
+  }
+}
+
+/** Returns the file's text when the fetch reads it, otherwise undefined. */
+async function fetchRawFile(
+  owner: string,
+  repo: string,
+  file: string,
+  headers: Record<string, string>
+): Promise<string | undefined> {
+  const outcome = await fetchRawFileDetailed(owner, repo, file, headers);
+  return outcome.status === "read" ? outcome.text : undefined;
+}
+
+/**
+ * Fetch all existing house-rules files for a repo (best-effort, cached),
+ * with per-basename read provenance.
+ *
+ * v0.9.3: stop at the first hit per filename (root, then .github/, then
+ * docs/), so a repo with CONTRIBUTING.md at the root does not pay for
+ * two more 404s, and a repo with it only in docs/ is still found (the
+ * AFFiNE shape the 5k scan caught: root-only probing called it
+ * "no policy" while docs/CONTRIBUTING.md existed).
+ *
+ * v0.19.0: provenance carries ONE entry per basename probed: the path
+ * that was read (status "read"), the first candidate path with status
+ * "absent" when every location missed, or status "error" with the first
+ * error kind when a fetch failed before any hit. An error at one
+ * location does not stop the later locations: the read still wins when
+ * a later location has the file.
+ *
+ * The cache payload is { sources, provenance }; entries written before
+ * v0.19.0 (a bare sources array) count as a miss and are re-fetched.
+ */
+export async function fetchHouseRulesDetailed(
+  owner: string,
+  repo: string,
+  deps: HouseRuleDeps = {}
+): Promise<{ sources: { file: string; text: string }[]; provenance: PolicySourceProvenance[] }> {
+  if (!deps.fetchRaw) {
+    const cached = cacheGet("house-rules", [owner, repo]) as
+      | { sources: { file: string; text: string }[]; provenance: PolicySourceProvenance[] }
+      | { file: string; text: string }[]
+      | undefined;
+    if (cached && !Array.isArray(cached) && Array.isArray(cached.provenance)) {
+      return { sources: cached.sources, provenance: cached.provenance };
+    }
+  }
+
+  const headers: Record<string, string> = { "User-Agent": "greenlight-cli" };
+  const token = githubToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const fetchOne = async (file: string): Promise<RawFileFetchStatus> => {
+    if (deps.fetchRaw) {
+      try {
+        const text = await deps.fetchRaw(file);
+        return text ? { status: "read", text } : { status: "absent" };
+      } catch (err) {
+        if (err instanceof ApiNotFoundError) return { status: "absent" };
+        return { status: "error", error: classifyFetchError(err) };
+      }
+    }
+    return fetchRawFileDetailed(owner, repo, file, headers);
+  };
+
+  const sources: { file: string; text: string }[] = [];
+  const provenance: PolicySourceProvenance[] = [];
+  for (const file of HOUSE_RULE_FILES) {
+    const base = file.split("/").pop()!.toLowerCase();
+    if (provenance.some((p) => p.file.split("/").pop()!.toLowerCase() === base && p.scope === "repo")) {
+      continue;
+    }
+    let readAt: { file: string; text: string } | undefined;
+    let firstError: { file: string; error: string } | undefined;
+    for (const candidate of HOUSE_RULE_FILES) {
+      if (candidate.split("/").pop()!.toLowerCase() !== base) continue;
+      const outcome = await fetchOne(candidate);
+      if (outcome.status === "read") {
+        readAt = { file: candidate, text: outcome.text };
+        break;
+      }
+      if (outcome.status === "error" && !firstError) {
+        firstError = { file: candidate, error: outcome.error };
+      }
+    }
+    if (readAt) {
+      sources.push(readAt);
+      provenance.push({ file: readAt.file, scope: "repo", status: "read" });
+    } else if (firstError) {
+      provenance.push({ file: firstError.file, scope: "repo", status: "error", error: firstError.error });
+    } else {
+      provenance.push({ file, scope: "repo", status: "absent" });
+    }
+  }
+  if (!deps.fetchRaw) cacheSet("house-rules", [owner, repo], { sources, provenance });
+  return { sources, provenance };
 }
 
 /** Fetch all existing house-rules files for a repo (best-effort, cached). */
@@ -548,38 +729,8 @@ export async function fetchHouseRules(
   repo: string,
   deps: HouseRuleDeps = {}
 ): Promise<{ file: string; text: string }[]> {
-  if (!deps.fetchRaw) {
-    const cached = cacheGet("house-rules", [owner, repo]) as
-      | { file: string; text: string }[]
-      | undefined;
-    if (cached) return cached;
-  }
-
-  const headers: Record<string, string> = { "User-Agent": "greenlight-cli" };
-  const token = githubToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const fetchRaw =
-    deps.fetchRaw ??
-    ((file: string): Promise<string | undefined> => fetchRawFile(owner, repo, file, headers));
-
-  // v0.9.3: stop at the first hit per filename (root, then .github/, then
-  // docs/), so a repo with CONTRIBUTING.md at the root does not pay for
-  // two more 404s, and a repo with it only in docs/ is still found (the
-  // AFFiNE shape the 5k scan caught: root-only probing called it
-  // "no policy" while docs/CONTRIBUTING.md existed).
-  const seenBasenames = new Set<string>();
-  const out: { file: string; text: string }[] = [];
-  for (const file of HOUSE_RULE_FILES) {
-    const base = file.split("/").pop()!.toLowerCase();
-    if (seenBasenames.has(base)) continue;
-    const text = await fetchRaw(file);
-    if (text) {
-      out.push({ file, text });
-      seenBasenames.add(base);
-    }
-  }
-  if (!deps.fetchRaw) cacheSet("house-rules", [owner, repo], out);
-  return out;
+  const { sources } = await fetchHouseRulesDetailed(owner, repo, deps);
+  return sources;
 }
 
 /** Fetch CONTRIBUTING.md raw text; returns undefined when the repo has none. */
@@ -1038,6 +1189,49 @@ export async function countStarterIssues(owner: string, repo: string): Promise<n
   }
 }
 
+/**
+ * v0.19.0 (item 16): the wider starter label set for the candidate
+ * estimate. Repos that never adopted the classic "good first issue" /
+ * "help wanted" pair often label starter work one of these instead.
+ */
+export const STARTER_CANDIDATE_LABELS = [
+  "beginner friendly",
+  "beginner",
+  "easy",
+  "starter",
+  "first-timers-only",
+  "up-for-grabs",
+  "good-first-issue",
+] as const;
+
+export interface StarterSearchDeps {
+  /** Test seam: run a search query, return its total_count or null. */
+  searchCount?: (query: string) => Promise<number | null>;
+}
+
+/**
+ * Fallback starter-candidate estimate, used only when the classic
+ * label count is exactly 0. One search call: open, unassigned issues
+ * under the wider starter label set. An estimate for display, never a
+ * score input; null when the search itself fails.
+ */
+export async function countStarterCandidates(
+  owner: string,
+  repo: string,
+  deps: StarterSearchDeps = {}
+): Promise<number | null> {
+  const labels = STARTER_CANDIDATE_LABELS.map((l) => `"${l}"`).join(",");
+  const query = `repo:${owner}/${repo} type:issue state:open no:assignee label:${labels}`;
+  if (deps.searchCount) return deps.searchCount(query);
+  try {
+    const q = encodeURIComponent(query);
+    const data = (await apiGet(`/search/issues?q=${q}&per_page=1`)) as { total_count: number };
+    return data.total_count ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Detect a collaborators-only PR creation policy via the community metrics endpoint. */
 export async function detectRepoPolicy(owner: string, repo: string): Promise<{ collaboratorsOnly: boolean }> {
   // Best-effort: no public API exposes pull_request_creation_policy directly,
@@ -1246,6 +1440,24 @@ export interface ScanCandidateList {
   issues: ScanCandidate[];
   /** True when the label pass came back empty and the fallback list was used. */
   fallbackUsed: boolean;
+}
+
+/**
+ * Default wall-time bound for `greenlight scan`, in seconds (v0.19.0,
+ * item 17): on mega-backlog repos the per-issue verdict pipeline ran
+ * about 25 minutes, so the scan stops with marked partial results when
+ * the budget runs out instead of running open-ended. Override per run
+ * with --max-time <seconds>.
+ */
+export const DEFAULT_SCAN_MAX_TIME_SEC = 600;
+
+/**
+ * Pure wall-time check for the scan loop (v0.19.0, item 17): true once
+ * the elapsed time since startedAtMs has reached the budget. Call with
+ * Date.now() for the nowMs argument. Exported for unit tests.
+ */
+export function scanBudgetExceeded(startedAtMs: number, maxTimeSec: number, nowMs: number): boolean {
+  return nowMs - startedAtMs >= maxTimeSec * 1000;
 }
 
 export interface ScanDeps {
