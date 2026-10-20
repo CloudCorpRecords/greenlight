@@ -22,10 +22,11 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "index": "tsx src/friction-index.ts",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "readme:count": "bash scripts/sync-readme-test-count.sh"
   },
   "type": "module",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "mcpName": "io.github.CloudCorpRecords/greenlight",
   "publishConfig": {
     "access": "public"

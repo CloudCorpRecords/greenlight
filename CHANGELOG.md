@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.1 (2026-10-19)
+
+- **Correctness and polish from the 2026-10-19 iteration audit (batch 2, release C).** 13 new tests, 1039 green. The server still carries 31 tools.
+- **Wave own-PR exclusion is paginated (item 13).** `ownOpenPrRepos` fetched one search page of 100 and silently stopped excluding repos past that; the campaign sits at 96 authored PRs, so double-booking a repo was weeks away. The exclusion now pages to the reported total (exact to the 1000-result search cap) through a pure `collectSearchPages` driver pinned by fixtures.
+- **Wave aborts loudly on an unreadable login (item 25).** `getLogin` returning an empty string used to degrade to an empty exclusion set and the wave built into occupied repos; `runWave` now refuses to start without a login.
+- **One canonical behavioral_gate location (item 12).** The top-level `behavioral_gate` in `friction --json` is documented as canonical; `signals.behavioralGate` stays as an identical mirror for index-pipeline compatibility, and one `attachBehavioralGate` helper sets both so they can never disagree.
+- **Behavioral pass recency bound (item 18).** Closures older than 12 months are excluded before their comment pages are fetched (saving calls on quiet repos), and when the newest closure itself is past the bound the report carries an explicit "stale signal" note.
+- **Babysit default concurrency lowered to 3 (item 20).** 43-PR sweeps at the old default of 5 wedged the shared proxy; field runs needed 2-3 to stay healthy. The `--concurrency` flag still overrides per run.
+- **Per-command API budgets in help (item 21).** friction, check, scan, wave, babysit, and autopilot help now state their core-call budgets so operators can plan runs; a test pins the lines.
+- **Wave queue contract matches its sort (item 24).** The result docstring promised "repo star order within a tier"; the queue actually orders by verdict tier, then candidate order (winnability by default). The docs now say so and a regression test pins the behavior.
+- **README test count is generated, not hand-written (item 27).** `npm run readme:count` regenerates the count from a real suite run and refuses to update the README when the suite is red; the release checklist documents the step and a packaging test enforces its presence.
+
+
 ## 0.17.0 (2026-10-19)
 
 - **Capability items from the 2026-10-19 iteration audit.** 10 new tests, 1026 green. The server now carries 31 tools.

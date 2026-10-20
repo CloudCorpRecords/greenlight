@@ -43,7 +43,7 @@ Every verdict and every report cites its evidence: the quoted policy line, the c
 
 ## Proof, stated plainly
 
-* 1026 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
+* 1039 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
 * Dogfooded on real campaigns: the toolkit has authored 80+ pull requests across dozens of public open-source repos. Every feature exists because a real contribution died without it.
 * Distributed everywhere the audience already looks: npm (`@reneturcios/greenlight`), the MCP Registry, and GHCR (`ghcr.io/cloudcorprecords/greenlight`), plus Docker and direct MCP stdio.
 * Two living datasets ship with it: the Contribution Friction Index (`data/friction-index.json`) and the Agent Policy Index (505 repos, 127 gated, 19 agent bans, published at `docs/policy.html`), both built from real campaign field work, not scraped guesses.
@@ -338,7 +338,7 @@ The verdict engine is deterministic (no LLM) and checks, in order:
 
 Friction score starts at 100 and subtracts gate weights (assignment -25, vouch -35, collaborators-only -50, paused unsolicited PRs -40, scoped pause -20, external PRs auto-closed -50, discussion-first -10, claim-first -5, CLA/DCO -5 each, detected behavioral gate -20), adjusts for external PR merge rate and review/response times when computable, and adds up to +10 for open good-first-issues. Unknown signals stay null and are skipped, never guessed. See `src/friction.ts` for the exact formula.
 
-A behavioral gate is not a policy file: it is read from what maintainers do. `friction` walks the closed-PR list until it has the 15 most recent closed-unmerged PRs, then reads maintainer-side comments for AI-rejection evidence (AI attribution plus rejection language, explicit phrases like "AI slop" or an invoked "AI policy", with welcoming overrides like "AI-assisted PRs are welcome" suppressing the signal). Two independent PRs mark the repo as behaviorally gated; a single weak signal is carried as a warning, while a single explicit rejection phrase detects on its own. `friction --json` reports it as `behavioral_gate` (`detected`, `strength`, `threshold`, `evidence` with PR numbers, quotes, and URLs, `notes`), so index pipelines like the rebaseline can reclassify repos whose written policy is silent but whose practice is hostile. API cost is bounded at 18 calls: up to 3 list calls to collect 15 closed-unmerged PRs plus one comment page per PR; skip it with `--no-behavioral`.
+A behavioral gate is not a policy file: it is read from what maintainers do. `friction` walks the closed-PR list until it has the 15 most recent closed-unmerged PRs within a 12-month recency bound (older closures are excluded, with a "stale signal" note when the newest closure itself is older than the bound), then reads maintainer-side comments for AI-rejection evidence (AI attribution plus rejection language, explicit phrases like "AI slop" or an invoked "AI policy", with welcoming overrides like "AI-assisted PRs are welcome" suppressing the signal). Two independent PRs mark the repo as behaviorally gated; a single weak signal is carried as a warning, while a single explicit rejection phrase detects on its own. `friction --json` reports it as the top-level `behavioral_gate` field (`detected`, `strength`, `threshold`, `evidence` with PR numbers, quotes, and URLs, `notes`); that field is the canonical location, and `signals.behavioralGate` is kept as an identical mirror for index-pipeline compatibility. Index pipelines like the rebaseline read the canonical field to reclassify repos whose written policy is silent but whose practice is hostile. API cost is bounded at 18 calls: up to 3 list calls to collect 15 closed-unmerged PRs plus one comment page per PR; skip it with `--no-behavioral`.
 
 `wave` turns the Agent Policy Index into a build queue in one command: pure-open repos with outsider merge share, star band, and starter issues are x-rayed with the existing xray engine (CLEAR / RISKY / TAKEN with competing PRs named), repos with detected behavioral gates are excluded, repos where you already have an open PR are skipped, and the run stops with marked partial results when the core API budget falls under the floor (default 800) or search throttling hits. Human and `--json` output; every stage reports the API calls it used. Candidates rank by winnability by default (outsider merge share, then friction, then stars); `--sort stars` restores the old order.
 
@@ -452,6 +452,9 @@ Every version bump touches all of these, or the release ships stale surfaces:
   fails the build if the tag drifts
 - `src/index.ts` version
 - `examples/guard-workflow.yml` pin
+- run `npm run readme:count` after the suite passes so the test count in
+  the README is regenerated from the real run, never hand-written
+  (test/packaging.test.ts fails the build if this step is not documented)
 
 ## Roadmap
 
