@@ -40,4 +40,22 @@ describe("packaging version coherence", () => {
       `OCI identifier ${oci.identifier} must end with :${pkg.version}`
     );
   });
+
+  it("the release checklist requires regenerating the README test count", () => {
+    // Item 27: the hand-written test count went stale twice because
+    // nothing enforced the refresh. The durable fix is procedural:
+    // the checklist must document the readme:count step, and the
+    // script exists.
+    const readme = readFileSync(join(root, "README.md"), "utf8");
+    assert.ok(
+      readme.includes("npm run readme:count"),
+      "README release checklist must document `npm run readme:count`"
+    );
+    assert.ok(
+      JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts[
+        "readme:count"
+      ],
+      "package.json must define the readme:count script"
+    );
+  });
 });

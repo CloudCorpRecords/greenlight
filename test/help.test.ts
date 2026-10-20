@@ -76,3 +76,20 @@ describe("greenlight help", () => {
     assert.equal(versionText(), `greenlight ${pkg.version}`);
   });
 });
+
+describe("v0.17.1 per-command API budgets (item 21)", () => {
+  it("the heavy commands document their API budget in help", () => {
+    // Operators plan runs against the shared API budget; the budget
+    // line must never silently disappear from a command's help.
+    const heavy = ["friction", "check", "scan", "wave", "babysit", "autopilot"];
+    for (const name of heavy) {
+      const cmd = COMMANDS.find((c) => c.name === name);
+      assert.ok(cmd, `help covers ${name}`);
+      const text = `${cmd.description} ${cmd.flags.join(" ")}`;
+      assert.ok(
+        text.includes("API budget"),
+        `${name} help documents its API budget`
+      );
+    }
+  });
+});

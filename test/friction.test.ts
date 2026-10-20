@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { scoreFriction } from "../src/friction.js";
+import { scoreFriction, attachBehavioralGate } from "../src/friction.js";
 import type { Gate } from "../src/types.js";
 
 function gatesOn(kinds: Gate["kind"][]): Gate[] {
@@ -117,5 +117,36 @@ describe("scoped intake pause (v0.17.0)", () => {
     assert.equal(scoped.score, 100 - 20);
     assert.equal(blanket.score, 100 - 40);
     assert.ok(scoped.reasons.some((x) => x.includes("-20")));
+  });
+});
+
+describe("v0.17.1 canonical behavioral_gate location (item 12)", () => {
+  it("top-level behavioral_gate is canonical; signals.behavioralGate is an identical mirror", () => {
+    const gate = {
+      detected: true,
+      strength: 2,
+      threshold: 2,
+      evidence: [],
+      notes: [],
+      note: "maintainer rejects AI-built PRs in practice",
+    };
+    const report = attachBehavioralGate(scoreFriction(base()), gate);
+    assert.equal(report.behavioral_gate, gate, "canonical top-level field is set");
+    assert.equal(
+      report.signals.behavioralGate,
+      gate,
+      "the documented mirror carries the same value"
+    );
+    assert.deepEqual(
+      report.behavioral_gate,
+      report.signals.behavioralGate,
+      "the two locations never disagree"
+    );
+  });
+
+  it("null gates stay null in both locations", () => {
+    const report = attachBehavioralGate(scoreFriction(base()), null);
+    assert.equal(report.behavioral_gate, null);
+    assert.equal(report.signals.behavioralGate, null);
   });
 });

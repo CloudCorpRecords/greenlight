@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import {
   runWave,
   filterWaveRepos,
+  collectSearchPages,
+  SEARCH_RESULT_CAP,
   DEFAULT_WAVE_FILTERS,
   type PolicyIndexEntry,
   type WaveDeps,
@@ -268,5 +270,81 @@ describe("runWave", () => {
     assert.equal(result.partial, true);
     assert.ok(result.partialReason?.includes("rate limited"));
     assert.equal(result.queue.length, 0);
+  });
+});
+
+describe("v0.17.1 wave exclusion integrity (items 13, 25)", () => {
+  const pageItems = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) => ({ repository_url: `https://api.github.com/repos/${prefix}/r${i}` }));
+
+  it("collectSearchPages stops on a short page", async () => {
+    let pages = 0;
+    const got = await collectSearchPages(async (page: number) => {
+      pages++;
+      return page === 1
+        ? { total_count: 120, items: pageItems(100, "a") }
+        : { total_count: 120, items: pageItems(20, "b") };
+    });
+    assert.equal(got.length, 120);
+    assert.equal(pages, 2);
+  });
+
+  it("collectSearchPages paginates past the old 100-result wall", async () => {
+    // Item 13: the campaign sits at 96 authored; past 100 the old
+    // single-page call would have silently dropped repos.
+    const got = await collectSearchPages(async (page: number) => ({
+      total_count: 250,
+      items: pageItems(page < 3 ? 100 : 50, `p${page}`),
+    }));
+    assert.equal(got.length, 250);
+  });
+
+  it("collectSearchPages honors the 1000-result search cap", async () => {
+    const got = await collectSearchPages(async () => ({
+      total_count: 5000,
+      items: pageItems(100, "z"),
+    }));
+    assert.equal(got.length, SEARCH_RESULT_CAP);
+  });
+
+  it("runWave aborts loudly when the login is unreadable (item 25)", async () => {
+    const deps = fixtureDeps();
+    deps.getLogin = async () => "";
+    await assert.rejects(
+      runWave([entry("o/one", { stars: 9000 })], filters, deps),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.ok(err.message.includes("refusing to run"), `unexpected message: ${err.message}`);
+        return true;
+      }
+    );
+  });
+
+  it("the queue doc contract matches the actual sort (item 24)", async () => {
+    // CLEAR first, then RISKY; within a tier, candidate order
+    // (winnability here), never raw star order.
+    const deps = fixtureDeps({
+      starters: {
+        "o/star": [{ number: 1, title: "t", url: "u" }],
+        "o/quiet": [{ number: 2, title: "t", url: "u" }],
+      },
+      xrays: {
+        "o/star#1": xray("RISKY", { number: 1 }),
+        "o/quiet#2": xray("GO", { number: 2 }),
+      },
+    });
+    const result = await runWave(
+      [
+        entry("o/star", { stars: 90000, outsider_merge_share: 40 }),
+        entry("o/quiet", { stars: 1000, outsider_merge_share: 95 }),
+      ],
+      { ...filters, maxRepos: 2 },
+      deps
+    );
+    assert.deepEqual(
+      result.queue.map((i) => i.repo),
+      ["o/quiet", "o/star"],
+      "CLEAR tier precedes RISKY regardless of stars"
+    );
   });
 });

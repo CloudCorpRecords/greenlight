@@ -13,6 +13,8 @@ import assert from "node:assert/strict";
 import {
   matchAiRejection,
   detectBehavioralGateFromData,
+  partitionByRecency,
+  BEHAVIORAL_RECENCY_MONTHS,
   type BehavioralClosedPR,
   type BehavioralMaintainerComment,
 } from "../src/behavior.js";
@@ -212,5 +214,51 @@ describe("friction behavioral penalty", () => {
   it("changes nothing when the pass was skipped or found nothing", () => {
     const r = scoreFriction(baseSignals);
     assert.equal(r.score, 100);
+  });
+});
+
+describe("v0.17.1 behavioral recency bound (item 18)", () => {
+  const NOW = Date.parse("2026-10-19T00:00:00Z");
+  const oldPr = (number: number): BehavioralClosedPR => ({
+    number,
+    url: `https://github.com/o/r/pull/${number}`,
+    author: "a",
+    closedAt: "2024-06-01T00:00:00Z",
+  });
+  const freshPr = (number: number): BehavioralClosedPR => ({
+    number,
+    url: `https://github.com/o/r/pull/${number}`,
+    author: "a",
+    closedAt: "2026-10-01T00:00:00Z",
+  });
+
+  it("excludes closures older than the 12-month bound", () => {
+    assert.equal(BEHAVIORAL_RECENCY_MONTHS, 12);
+    const r = partitionByRecency([freshPr(1), oldPr(2), oldPr(3)], NOW);
+    assert.deepEqual(
+      r.fresh.map((p) => p.number),
+      [1]
+    );
+    assert.equal(r.staleCount, 2);
+    assert.equal(r.newestClosedAt, "2026-10-01T00:00:00Z");
+  });
+
+  it("keeps PRs with an unparseable closedAt (missing data never discards evidence)", () => {
+    const weird: BehavioralClosedPR = {
+      number: 9,
+      url: "u",
+      author: "a",
+      closedAt: "",
+    };
+    const r = partitionByRecency([weird], NOW);
+    assert.equal(r.fresh.length, 1);
+    assert.equal(r.staleCount, 0);
+  });
+
+  it("reports the newest closure so callers can flag stale-signal repos", () => {
+    const r = partitionByRecency([oldPr(2), oldPr(3)], NOW);
+    assert.equal(r.fresh.length, 0);
+    assert.equal(r.staleCount, 2);
+    assert.equal(r.newestClosedAt, "2024-06-01T00:00:00Z");
   });
 });

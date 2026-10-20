@@ -18,6 +18,7 @@ import {
   watermarkFromReport,
   defaultStatePath,
   defaultAccountAuthor,
+  BABYSIT_CONCURRENCY,
   MINE_DISCOVERY_CAP,
   STUCK_CHECK_MINUTES,
   type BabysitPull,
@@ -730,5 +731,13 @@ describe("v0.9.1 babysit: concurrency, retries, transient bucket, guard subjects
     assert.deepEqual(run.reports[0].newGuardFlags, ["Competing fix for #123"]);
     assert.equal(run.reports[0].repoNotes.length, 0);
     assert.ok(run.needsYouNow.some((a) => a.text.includes("Competing fix for #123")));
+  });
+});
+
+describe("v0.17.1 babysit transport safety (item 20)", () => {
+  it("defaults to the lowered concurrency of 3, not the old hot 5", () => {
+    // 43-PR sweeps at 5 concurrent wedged the shared proxy; field runs
+    // needed 2-3. The default stays conservative; --concurrency overrides.
+    assert.equal(BABYSIT_CONCURRENCY, 3);
   });
 });
