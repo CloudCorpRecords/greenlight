@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.18.0 - 2026-10-19
+
+Capability items from the iteration audit. 6 new tests (1045 total, all passing), 32 MCP tools.
+
+- **The external merge-rate score term is wired (item 11).** fetchFrictionSummary now fetches merge velocity alongside the other signals and sets externalPRMergeRate from the real outsider share instead of hardcoding null. scoreFriction applies the documented +(rate - 0.5) * 40 term and exposes externalPRMergeRate_pct in the JSON, with the reason line showing the term's contribution. The friction-index generator wires the same computation, and the published Friction Index was regenerated with this machinery.
+- **The behavioral pass reads reviews and review comments (item 5).** For each sampled closed-unmerged PR it now pulls up to three evidence pages: issue comments, reviews with non-empty bodies, and review comments. Evidence carries a source label (comment, review, or review_comment) all the way into the report. The worst case API cost is bounded at 48 calls (BEHAVIORAL_MAX_API_CALLS), and the friction help and README budget notes state the new bound.
+- **Repo renames resolve before search-dependent flows (item 15).** A new resolveCanonicalRepo helper asks the repo endpoint for the canonical full_name; friction, check, and scan resolve first and report the rename (resolvedFrom in the friction JSON, renamedFrom in check/scan JSON, plus a plain-text rename line). dbt-labs/dbt-core now resolves to dbt-labs/dbt everywhere.
+- **Bounty liveness is a real command (item 23).** `greenlight bounty <issue-url>` on the CLI and a bounty_check MCP tool both wrap detectBountyForIssue: canonical resolution, issue fetch, and the pure bounty signal detector, reporting the issue URL, labels, title, and the detected signal. Tool count is 32.
+- **Owed gate fixtures verified (item 29).** The hyperframes, coolify, and ppt-master contributing-text fixtures are present under test/fixtures/policy/ with full-file regression tests pinning their gate classes in test/policy-detection.test.ts; nothing remained to file.
+
 ## 0.17.1 (2026-10-19)
 
 - **Correctness and polish from the 2026-10-19 iteration audit (batch 2, release C).** 13 new tests, 1039 green. The server still carries 31 tools.
