@@ -98,6 +98,7 @@ import {
 import { runPortfolio, formatPortfolioHuman, portfolioJson } from "./portfolio.js";
 import { runShipcheck, formatShipcheckHuman } from "./shipcheck.js";
 import { runPreflight, formatPreflightHuman } from "./preflight.js";
+import { detectBehavioralGate, type BehavioralGate } from "./behavior.js";
 import {
   viaApiClaim,
   viaApiRelease,
@@ -213,8 +214,15 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
   // The check pipeline merges the legacy verdict with the Claim Protocol
   // state: a protocol claim verdict overrides legacy claim inference, but
   // never gates or cross-referenced PR evidence (see mergeProtocolVerdict).
+  // v0.16.2: the behavioral pass runs once per check (opt out with
+  // --no-behavioral); a detected gate caps the verdict at GATED.
+  let behavioralGate: BehavioralGate | null = null;
+  if (!args.includes("--no-behavioral")) {
+    behavioralGate = await detectBehavioralGate(owner, repo);
+  }
   const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {
     externalGates: loadExternalGates(args),
+    behavioralGate,
   });
   const result: VerdictResult = {
     verdict: merged.verdict,
@@ -321,6 +329,13 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
     return;
   }
   const externalGates = loadExternalGates(args);
+  // v0.16.2: one behavioral pass per scan, shared across the issue loop
+  // (opt out with --no-behavioral); a detected gate caps each verdict at
+  // GATED.
+  let behavioralGate: BehavioralGate | null = null;
+  if (!args.includes("--no-behavioral")) {
+    behavioralGate = await detectBehavioralGate(owner, repo);
+  }
   const results: Array<{
     number: number;
     url: string;
@@ -340,7 +355,7 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   // budget notes in help keep that visible.
   for (const issue of issues) {
     try {
-      const { merged } = await checkIssueWithProtocol(owner, repo, issue.number, { externalGates });
+      const { merged } = await checkIssueWithProtocol(owner, repo, issue.number, { externalGates, behavioralGate });
       results.push({
         number: issue.number,
         url: issue.url,
@@ -531,6 +546,7 @@ async function cmdWave(args: string[]): Promise<void> {
     maxRepos: numFlag("--repos") ?? DEFAULT_WAVE_FILTERS.maxRepos,
     issuesPerRepo: numFlag("--issues-per-repo") ?? DEFAULT_WAVE_FILTERS.issuesPerRepo,
     minBudget: numFlag("--min-budget") ?? DEFAULT_WAVE_FILTERS.minBudget,
+    sort: flagValue(args, "--sort") === "stars" ? "stars" : undefined,
   };
   const indexSource = flagValue(args, "--index") ?? POLICY_INDEX_URL;
   const asJson = args.includes("--json");
@@ -1259,6 +1275,7 @@ async function cmdPreflight(target: string, args: string[]): Promise<void> {
     repo,
     base: flagValue(args, "--base"),
     files: filesRaw ? filesRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0) : undefined,
+    behavioral: args.includes("--behavioral"),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));

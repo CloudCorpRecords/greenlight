@@ -54,6 +54,7 @@ import type {
   Gate,
   LinkedPR,
 } from "./types.js";
+import { detectBehavioralGate, type BehavioralGate } from "./behavior.js";
 
 /* ------------------------------------------------------------------ */
 /* Injected fetchers (network seam)                                    */
@@ -368,6 +369,18 @@ export interface IssueStatusComputation {
 export interface ComputeStatusOptions {
   externalGates?: Gate[];
   deps?: ProtocolFetchDeps;
+  /**
+   * Precomputed behavioral gate for the repo (v0.16.2). A defined value,
+   * including null, wins over `behavioral`; null means "ran, not
+   * detected".
+   */
+  behavioralGate?: BehavioralGate | null;
+  /**
+   * Run detectBehavioralGate for the repo when no precomputed gate was
+   * passed (default false: the pass costs up to 18 API calls, so callers
+   * opt in or precompute once per repo).
+   */
+  behavioral?: boolean;
 }
 
 /**
@@ -384,6 +397,13 @@ export async function computeIssueStatus(
   const fetchSnapshot = deps.fetchSnapshot ?? buildIssueSnapshot;
   const snapshot = await fetchSnapshot(owner, repo, number);
   if (opts.externalGates) snapshot.externalGates = opts.externalGates;
+  // v0.16.2: a detected behavioral gate caps the issue verdict at GATED
+  // (verdict.ts Rule 7b). Precomputed values win; the live pass runs only
+  // when explicitly asked, because it costs up to 18 API calls per repo.
+  let behavioralGate: BehavioralGate | null = null;
+  if (opts.behavioralGate !== undefined) behavioralGate = opts.behavioralGate;
+  else if (opts.behavioral) behavioralGate = await detectBehavioralGate(owner, repo);
+  if (behavioralGate) snapshot.behavioralGate = behavioralGate;
   const legacy = scoreIssue(snapshot);
   const proto = await fetchProtocolState(owner, repo, number, deps);
 
@@ -576,6 +596,8 @@ export function mergeProtocolVerdict(
 export interface CheckWithProtocolOptions {
   externalGates?: Gate[];
   deps?: ProtocolFetchDeps;
+  behavioralGate?: BehavioralGate | null;
+  behavioral?: boolean;
 }
 
 /** The `check` command's full pipeline: legacy verdict, optional AI claim layer, merged with protocol. */

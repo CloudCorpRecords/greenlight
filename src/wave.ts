@@ -39,6 +39,12 @@ export interface PolicyIndexEntry {
   good_first_issues: number | null;
   /** 0..100 scale in policy.json. */
   outsider_merge_share: number | null;
+  /**
+   * v0.16.2: normalized from greenlight_friction.score when the index
+   * carries it (lower is easier). Null when the index has no friction
+   * verdict for the entry.
+   */
+  friction_score?: number | null;
 }
 
 export interface WaveFilters {
@@ -48,6 +54,13 @@ export interface WaveFilters {
   maxRepos: number;
   issuesPerRepo: number;
   minBudget: number;
+  /**
+   * v0.16.2: candidate ranking. "winnability" (default) ranks by outsider
+   * merge share, then friction score, then stars as a tiebreak, so quiet
+   * high-converting repos are reached before star-heavy raced ones.
+   * "stars" restores the pre-0.16.2 stars-descending order.
+   */
+  sort?: "winnability" | "stars";
 }
 
 export const DEFAULT_WAVE_FILTERS: WaveFilters = {
@@ -111,11 +124,19 @@ export interface WaveDeps {
 }
 
 /** Pure: the index-side filter. Candidates must be pure-open, actually
- * merge outsider PRs, sit in the star band, and have starter issues. */
+ * merge outsider PRs, sit in the star band, and have starter issues.
+ * Ranking is by winnability by default (outsider merge share, then
+ * friction, then stars as the tiebreak); --sort stars restores the old
+ * stars-descending order. */
 export function filterWaveRepos(
   entries: PolicyIndexEntry[],
   filters: WaveFilters
 ): PolicyIndexEntry[] {
+  const sort = filters.sort ?? "winnability";
+  const frictionOf = (e: PolicyIndexEntry): number => {
+    const s = e.friction_score ?? null;
+    return s === null ? Number.POSITIVE_INFINITY : s;
+  };
   return entries
     .filter((e) => {
       const classes = e.policy_classes ?? [];
@@ -126,7 +147,14 @@ export function filterWaveRepos(
       if (stars < filters.minStars || stars > filters.maxStars) return false;
       return true;
     })
-    .sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0))
+    .sort((a, b) => {
+      if (sort === "stars") return (b.stars ?? 0) - (a.stars ?? 0);
+      const share = (b.outsider_merge_share ?? 0) - (a.outsider_merge_share ?? 0);
+      if (share !== 0) return share;
+      const friction = frictionOf(a) - frictionOf(b);
+      if (friction !== 0) return friction;
+      return (b.stars ?? 0) - (a.stars ?? 0);
+    })
     .slice(0, filters.maxRepos);
 }
 
@@ -290,6 +318,12 @@ export async function loadPolicyIndex(source: string): Promise<PolicyIndexEntry[
   }
   const data = JSON.parse(raw) as { entries?: PolicyIndexEntry[] };
   if (!Array.isArray(data.entries)) throw new Error("policy index has no entries array");
+  // Normalize the friction verdict the index carries into the
+  // winnability-ranking field (v0.16.2).
+  for (const e of data.entries) {
+    const score = (e as unknown as { greenlight_friction?: { score?: unknown } }).greenlight_friction?.score;
+    e.friction_score = typeof score === "number" && Number.isFinite(score) ? score : null;
+  }
   return data.entries;
 }
 

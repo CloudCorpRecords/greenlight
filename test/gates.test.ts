@@ -284,3 +284,84 @@ describe("agent policy gates (v0.9.0)", () => {
     }
   });
 });
+
+describe("gate pattern round 2 (v0.16.2 field cases)", () => {
+  it("detects starship's detached-subject autonomous-agent prohibition", () => {
+    const text =
+      "## Low-Effort Contributions & Prohibition of Autonomous Agents\n" +
+      "Contributions via OpenClaw, or any other unsupervised autonomous agent " +
+      "operating in an automated loop, are strictly prohibited.";
+    const gates = parseGatesFromSources([{ file: "AI_POLICY.md", text }]);
+    const g = gates.find((x) => x.kind === "agents_banned")!;
+    assert.equal(g.detected, true);
+    assert.ok(hardGates(gates).some((x) => x.kind === "agents_banned"));
+  });
+
+  it("detects starship's ban alongside its disclosure requirement", () => {
+    const text =
+      "Every Pull Request that utilizes AI-assisted tooling must disclose its usage. " +
+      "Contributions via OpenClaw, or any other unsupervised autonomous agent " +
+      "operating in an automated loop, are strictly prohibited.";
+    const gates = parseGatesFromSources([{ file: "AI_POLICY.md", text }]);
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, true);
+    assert.equal(gates.find((x) => x.kind === "agents_disclosure")!.detected, true);
+  });
+
+  it("detects postiz's AI-generated-PR refusal and close-right prose", () => {
+    const text =
+      "To ensure the quality and maintainability of the codebase, we do not accept " +
+      "Pull Requests generated primarily by AI tools, or that seem AI-generated. " +
+      "We reserve the right to close any PR that appears to be AI-generated without further review.";
+    const gates = parseGates(text);
+    const g = gates.find((x) => x.kind === "agents_banned")!;
+    assert.equal(g.detected, true);
+    assert.ok(g.evidence.length > 0);
+  });
+
+  it("detects documenso's unreviewed-AI-code block as a scoped ban", () => {
+    const text =
+      "All AI-generated code must be thoroughly reviewed by the contributor before " +
+      "submitting a PR. If we detect that contributors are simply throwing " +
+      "AI-generated code over the wall without proper review, they will be blocked " +
+      "from the repository.";
+    const gates = parseGates(text);
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, true);
+  });
+
+  it("does not fire the ban on a plain review mandate without enforcement", () => {
+    const gates = parseGates(
+      "All AI-generated code must be thoroughly reviewed by the contributor before submitting a PR."
+    );
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+
+  it("does not fire 'strictly prohibited' without an agent-ish subject", () => {
+    const gates = parseGates(
+      "Spam, harassment, and plagiarism are strictly prohibited. We welcome AI-assisted contributions."
+    );
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+
+  it("does not fire the close-right pattern on stale-issue cleanup", () => {
+    const gates = parseGates(
+      "We reserve the right to close stale issues that have had no activity for 90 days."
+    );
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+
+  it("does not fire on formbricks' agent-session-link rule (rows 48-49)", () => {
+    const gates = parseGates(
+      "Never put an agent session link in a PR description, PR or review comment, " +
+      "commit message, or anything the maintainer sees."
+    );
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+
+  it("does not fire on medusa's policy with no AI clause (rows 48-49)", () => {
+    const gates = parseGates(
+      "# Contributing\n\nFork, branch, and open a PR. Add a changeset for every " +
+      "user-facing change. Generate a changeset with the CLI before opening the PR."
+    );
+    assert.equal(gates.find((x) => x.kind === "agents_banned")!.detected, false);
+  });
+});

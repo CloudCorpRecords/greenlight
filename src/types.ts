@@ -122,6 +122,13 @@ export interface IssueSnapshot {
    * is no evidence.
    */
   serverSide?: { flag: string; evidence: string };
+  /**
+   * v0.16.2: behavioral gate from maintainer actions (not policy text),
+   * attached by the caller when the behavioral pass ran for this repo.
+   * When detected, scoreIssue caps the verdict at GATED, the same
+   * treatment the policy-file agents_banned gate gets.
+   */
+  behavioralGate?: import("./behavior.js").BehavioralGate | null;
 }
 
 /** One detected claim signal from a comment. */

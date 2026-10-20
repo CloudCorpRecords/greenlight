@@ -203,8 +203,9 @@ server.tool(
     max_stars: z.number().default(150000).describe("Star band ceiling (default 150000)."),
     issues_per_repo: z.number().default(3).describe("Starter issues x-rayed per repo (default 3)."),
     min_budget: z.number().default(800).describe("Core API floor; the run stops with partial results under it (default 800)."),
+    sort: z.enum(["winnability", "stars"]).default("winnability").describe("Candidate ranking: winnability (outsider merge share, then friction, then stars) or stars (default winnability)."),
   },
-  async ({ index_url, max_repos, min_share, min_stars, max_stars, issues_per_repo, min_budget }) => {
+  async ({ index_url, max_repos, min_share, min_stars, max_stars, issues_per_repo, min_budget, sort }) => {
     try {
       const filters: WaveFilters = {
         minShare: min_share,
@@ -213,6 +214,7 @@ server.tool(
         maxRepos: max_repos,
         issuesPerRepo: issues_per_repo,
         minBudget: min_budget,
+        sort: sort === "stars" ? "stars" : undefined,
       };
       const index = await loadPolicyIndex(index_url ?? POLICY_INDEX_URL);
       const result = await runWave(index, filters, liveWaveDeps());

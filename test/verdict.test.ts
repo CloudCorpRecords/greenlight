@@ -598,3 +598,64 @@ describe("duplicate-of and attempt-linked races (field cases 2026-10-15)", () =>
     assert.ok(result.reasons.some((r) => r.includes("paused")));
   });
 });
+
+describe("behavioral gate caps verdicts at GATED (v0.16.2)", () => {
+  function clean(): IssueSnapshot {
+    const base = load("pdfcn-58.json");
+    return {
+      ...base,
+      comments: [],
+      linkedPRs: [],
+      commentMentionedPRs: [],
+      contributing: undefined,
+      updatedAt: NOW.toISOString(),
+    };
+  }
+
+  function spotDLGate(): IssueSnapshot["behavioralGate"] {
+    return {
+      detected: true,
+      strength: 2,
+      threshold: 2,
+      evidence: [
+        {
+          pr: 2494,
+          author: "maintainer",
+          quote: "Closing this as AI slop.",
+          url: "https://github.com/spotDL/spotify-downloader/pull/2494",
+          strong: true,
+        },
+        {
+          pr: 2501,
+          author: "maintainer",
+          quote: "We do not accept AI-generated PRs here.",
+          url: "https://github.com/spotDL/spotify-downloader/pull/2501",
+          strong: true,
+        },
+      ],
+      notes: [],
+      note: "2 closed-unmerged PRs with maintainer AI-rejection comments",
+    };
+  }
+
+  it("a detected behavioral gate caps a clean issue at GATED with the evidence quoted", () => {
+    const result = scoreIssue({ ...clean(), behavioralGate: spotDLGate() }, NOW);
+    assert.equal(result.verdict, "GATED");
+    assert.ok(result.flags.includes("behavioral-gate"));
+    assert.ok(result.reasons.some((r) => r.includes("rejects AI-built PRs in practice")));
+    assert.ok(result.reasons.some((r) => r.includes("2494")));
+    assert.ok(result.reasons.some((r) => r.includes("AI slop")));
+  });
+
+  it("an undetected behavioral gate does not change the verdict", () => {
+    const gate = spotDLGate()!;
+    const result = scoreIssue({ ...clean(), behavioralGate: { ...gate, detected: false, strength: 1 } }, NOW);
+    assert.equal(result.verdict, "GO");
+    assert.ok(!result.flags.includes("behavioral-gate"));
+  });
+
+  it("a null behavioral gate leaves the verdict alone", () => {
+    const result = scoreIssue({ ...clean(), behavioralGate: null }, NOW);
+    assert.equal(result.verdict, "GO");
+  });
+});

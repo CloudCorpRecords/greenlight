@@ -43,7 +43,7 @@ Every verdict and every report cites its evidence: the quoted policy line, the c
 
 ## Proof, stated plainly
 
-* 965 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
+* 1016 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
 * Dogfooded on real campaigns: the toolkit has authored 80+ pull requests across dozens of public open-source repos. Every feature exists because a real contribution died without it.
 * Distributed everywhere the audience already looks: npm (`@reneturcios/greenlight`), the MCP Registry, and GHCR (`ghcr.io/cloudcorprecords/greenlight`), plus Docker and direct MCP stdio.
 * Two living datasets ship with it: the Contribution Friction Index (`data/friction-index.json`) and the Agent Policy Index (505 repos, 127 gated, 19 agent bans, published at `docs/policy.html`), both built from real campaign field work, not scraped guesses.
@@ -431,6 +431,18 @@ The published page ([cloudcorprecords.github.io/greenlight](https://cloudcorprec
 npm test    # tsx --test, includes fixture tests that reproduce our real verdicts
 npm run build
 ```
+
+### Release checklist
+
+Every version bump touches all of these, or the release ships stale surfaces:
+- `package.json` version
+- `package-lock.json` version
+- `server.json`: the top-level `version`, the npm package `version`, and the
+  OCI `identifier` tag, which must equal the package version
+  (`ghcr.io/cloudcorprecords/greenlight:<version>`); `test/packaging.test.ts`
+  fails the build if the tag drifts
+- `src/index.ts` version
+- `examples/guard-workflow.yml` pin
 
 ## Roadmap
 

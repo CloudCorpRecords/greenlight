@@ -118,10 +118,32 @@ describe("filterWaveRepos", () => {
     assert.deepEqual(kept, ["o/clear"]);
   });
 
-  it("orders by stars descending and caps at maxRepos", () => {
+  it("orders by stars descending with sort: stars and caps at maxRepos", () => {
     const index = [entry("o/a", { stars: 2000 }), entry("o/b", { stars: 9000 }), entry("o/c", { stars: 4000 })];
-    const kept = filterWaveRepos(index, { ...filters, maxRepos: 2 }).map((e) => e.repo);
+    const kept = filterWaveRepos(index, { ...filters, maxRepos: 2, sort: "stars" }).map((e) => e.repo);
     assert.deepEqual(kept, ["o/b", "o/c"]);
+  });
+
+  it("ranks by winnability by default: outsider share, then friction, then stars", () => {
+    const index = [
+      entry("o/mega", { stars: 90000, outsider_merge_share: 45, friction_score: 30 }),
+      entry("o/quiet", { stars: 2000, outsider_merge_share: 95, friction_score: 30 }),
+      entry("o/easy", { stars: 2000, outsider_merge_share: 95, friction_score: 10 }),
+      entry("o/hard", { stars: 2000, outsider_merge_share: 95, friction_score: 90 }),
+      entry("o/tie-high", { stars: 8000, outsider_merge_share: 95, friction_score: 10 }),
+      entry("o/tie-low", { stars: 1000, outsider_merge_share: 95, friction_score: 10 }),
+      entry("o/nofriction", { stars: 9000, outsider_merge_share: 95, friction_score: null }),
+    ];
+    const kept = filterWaveRepos(index, { ...filters, maxRepos: 10 }).map((e) => e.repo);
+    assert.deepEqual(kept, [
+      "o/tie-high",
+      "o/easy",
+      "o/tie-low",
+      "o/quiet",
+      "o/hard",
+      "o/nofriction",
+      "o/mega",
+    ]);
   });
 });
 

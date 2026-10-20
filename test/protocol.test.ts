@@ -120,9 +120,21 @@ describe("parseClaimsPolicy / defaultClaimsPolicy", () => {
     assert.equal(p.invalid, undefined);
   });
 
-  it("raises the tenure cap to at least one lease", () => {
+  it("never overrides an explicit tenure_cap_days (field lesson 2026-10-19)", () => {
+    const p = parseClaimsPolicy('{"protocol":1,"lease_days":30,"tenure_cap_days":28}');
+    assert.equal(p.tenure_cap_days, 28);
+  });
+
+  it("honors an explicit cap even below one lease", () => {
     const p = parseClaimsPolicy('{"protocol":1,"lease_days":10,"tenure_cap_days":3}');
-    assert.equal(p.tenure_cap_days, 10);
+    assert.equal(p.tenure_cap_days, 3);
+  });
+
+  it("guards the cap to at least one lease only when the value is absent or invalid", () => {
+    assert.equal(parseClaimsPolicy('{"protocol":1,"lease_days":30}').tenure_cap_days, 30);
+    assert.equal(parseClaimsPolicy('{"protocol":1,"lease_days":5}').tenure_cap_days, 28);
+    assert.equal(parseClaimsPolicy('{"protocol":1,"lease_days":30,"tenure_cap_days":0}').tenure_cap_days, 30);
+    assert.equal(parseClaimsPolicy('{"protocol":1,"lease_days":30,"tenure_cap_days":"junk"}').tenure_cap_days, 30);
   });
 
   it("garbage JSON degrades to defaults with the warning flag", () => {

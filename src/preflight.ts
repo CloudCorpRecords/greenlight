@@ -19,6 +19,7 @@
 import { apiGet, ApiNotFoundError, fetchPolicySources, detectRepoPolicy } from "./github.js";
 import { parseGatesFromSources } from "./gates.js";
 import { loadCapabilities, latestCapability, isBlockedOutcome, defaultCapabilitiesPath } from "./capabilities.js";
+import { detectBehavioralGate, type BehavioralGate } from "./behavior.js";
 
 export interface PreflightOptions {
   owner: string;
@@ -28,6 +29,12 @@ export interface PreflightOptions {
   /** Repo-relative file paths to check for upstream drift. */
   files?: string[];
   capabilitiesPath?: string;
+  /**
+   * v0.16.2: run the behavioral gate pass (up to 18 API calls). Off by
+   * default so autopilot sweeps keep their transport budget; opt in with
+   * --behavioral on the CLI.
+   */
+  behavioral?: boolean;
 }
 
 export interface ForkCheck {
@@ -59,6 +66,8 @@ export interface PreflightResult {
   capability: CapabilityCheck;
   gates: GateCheck;
   drift?: DriftFile[];
+  /** v0.16.2: the behavioral gate when the pass ran (null when skipped). */
+  behavioral?: BehavioralGate | null;
   verdict: "GO" | "NO-GO";
   reasons: string[];
 }
@@ -181,6 +190,22 @@ export async function runPreflight(opts: PreflightOptions): Promise<PreflightRes
   const gates = await checkGates(owner, repo);
   if (gates.collaboratorsOnly) reasons.push("gates: repo is collaborators-only");
 
+  // v0.16.2: behavioral gate, opt-in only (cost is up to 18 API calls).
+  // A detected gate means the maintainer rejects AI-built PRs in
+  // practice, so a pre-build check should say NO-GO before work starts.
+  let behavioral: BehavioralGate | null = null;
+  if (opts.behavioral) {
+    behavioral = await detectBehavioralGate(owner, repo);
+    if (behavioral?.detected) {
+      const n = behavioral.strength;
+      const first = behavioral.evidence[0];
+      reasons.push(
+        `behavioral gate: maintainer rejects AI-built PRs in practice (${n} signal${n === 1 ? "" : "s"})` +
+          (first ? `, e.g. PR #${first.pr}: "${first.quote}"` : "")
+      );
+    }
+  }
+
   let drift: DriftFile[] | undefined;
   if (opts.base && opts.files && opts.files.length > 0) {
     try {
@@ -194,7 +219,7 @@ export async function runPreflight(opts: PreflightOptions): Promise<PreflightRes
   }
 
   const verdict = reasons.length === 0 ? "GO" : "NO-GO";
-  return { owner, repo, fork, capability, gates, drift, verdict, reasons };
+  return { owner, repo, fork, capability, gates, drift, behavioral, verdict, reasons };
 }
 
 export function formatPreflightHuman(r: PreflightResult): string {

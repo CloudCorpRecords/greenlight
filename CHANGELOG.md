@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.16.2 (2026-10-19)
+
+- **Live bugs and quick wins from the 2026-10-19 iteration audit.**
+- **tenure_cap_days is never overridden (LB-1).** `parseClaimsPolicy` used `Math.max(tenureCapRaw, lease_days)`, silently turning an explicit `{"lease_days": 30, "tenure_cap_days": 28}` into 30. An explicit cap now always wins; the one-lease floor applies only when the value is absent or invalid. Three regression tests pin the semantics.
+- **Behavioral gate now caps check/scan verdicts at GATED (LB-3).** Until now the gate was friction's number; `behavior.ts` promised verdicts would treat it like `agents_banned`, but no code did. `IssueSnapshot` carries the gate, `scoreIssue` adds Rule 7b (GATED with the behavioral evidence quoted), and `check`/`scan` run one behavioral pass per repo (opt out with `--no-behavioral`). `preflight` gains the opt-in `--behavioral` flag, which turns a detected gate into NO-GO before work starts.
+- **Gate pattern round 2 (LB-4/LB-5).** The detached-subject "strictly prohibited" family (starship's "unsupervised autonomous agent operating in an automated loop, are strictly prohibited"), the postiz prose family ("we do not accept Pull Requests generated primarily by AI tools"; "reserve the right to close any PR that appears to be AI-generated"), and the documenso scoped review-mandate family (unreviewed AI code gets you blocked), with negative fixtures for review mandates without enforcement, non-agent "strictly prohibited" prose, stale-issue close rights, formbricks' agent-session-link rule, and medusa's policy-free CONTRIBUTING.
+- **Wave ranks by winnability (item 19).** Candidates rank by outsider merge share, then friction score, then stars as the tiebreak, so quiet high-converting repos are reached before star-heavy raced ones. `--sort stars` restores the old order (also exposed on the `wave_queue` MCP tool).
+- **OCI tag drift, fixed and pinned (LB-2).** `server.json`'s Docker identifier was pinned to 0.13.0 while the package shipped 0.16.1; the tag now equals the package version on every release, `test/packaging.test.ts` fails the build if it drifts, and the README carries the release checklist.
+- 22 new tests. The server still carries 28 tools.
+
+
 ## 0.16.1 (2026-10-19)
 
 - **Starter-issue search fix.** The wave smoke test caught it: the shared starter-issue queries used a parenthesized `(label:"good first issue" OR label:"help wanted")` form that silently returns zero results against the live API (badges/shields carries 42 good-first-issues; the query found none). Both `countStarterIssues` and `listStarterIssues` now use GitHub's comma label form (`label:"good first issue","help wanted"`), which returns the real counts. This also repairs `scan`'s starter-issue ranking (it was falling back to recent-unassigned issues unnecessarily) and `friction`'s starter-issue bonus (always zero before). Two regression tests pin the query shape.

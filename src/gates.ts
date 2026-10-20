@@ -38,6 +38,11 @@ const SCOPED_BAN_REGEXES: RegExp[] = [
   /do not accept.{0,80}(bulk|autonomous).{0,30}(agent|ai)[-\s]?driven (contributions?|pull requests?|prs?)/i,
   /(bulk|mass)[-\s]?(agent|ai)[-\s]?driven (contributions?|pull requests?|prs?).{0,80}(not accepted|refused|will be closed|are not welcome|do not accept)/i,
   /(purely|fully|entirely) ai[-\s]?(generated|authored|drafted).{0,50}(without human review|unreviewed|without (a )?human in the loop).{0,80}(closed|rejected|not a contribution|will not be merged)/i,
+  // Field case 2026-10-19: documenso ("If we detect that contributors are
+  // simply throwing AI-generated code over the wall without proper review,
+  // they will be blocked from the repository"). Reviewed AI code is
+  // allowed, so this is scoped (unreviewed-only), never a blanket ban.
+  /ai[-\s]?generated (code|content).{0,40}(without|with no).{0,40}review.{0,60}(blocked|closed|rejected)/i,
 ];
 
 const RULES: GateRule[] = [
@@ -179,6 +184,15 @@ const RULES: GateRule[] = [
       /(do not|don't|does not) welcome.{0,40}ai contributions?/i,
       /(pull requests?|prs?).{0,40}(must not|may not|cannot|will not) be opened by (bots|automated|agents?)/i,
       /autonomous (ai )?agents? may not (submit|open|contribute)/i,
+      // Field cases 2026-10-19: starship ("Contributions via OpenClaw, or
+      // any other unsupervised autonomous agent operating in an automated
+      // loop, are strictly prohibited"), postiz ("we do not accept Pull
+      // Requests generated primarily by AI tools"; "we reserve the right
+      // to close any PR that appears to be AI-generated"). Each pattern is
+      // anchored on an explicit prohibition, never on a bare mention of AI.
+      /(autonomous|unsupervised|ai[-\s]?generated|ai[-\s]?authored)[\w\s,'"()-]{0,120}?\bare\s+strictly\s+prohibited\b/i,
+      /(do not|don't|does not|will not) accept.{0,60}(pull requests?|prs?|contributions?).{0,40}generated.{0,40}\bai\b/i,
+      /reserve.{0,20}(the )?right to close.{0,80}ai[-\s]?generated/i,
       ...SCOPED_BAN_REGEXES,
     ],
   },
@@ -285,6 +299,12 @@ const UNSCOPED_BAN_RES: RegExp[] = [
   /(do not|don't|does not) welcome.{0,40}ai contributions?/i,
   /(pull requests?|prs?).{0,40}(must not|may not|cannot|will not) be opened by (bots|automated|agents?)/i,
   /autonomous (ai )?agents? may not (submit|open|contribute)/i,
+  // v0.16.2 round 2: the detached-subject "strictly prohibited" family
+  // (starship) and the postiz prose family (refusal to accept
+  // AI-generated PRs; the reserved right to close them).
+  /(autonomous|unsupervised|ai[-\s]?generated|ai[-\s]?authored)[\w\s,'"()-]{0,120}?\bare\s+strictly\s+prohibited\b/i,
+  /(do not|don't|does not|will not) accept.{0,60}(pull requests?|prs?|contributions?).{0,40}generated.{0,40}\bai\b/i,
+  /reserve.{0,20}(the )?right to close.{0,80}ai[-\s]?generated/i,
 ];
 
 /**

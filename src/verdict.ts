@@ -304,6 +304,21 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     return { verdict: "GATED", reasons, claims, gates, flags };
   }
 
+  // Rule 7b: detected behavioral gate (v0.16.2). A repo whose maintainer
+  // rejects AI-built PRs in practice is as closed to agent work as a
+  // policy-file ban, even when no policy file says so (spotDL field
+  // case). Caps at GATED with the behavioral evidence quoted.
+  const behavioral = snapshot.behavioralGate;
+  if (behavioral?.detected) {
+    const n = behavioral.strength;
+    reasons.push(`behavioral gate: maintainer rejects AI-built PRs in practice (${n} signal${n === 1 ? "" : "s"})`);
+    for (const ev of behavioral.evidence.slice(0, 2)) {
+      reasons.push(`gate evidence: PR #${ev.pr}: "${ev.quote}" (${ev.url})`);
+    }
+    flags.push("behavioral-gate");
+    return { verdict: "GATED", reasons, claims, gates, flags };
+  }
+
   // Rule 8: stale by inactivity.
   const inactivityDays = daysSince(snapshot.updatedAt, now);
   if (inactivityDays >= STALE_INACTIVITY_DAYS) {

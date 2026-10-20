@@ -97,10 +97,21 @@ export function parseClaimsPolicy(jsonText: string): ClaimsPolicy {
   // this engine; fall back to defaults rather than half-applying it.
   if (r.protocol !== PROTOCOL_VERSION) return { ...base, invalid: true };
   const lease_days = clampInt(r.lease_days, base.lease_days, 1, 30);
-  const tenureCapRaw = clampInt(r.tenure_cap_days, base.tenure_cap_days, 1, Number.MAX_SAFE_INTEGER);
-  // DECISION: a tenure cap below the lease would make leases meaningless;
-  // the cap can never be shorter than one lease.
-  const tenure_cap_days = Math.max(tenureCapRaw, lease_days);
+  // DECISION: an explicit tenure_cap_days is never overridden. The
+  // Math.max guard against a cap shorter than one lease applies only when
+  // the file's value is absent or invalid; a maintainer who writes
+  // {"lease_days": 30, "tenure_cap_days": 28} means 28, and the engine
+  // honors it. Field lesson 2026-10-19: Math.max(tenureCapRaw, lease_days)
+  // silently turned that into 30.
+  const rawCap = r.tenure_cap_days;
+  const capNum = typeof rawCap === "number" ? rawCap : Number(rawCap);
+  const capExplicit =
+    Number.isInteger(capNum) &&
+    capNum >= 1 &&
+    capNum <= Number.MAX_SAFE_INTEGER;
+  const tenure_cap_days = capExplicit
+    ? Math.trunc(capNum)
+    : Math.max(base.tenure_cap_days, lease_days);
   const who =
     typeof r.who_can_claim === "string" && r.who_can_claim.trim() !== ""
       ? r.who_can_claim.trim()

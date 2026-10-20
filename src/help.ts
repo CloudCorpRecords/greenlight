@@ -75,7 +75,7 @@ export const COMMANDS: CommandHelp[] = [
   },
   {
     name: "wave",
-    usage: "greenlight wave [--index <url|path>] [--repos N] [--min-share N] [--stars lo,hi] [--issues-per-repo N] [--min-budget N] [--json]",
+    usage: "greenlight wave [--index <url|path>] [--repos N] [--min-share N] [--stars lo,hi] [--issues-per-repo N] [--min-budget N] [--sort winnability|stars] [--json]",
     description: "Build queue in one command: filters the Agent Policy Index for winnable open repos, x-rays starter issues, excludes behavioral gates, skips repos where you already have an open PR.",
     flags: [
       "--index <url|path> (policy index; defaults to the live index)",
@@ -84,6 +84,7 @@ export const COMMANDS: CommandHelp[] = [
       "--stars <lo,hi> (star band, default 1000,150000)",
       "--issues-per-repo <N> (starter issues x-rayed per repo, default 3)",
       "--min-budget <N> (core API floor; the run stops with partial results under it, default 800)",
+      "--sort winnability|stars (candidate ranking; winnability ranks by outsider merge share, then friction, then stars. Default winnability)",
       "--json (machine-readable output)",
     ],
     examples: ["greenlight wave --repos 5"],
