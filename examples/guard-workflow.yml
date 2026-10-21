@@ -27,7 +27,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
       - name: Guard the PR
-        uses: CloudCorpRecords/greenlight@v0.20.0
+        uses: CloudCorpRecords/greenlight@v0.20.1
         id: guard
       - name: Fail the check when the guard flags something
         if: steps.guard.outputs.findings != '0'
