@@ -224,8 +224,9 @@ const HTTP_STATUS_CODES = new Set([
  *  - bare mid-branch token when it is a 3+ digit, non-status-code number
  *    ("pay-852-partial-...").
  * Never counted: GitHub web-UI "patch-N" names (patch-1, inian-patch-1),
- * version numbers (1.0, 2.73.0-rc.5), sub-counters after another number
- * (claude/task-22584764486-1), bare counters under 100 mid/trailing
+ * version numbers (1.0, 2.73.0-rc.5), task counters paired with a
+ * sub-counter (claude/task-22584764486-1, bot/task-987654-2),
+ * bare counters under 100 mid/trailing
  * (bundle-size-3-migrate, ...-try-2), and alphanumerics like "oauth2"
  * (letter boundaries are not delimiters).
  *
@@ -273,6 +274,13 @@ export function branchIssueRefs(branch: string): number[] {
         add(n);
         continue;
       }
+      const next = i + 1 < tokens.length ? tokens[i + 1].text : "";
+      // v0.21.0: a bare number immediately followed by another numeric
+      // token is a counter namespace, not an issue ref: bot branches like
+      // "bot/task-987654-2" pair a task/run ID with a sub-counter. The
+      // existing rule only skipped the sub-counter itself; a 6-digit task
+      // ID under the 999999 cap still leaked through as a phantom issue.
+      if (/^\d+$/.test(next)) continue;
       if (HTTP_STATUS_CODES.has(n)) continue; // unmarked status code: an error code.
       if (n >= 100) add(n); // bare 3+ digit token, mid-branch or trailing.
       // Bare 1-2 digit tokens mid-branch or trailing ("-3-", "-try-2") are

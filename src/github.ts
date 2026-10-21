@@ -20,14 +20,38 @@ const DEFAULT_API = "https://api.github.com";
 const RAW = "https://raw.githubusercontent.com";
 
 /**
+ * Validate and normalize a candidate API base URL (v0.21.0 hardening).
+ * Only http/https URLs are accepted. Embedded credentials, query strings
+ * and fragments are stripped: a base URL is an address, and anything
+ * secret-shaped inside it must never reach a request line, an error
+ * message, or a doctor report. Returns null for anything unparseable or
+ * off-protocol.
+ */
+export function sanitizeApiBase(raw: string): string | null {
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    u.username = "";
+    u.password = "";
+    u.search = "";
+    u.hash = "";
+    return u.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The GitHub API base in use. Reads GREENLIGHT_GITHUB_BASE_URL so a
  * vault-backed localhost proxy (gh-proxy.py) can attach a stored token to
- * requests from tools that only know how to read env. Trailing slashes are
- * stripped; with the env unset the return is the historical hardcoded value.
+ * requests from tools that only know how to read env. The override goes
+ * through sanitizeApiBase; an invalid or off-protocol value falls back to
+ * the default API instead of being used verbatim. With the env unset the
+ * return is the historical hardcoded value.
  */
 export function githubApiBase(): string {
   const env = process.env.GREENLIGHT_GITHUB_BASE_URL;
-  if (env && env.trim().length > 0) return env.trim().replace(/\/+$/, "");
+  if (env && env.trim().length > 0) return sanitizeApiBase(env) ?? DEFAULT_API;
   return DEFAULT_API;
 }
 const CACHE_DIR = join(homedir(), ".cache", "greenlight");
@@ -60,7 +84,12 @@ export function cacheGet(kind: string, parts: string[]): unknown | undefined {
   const file = join(CACHE_DIR, cacheKey(kind, parts));
   if (!existsSync(file)) return undefined;
   try {
-    const entry = JSON.parse(readFileSync(file, "utf8"));
+    const entry = JSON.parse(readFileSync(file, "utf8")) as { savedAt?: unknown; data?: unknown } | null;
+    // v0.21.0: a shape-invalid entry (non-object, or savedAt missing/not a
+    // number) is a miss. Before this check, `Date.now() - undefined` was
+    // NaN, the TTL comparison was false, and a corrupt-but-parseable file
+    // served its payload forever.
+    if (!entry || typeof entry !== "object" || typeof entry.savedAt !== "number") return undefined;
     if (Date.now() - entry.savedAt > TTL_MS[kind]) return undefined;
     return entry.data;
   } catch {

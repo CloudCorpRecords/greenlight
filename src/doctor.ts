@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { llmModelId } from "./llm-claims.js";
-import { githubApiBase } from "./github.js";
+import { githubApiBase, sanitizeApiBase } from "./github.js";
 
 export type DoctorStatus = "pass" | "warn" | "fail";
 
@@ -142,7 +142,10 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<DoctorReport> {
         ? {
             name: "github token",
             status: "warn",
-            detail: `no token set, but GREENLIGHT_GITHUB_BASE_URL points at ${proxyBase} (proxy mode); reads route through it`,
+            // v0.21.0: render the sanitized base, never the raw env value:
+            // an env carrying embedded credentials must not echo them
+            // into a doctor report.
+            detail: `no token set, but GREENLIGHT_GITHUB_BASE_URL points at ${sanitizeApiBase(proxyBase) ?? "an unparseable URL"} (proxy mode); reads route through it`,
             fix: "If the proxy attaches your token server-side you are fine. Otherwise export GITHUB_TOKEN=<your-classic-token> for the 5000 req/hr limit.",
           }
         : {

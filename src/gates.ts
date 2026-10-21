@@ -427,7 +427,18 @@ export function parseGates(text: string | undefined, options: ParseOptions = {})
   // **disclose"), both of which a literal pattern would miss. Matching
   // is on the normalized body; evidence snippets were already
   // whitespace-collapsed for display.
-  const body = (text ?? "").replace(/\*+/g, "").replace(/\s+/g, " ");
+  // v0.21.0: strip URLs and any token carrying an "assignees=" query
+  // parameter before matching. Gate evidence is prose; a URL is an
+  // address, not an instruction. Field failure (huggingface/transformers
+  // classified assignment-gated): the doc's issue-template URL contained
+  // "assignees=", and once the document was collapsed to one line the
+  // /assign.*before (submitting|opening)/ pattern spanned from that URL
+  // parameter to an unrelated "Before submitting a PR" later in the doc.
+  const body = (text ?? "")
+    .replace(/\*+/g, "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\S*assignees=\S*/gi, " ")
+    .replace(/\s+/g, " ");
   const gates = RULES.map((rule) => {
     const found = rule.regexes.find((re) => re.test(body));
     if (rule.kind === "collaborators_only" && options.collaboratorsOnlyPolicy) {
