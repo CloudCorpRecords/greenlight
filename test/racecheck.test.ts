@@ -23,6 +23,8 @@ import {
   racecheckIssue,
   applyRaceDemotion,
   searchSeeds,
+  suppressByDocumentFrequency,
+  stripUrls,
   type RaceIssue,
   type RacePRCandidate,
 } from "../src/racecheck.js";
@@ -127,10 +129,17 @@ describe("extractKeywords", () => {
 describe("scoreCandidate thresholds", () => {
   const kw = extractKeywords(SVELTE_ISSUE);
 
-  it("two significant term matches -> RACE", () => {
-    const s = scoreCandidate(kw, { title: "Keep deleted files regenerated properly", body: "" });
+  it("three term matches with two title-derived -> RACE (v0.20.1 bar)", () => {
+    const s = scoreCandidate(kw, { title: "Deleted entries regenerated during sync", body: "" });
     assert.equal(s.verdict, "RACE");
-    assert.ok(s.termHits.length + s.phraseHits.length >= 2);
+    assert.ok(s.termHits.length >= 3);
+    assert.ok(s.titleTermHits.length >= 2);
+  });
+
+  it("two term matches alone stay SUSPECT (v0.20.1 bar)", () => {
+    const s = scoreCandidate(kw, { title: "Deleted entries cleaned during sync runs", body: "" });
+    assert.equal(s.verdict, "SUSPECT");
+    assert.equal(s.termHits.length, 2);
   });
 
   it("one rare term match -> RACE", () => {
@@ -145,16 +154,71 @@ describe("scoreCandidate thresholds", () => {
     assert.deepEqual(s.termHits, ["sync"]);
   });
 
-  it("a shared changed file -> RACE even with no text overlap", () => {
+  it("a shared changed file alone -> SUSPECT, never RACE (v0.20.1)", () => {
     const kw2 = extractKeywords({
       title: "Importer drops rows",
-      body: "The importer in src/sync/types.ts drops rows silently.",
+      body: "The importer in src/sync/importer.ts drops rows silently.",
       labels: [],
       author: "x",
     });
-    const s = scoreCandidate(kw2, { title: "Unrelated cleanup", body: "tidy" }, ["src/sync/types.ts", "README.md"]);
+    const s = scoreCandidate(kw2, { title: "Unrelated cleanup", body: "tidy" }, ["src/sync/importer.ts", "README.md"]);
+    assert.equal(s.verdict, "SUSPECT");
+    assert.deepEqual(s.fileHits, ["src/sync/importer.ts"]);
+  });
+
+  it("a shared changed file PLUS a bare term hit -> SUSPECT (v0.20.1, cubrid #882 lesson)", () => {
+    const kw2 = extractKeywords({
+      title: "Importer drops rows",
+      body: "The importer in src/sync/importer.ts drops rows silently.",
+      labels: [],
+      author: "x",
+    });
+    const s = scoreCandidate(kw2, { title: "Importer cleanup", body: "tidy" }, ["src/sync/importer.ts"]);
+    assert.equal(s.verdict, "SUSPECT");
+    assert.deepEqual(s.fileHits, ["src/sync/importer.ts"]);
+    assert.ok(s.termHits.includes("importer"));
+  });
+
+  it("a shared changed file PLUS a rare hit -> RACE (v0.20.1)", () => {
+    const kw2 = extractKeywords({
+      title: "Importer drops rows",
+      body: "The importer in src/sync/importer.ts drops rows silently.",
+      labels: [],
+      author: "x",
+    });
+    const s = scoreCandidate(kw2, { title: "Unrelated cleanup", body: "also touches importer.ts" }, ["src/sync/importer.ts"]);
     assert.equal(s.verdict, "RACE");
-    assert.deepEqual(s.fileHits, ["src/sync/types.ts"]);
+    assert.deepEqual(s.fileHits, ["src/sync/importer.ts"]);
+    assert.ok(s.rareHits.includes("importer.ts"));
+  });
+
+  it("the repo package prefix is stripped from rare tokens, keeping the distinctive remainder", () => {
+    const kw = extractKeywords(
+      {
+        title: "Namespace of reflected timezone types",
+        body: "The classes `sqlalchemy_cubrid.TIMESTAMPTZ` and `sqlalchemy_cubrid.types` live in `sqlalchemy_cubrid/types.py`; root is `sqlalchemy_cubrid/__init__.py`.",
+        labels: [],
+        author: "x",
+      },
+      { owner: "cubrid-lab", repo: "sqlalchemy-cubrid" }
+    );
+    assert.ok(kw.rare.includes("timestamptz"), `rare: ${kw.rare.join(",")}`);
+    assert.ok(!kw.rare.includes("sqlalchemy_cubrid"), `rare: ${kw.rare.join(",")}`);
+    assert.ok(!kw.files.includes("types.py") && !kw.rare.includes("types.py"), `files: ${kw.files.join(",")} rare: ${kw.rare.join(",")}`);
+    assert.ok(!kw.files.some((f) => f.endsWith("__init__.py")), `files: ${kw.files.join(",")}`);
+  });
+
+  it("two body-only term matches cap at SUSPECT (v0.20.1 title-term rule)", () => {
+    const kw2 = extractKeywords({
+      title: "Improve rendering speed",
+      body: "The logs mention \"zephyr\" and \"quill\" as slow paths.",
+      labels: [],
+      author: "x",
+    });
+    const s = scoreCandidate(kw2, { title: "Pipeline throughput work", body: "Optimizes the zephyr and quill stages." });
+    assert.equal(s.verdict, "SUSPECT");
+    assert.equal(s.termHits.length, 2);
+    assert.equal(s.titleTermHits.length, 0);
   });
 
   it("no overlap -> no verdict", () => {
@@ -242,10 +306,10 @@ describe("racecheckIssue pipeline (injected deps)", () => {
     assert.equal(result.matches.length, 0);
   });
 
-  it("pure file overlap (no keyword overlap) is RACE when the pool is small", async () => {
+  it("pure file overlap (no keyword overlap) is SUSPECT, not RACE (v0.20.1)", async () => {
     const issue: RaceIssue = {
       title: "Importer drops rows silently",
-      body: "The importer in src/sync/types.ts drops rows.",
+      body: "The importer in src/sync/importer.ts drops rows.",
       labels: [],
       author: "x",
     };
@@ -257,9 +321,9 @@ describe("racecheckIssue pipeline (injected deps)", () => {
       createdAt: "2026-10-03T00:00:00Z",
       url: "https://github.com/o/r/pull/31",
     };
-    const result = await racecheckIssue("o", "r", 8, depsFor(issue, [pr], { 31: ["src/sync/types.ts"] }));
-    assert.equal(result.verdict, "RACE");
-    assert.deepEqual(result.matches[0].fileHits, ["src/sync/types.ts"]);
+    const result = await racecheckIssue("o", "r", 8, depsFor(issue, [pr], { 31: ["src/sync/importer.ts"] }));
+    assert.equal(result.verdict, "SUSPECT");
+    assert.deepEqual(result.matches[0].fileHits, ["src/sync/importer.ts"]);
   });
 
   it("an unreadable issue is ERROR, not CLEAR", async () => {
@@ -271,6 +335,171 @@ describe("racecheckIssue pipeline (injected deps)", () => {
     };
     const result = await racecheckIssue("o", "r", 1, deps);
     assert.equal(result.verdict, "ERROR");
+  });
+});
+
+describe("v0.20.1 precision: extraction discipline", () => {
+  it("GitHub label names are never keywords", () => {
+    const kw = extractKeywords({
+      title: "Dark mode toggle contrast",
+      body: "",
+      labels: ["help wanted", "good first issue", "hacktoberfest", "beginner", "easy"],
+      author: "x",
+    });
+    for (const w of ["help", "wanted", "good", "beginner", "easy", "hacktoberfest"]) {
+      assert.ok(!kw.terms.includes(w), `label word leaked into terms: ${w}`);
+    }
+    assert.ok(kw.terms.includes("toggle"));
+    assert.ok(kw.terms.includes("contrast"));
+  });
+
+  it("URLs and long quoted strings contribute no terms; their identifiers stay rare-only", () => {
+    const kw = extractKeywords({
+      title: "Root route types deleted on sync",
+      body:
+        "In `write_all_types` (https://github.com/sveltejs/kit/blob/73bf98/packages/kit/src/core/sync/write_types/index.js#L44-L55), " +
+        "the cleanup loop deletes the root file. The quoted path \"packages/kit/src/core/sync/write_types/index.js\" shows it, " +
+        "and a long note says \"the quick brown fox jumps over the lazy dog again and again and again and again\".",
+      labels: [],
+      author: "x",
+    });
+    for (const w of ["packages", "kit", "src", "core", "index", "generated", "blob", "master", "quick", "brown", "fox"]) {
+      assert.ok(!kw.terms.includes(w), `noise word leaked into terms: ${w} (${kw.terms.join(",")})`);
+    }
+    assert.ok(kw.rare.includes("write_all_types"), `rare: ${kw.rare.join(",")}`);
+    assert.ok(!kw.files.some((f) => f.endsWith("index.js")), `files: ${kw.files.join(",")}`);
+  });
+
+  it("stripUrls keeps only the basename of a URL", () => {
+    const out = stripUrls("see https://github.com/o/r/blob/main/src/parser.ts#L3 for details");
+    assert.ok(!out.includes("blob") && !out.includes("github"), out);
+    assert.ok(out.includes("parser.ts"), out);
+  });
+
+  it("pure version tokens are not rare", () => {
+    const toks = specialTokens("targets python 3.10 and node 20.5 and release 0.20.0");
+    assert.ok(!toks.includes("3.10"), toks.join(","));
+    assert.ok(!toks.includes("20.5"), toks.join(","));
+    assert.ok(!toks.includes("0.20.0"), toks.join(","));
+  });
+
+  it("generic config filenames are never rare or named files", () => {
+    const kw = extractKeywords({
+      title: "Config parsing breaks on empty input",
+      body: "The pyproject.toml and package.json are read first, but parser.ts is where it breaks.",
+      labels: [],
+      author: "x",
+    });
+    assert.ok(!kw.files.includes("pyproject.toml") && !kw.rare.includes("pyproject.toml"));
+    assert.ok(!kw.files.includes("package.json") && !kw.rare.includes("package.json"));
+    assert.ok(kw.files.includes("parser.ts"), `files: ${kw.files.join(",")}`);
+  });
+
+  it("owner and repo name tokens are never keywords", () => {
+    const kw = extractKeywords(
+      { title: "Cubrid dialect drops sqlalchemy connections", body: "", labels: [], author: "x" },
+      { owner: "cubrid-lab", repo: "sqlalchemy-cubrid" }
+    );
+    assert.ok(!kw.terms.includes("cubrid") && !kw.terms.includes("sqlalchemy"), kw.terms.join(","));
+    assert.ok(kw.terms.includes("dialect") && kw.terms.includes("connections"));
+  });
+});
+
+describe("v0.20.1 precision: document-frequency suppression", () => {
+  it("drops terms present in >25% (and >=2) of the corpus, keeps distinctive ones", () => {
+    const kw = {
+      rare: [], terms: ["ruff", "passes", "namespace"], phrases: [], files: [],
+      titleTerms: ["ruff", "namespace"], titlePhrases: [],
+    };
+    const corpus = [0, 1, 2, 3].map((i) => ({
+      title: `pr ${i}`,
+      body: "checks: ruff check passes, pytest passes",
+    }));
+    const { keywords, suppressed } = suppressByDocumentFrequency(kw, corpus);
+    assert.deepEqual([...suppressed].sort(), ["passes", "ruff"]);
+    assert.deepEqual(keywords.terms, ["namespace"]);
+    assert.deepEqual(keywords.titleTerms, ["namespace"]);
+  });
+
+  it("keeps a genuine phrase that appears in a small share of a large corpus", () => {
+    const kw = {
+      rare: [], terms: ["boilerplate"], phrases: ["root route"], files: [],
+      titleTerms: [], titlePhrases: ["root route"],
+    };
+    const corpus = Array.from({ length: 10 }, (_, i) => ({
+      title: `pr ${i}`,
+      body: i === 0 ? "the root route types" : i >= 1 && i < 4 ? "boilerplate text" : "unrelated words here",
+    }));
+    const { keywords, suppressed } = suppressByDocumentFrequency(kw, corpus);
+    assert.ok(suppressed.includes("boilerplate"), suppressed.join(",")); // 3/10 = 30% > 25%
+    assert.deepEqual(keywords.phrases, ["root route"]); // 1/10 stays
+  });
+
+  it("never suppresses on a one-document corpus", () => {
+    const kw = { rare: [], terms: ["ruff"], phrases: [], files: [], titleTerms: ["ruff"], titlePhrases: [] };
+    const { suppressed } = suppressByDocumentFrequency(kw, [{ title: "x", body: "ruff ruff" }]);
+    assert.deepEqual(suppressed, []);
+  });
+});
+
+describe("v0.20.1 precision: the four failed v0.20.0 controls, as fixtures", () => {
+  it("sloptotal #21 model: template vocabulary cannot RACE", async () => {
+    const issue: RaceIssue = {
+      title: "Enable ruff's import sorting rule (I) and fix what it reports",
+      body:
+        "`pyproject.toml` selects only ruff's `E`, `F` and `W` rules, so imports are ordered however each file happened to grow. " +
+        "Add \"I\" to `[tool.ruff.lint] select`, run `ruff check --fix app tests scripts`, and check that `pytest -q` still passes. " +
+        "Keep `app/main.py`'s intentional late import.",
+      labels: ["help wanted", "good first issue", "tooling", "beginner", "easy", "hacktoberfest"],
+      author: "maintainer",
+    };
+    const prs: RacePRCandidate[] = [
+      {
+        number: 44, title: "Add a sloptotal CLI, Python client and MCP server",
+        body: "Adds cli.py and a Python client. Install via pip; entry points live in pyproject.toml. Checks: ruff check passes, pytest passes. Import sorting is handled by ruff.",
+        author: "a", createdAt: "2026-09-01T00:00:00Z", url: "https://github.com/pablocaeg/sloptotal/pull/44",
+      },
+      {
+        number: 121, title: "Fix HTML page for missing reports",
+        body: "The reports page 404s when a report was deleted. Checks: ruff check passes, pytest passes.",
+        author: "b", createdAt: "2026-09-02T00:00:00Z", url: "https://github.com/pablocaeg/sloptotal/pull/121",
+      },
+      {
+        number: 118, title: "Refactor feedback handling in report.js",
+        body: "Moves feedback rendering out of report.js; reports rendering is unchanged. Checks: ruff check passes, pytest passes.",
+        author: "c", createdAt: "2026-09-03T00:00:00Z", url: "https://github.com/pablocaeg/sloptotal/pull/118",
+      },
+    ];
+    const result = await racecheckIssue("pablocaeg", "sloptotal", 21, depsFor(issue, prs));
+    assert.notEqual(result.verdict, "RACE", `matches: ${result.matches.map((m) => m.evidence).join(" | ")}`);
+    assert.ok(result.matches.every((m) => m.verdict === "SUSPECT"));
+    assert.ok(result.reasons.join(" ").includes("ruff"), `reasons: ${result.reasons.join(" | ")}`);
+  });
+
+  it("cubrid #882 model: shared type vocabulary cannot RACE", async () => {
+    const issue: RaceIssue = {
+      title: "docs(types): correct the namespace of reflected timezone types",
+      body:
+        "## Problem\nREADME's timezone-reflection limitation names `sqlalchemy_cubrid.TIMESTAMPTZ` and the related timezone types. " +
+        "These classes live in `sqlalchemy_cubrid.types`, but the package root does not export them.",
+      labels: ["documentation", "priority: low", "size: S", "status: in progress"],
+      author: "maintainer",
+    };
+    const prs: RacePRCandidate[] = [
+      {
+        number: 980, title: "chore(types)!: remove the deprecated display_width and values type arguments",
+        body: "Removes the deprecated display_width and values type arguments. Reflected types no longer accept them.",
+        author: "us", createdAt: "2026-10-18T00:00:00Z", url: "https://github.com/cubrid-lab/sqlalchemy-cubrid/pull/980",
+      },
+      {
+        number: 910, title: "chore(main): release 1.11.2",
+        body: "Release 1.11.2. See the changelog for the full list of changes in this release.",
+        author: "maintainer", createdAt: "2026-10-10T00:00:00Z", url: "https://github.com/cubrid-lab/sqlalchemy-cubrid/pull/910",
+      },
+    ];
+    const result = await racecheckIssue("cubrid-lab", "sqlalchemy-cubrid", 882, depsFor(issue, prs));
+    assert.notEqual(result.verdict, "RACE", `matches: ${result.matches.map((m) => m.evidence).join(" | ")}`);
+    assert.ok(result.matches.every((m) => m.verdict === "SUSPECT"));
   });
 });
 
