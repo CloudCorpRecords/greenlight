@@ -41,6 +41,7 @@ import {
   DEFAULT_SCAN_MAX_TIME_SEC,
 } from "./github.js";
 import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
+import { racecheckIssue } from "./racecheck.js";
 import { CLAIM_MARKER } from "./protocol.js";
 import { llmEnabled, llmModelId } from "./llm-claims.js";
 import type { LlmLayerStatus, PolicySourceProvenance } from "./types.js";
@@ -546,6 +547,41 @@ async function cmdXray(repoRef: string, args: string[]): Promise<void> {
     }
     if (r.flags.length > 0) console.log(`  flags: ${r.flags.join(", ")}`);
   }
+}
+
+async function cmdRacecheck(repoRef: string, issueArg: string | undefined, args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  // Two forms: `racecheck owner/repo 17465` and `racecheck owner/repo#17465`.
+  let number = issueArg ? Number(issueArg.replace(/^#/, "")) : NaN;
+  let ref = repoRef;
+  const hash = /#(\d+)$/.exec(repoRef);
+  if ((!Number.isInteger(number) || number <= 0) && hash) {
+    number = Number(hash[1]);
+    ref = repoRef.slice(0, hash.index);
+  }
+  if (!Number.isInteger(number) || number <= 0) {
+    console.error("Error: racecheck needs an issue number, e.g. greenlight racecheck sveltejs/kit 17465");
+    process.exitCode = 1;
+    return;
+  }
+  const { owner, repo } = parseRepoRef(ref);
+  const result = await racecheckIssue(owner, repo, number);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+    if (result.verdict === "RACE") process.exitCode = 1;
+    return;
+  }
+  console.log(`Keyword race check for ${owner}/${repo}#${number}: ${result.verdict} (${result.apiCalls} API calls)`);
+  if (result.title) console.log(`  "${result.title}"`);
+  const kw = result.keywords;
+  console.log(
+    `  keywords: rare [${kw.rare.join(", ") || "none"}]; terms [${kw.terms.join(", ") || "none"}]; phrases [${kw.phrases.join(" | ") || "none"}]`
+  );
+  for (const reason of result.reasons) console.log(`  - ${reason}`);
+  for (const m of result.matches) {
+    console.log(`  [${m.verdict}] ${m.evidence}`);
+  }
+  if (result.verdict === "RACE") process.exitCode = 1;
 }
 
 /**
@@ -1742,6 +1778,7 @@ async function main(): Promise<void> {
     if (command === "status" && target) return await cmdStatus(target, args.includes("--json"));
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "xray" && target) return await cmdXray(target, args);
+    if (command === "racecheck" && target) return await cmdRacecheck(target, positional[2], args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"), args);
     if (command === "wave") return await cmdWave(args);
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));

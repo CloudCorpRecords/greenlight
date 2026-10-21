@@ -13,6 +13,7 @@ import {
 } from "./github.js";
 import { scoreIssue } from "./verdict.js";
 import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
+import { racecheckIssue } from "./racecheck.js";
 import { fetchFrictionSummary } from "./friction.js";
 import { computeIssueStatus, checkIssueWithProtocol } from "./protocol-fetch.js";
 import {
@@ -179,6 +180,25 @@ server.tool(
 );
 
 server.tool(
+  "racecheck_issue",
+  "Keyword race check for one issue: find open PRs that fix the same problem WITHOUT ever linking the issue, which link-based checks (claims, timelines, X-Ray) cannot see. Extracts the issue's significant problem keywords (filenames like $types.d.ts, identifiers, distinctive terms, quoted phrases), searches and scans the repo's open PRs for overlap, and returns RACE / SUSPECT / CLEAR with per-PR evidence (number, title, author, created date, matched keywords). Field case: sveltejs/kit issue #17465 was raced by PR #17453, which never mentioned the issue. Call this before writing code for an issue that X-Ray calls clear.",
+  {
+    repo: z.string().describe("owner/repo, e.g. sveltejs/kit"),
+    issue: z.number().describe("Issue number, e.g. 17465"),
+  },
+  async ({ repo, issue }) => {
+    try {
+      const m = /^([^/]+)\/([^/]+)$/.exec(repo.trim());
+      if (!m) return text({ error: `Expected owner/repo, got: ${repo}` });
+      const result = await racecheckIssue(m[1], m[2], Math.trunc(issue));
+      return text(result);
+    } catch (err) {
+      return text({ error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+);
+
+server.tool(
   "repo_friction",
   "Friction score 0-100 for a repo (100 = easiest to land an outside PR). Based on detected contribution gates and computed outcome signals.",
   {
@@ -261,7 +281,7 @@ server.tool(
   "Release-readiness check for a shipped release: confirms the GitHub release exists, the npm package version is live, the MCP Registry record is active, and the GHCR image tag is published, returning a GO / NO-GO verdict per surface. Agent-callable surface of `greenlight shipcheck`.",
   {
     repo: z.string().describe("owner/repo of the release."),
-    version: z.string().describe("Release version without the v prefix, e.g. 0.19.0."),
+    version: z.string().describe("Release version without the v prefix, e.g. 0.20.0."),
     npm_package: z.string().optional().describe("npm package name; defaults from package.json, then the API."),
     mcp_name: z.string().optional().describe("MCP registry server name; defaults from server.json, then the API."),
   },

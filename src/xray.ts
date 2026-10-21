@@ -37,6 +37,12 @@
  * Closed/merged PRs are evidence, never blockers. Every linked PR is
  * reported with number, state, link strength, discovery path (via),
  * author, and URL, so a human can audit the verdict in seconds.
+ *
+ * v0.20.0: GO/RISKY outcomes also pass through the keyword race check
+ * (racecheck.ts). A competing PR that never links the issue is
+ * invisible to every rule above (sveltejs/kit #17453 vs issue #17465);
+ * a RACE result demotes the issue to TAKEN with the flag
+ * "keyword-race", a SUSPECT result demotes GO to RISKY.
  */
 import {
   apiCallsUsed,
@@ -48,6 +54,7 @@ import {
 } from "./github.js";
 import { isClosingPR } from "./linkstrength.js";
 import { detectClaims, strongClaimants } from "./claims.js";
+import { racecheckIssue, applyRaceDemotion, type RacecheckResult } from "./racecheck.js";
 
 export type XrayVerdict = "GO" | "RISKY" | "TAKEN" | "ERROR";
 
@@ -82,6 +89,12 @@ export interface XrayResult {
   flags: string[];
   linkedPRs: XrayLinkedPR[];
   claimFlags: XrayClaimFlag[];
+  /**
+   * v0.20.0: the keyword race check result, present when the verdict
+   * was GO or RISKY and racecheck ran (link-based evidence already
+   * settled TAKEN verdicts without it).
+   */
+  racecheck?: RacecheckResult;
   deepVerified: true;
   /** API calls consumed by this x-ray (measured, for budget honesty). */
   apiCalls: number;
@@ -168,6 +181,33 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
     apiCalls: apiCallsUsed() - callsBefore,
   });
 
+  // v0.20.0: keyword race check. Link-based evidence above settles
+  // TAKEN verdicts on its own; for GO/RISKY outcomes, an open PR that
+  // fixes the same problem WITHOUT ever linking the issue is still a
+  // lost race (sveltejs/kit #17465 -> PR #17453, which our #17489 died
+  // to). Racecheck only ever demotes; failures degrade to the x-ray
+  // verdict unchanged.
+  const finishWithRace = async (
+    verdict: XrayVerdict,
+    claimFlags: XrayClaimFlag[] = []
+  ): Promise<XrayResult> => {
+    const base = done(verdict, claimFlags);
+    if (verdict !== "GO" && verdict !== "RISKY") return base;
+    try {
+      const rc = await racecheckIssue(owner, repo, number);
+      base.racecheck = rc;
+      const holder = { verdict: base.verdict as string, reasons: base.reasons, flags: base.flags };
+      applyRaceDemotion(holder, rc);
+      base.verdict = holder.verdict as XrayVerdict;
+      base.reasons = holder.reasons;
+      base.flags = holder.flags;
+      base.apiCalls = apiCallsUsed() - callsBefore;
+    } catch {
+      // Racecheck is best-effort; the x-ray verdict stands.
+    }
+    return base;
+  };
+
   if (openClosing.length > 0) {
     const first = openClosing[0];
     reasons.push(`open PR #${first.number} closes this issue (${first.linkStrength}, via ${first.via ?? "unknown"})`);
@@ -231,7 +271,7 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
     reasons.push(
       `open PR(s) only mention this issue (no closing link): ${openMention.map(xrefLabel).join("; ")}`
     );
-    return done("RISKY", claimFlags);
+    return finishWithRace("RISKY", claimFlags);
   }
 
   if (freshStrong === 1) {
@@ -240,7 +280,7 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
       `claimed by ${c.author} ${c.ageDays} day(s) ago ("${c.phrase}"), no PR in flight`
     );
     flags.push("claimed");
-    return done("RISKY", claimFlags);
+    return finishWithRace("RISKY", claimFlags);
   }
 
   const closedOrMerged = xrayPRs.filter((p) => p.state !== "open");
@@ -251,7 +291,7 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
   } else {
     reasons.push("no linked PRs in the issue timeline or search; no comment claims");
   }
-  return done("GO", claimFlags);
+  return finishWithRace("GO", claimFlags);
 }
 
 /** X-Ray a list of issues serially (rate-limit discipline over speed). */

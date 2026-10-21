@@ -67,6 +67,16 @@ export const COMMANDS: CommandHelp[] = [
     ],
   },
   {
+    name: "racecheck",
+    usage: "greenlight racecheck <owner/repo> <issue-number> [--json]",
+    description: "Keyword race check: find open PRs fixing the same problem as an issue WITHOUT ever linking it (the sveltejs/kit #17465 vs PR #17453 case). Extracts the issue's significant problem keywords (filenames, identifiers, distinctive terms, quoted phrases), searches and scans the repo's open PRs for overlap, and answers RACE / SUSPECT / CLEAR with the matched keywords quoted per PR. Exits 1 on RACE. scan --deep and xray consult it automatically.",
+    flags: [
+      "--json (machine-readable output)",
+      "API budget: 1 issue read + up to 3 search calls + the open-PR list (cached, 1 call per 100 PRs, capped at 2 pages) + at most 5 changed-file reads, only when the issue names files",
+    ],
+    examples: ["greenlight racecheck sveltejs/kit 17465"],
+  },
+  {
     name: "friction",
     usage: "greenlight friction <owner/repo> [--json] [--no-behavioral] [--lite]",
     description: "How hard it is to land an outside PR here, 0-100 (100 = easiest). Now also catches behavioral gates: maintainers who reject AI-built PRs in practice.",
@@ -481,6 +491,7 @@ export const NEEDS_TARGET: Record<string, string> = {
   status: "an issue URL, e.g. greenlight status https://github.com/owner/repo/issues/123",
   scan: "a repo, e.g. greenlight scan facebook/react",
   xray: "a repo, e.g. greenlight xray usebruno/bruno --issues 8149,9319",
+  racecheck: "a repo and an issue number, e.g. greenlight racecheck sveltejs/kit 17465",
   friction: "a repo, e.g. greenlight friction vercel/next.js",
   ci: "a PR URL, e.g. greenlight ci https://github.com/owner/repo/pull/456",
   "ci-prep": "a local repo path, e.g. greenlight ci-prep ~/work/bruno",
