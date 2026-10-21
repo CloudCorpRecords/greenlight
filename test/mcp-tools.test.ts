@@ -1,5 +1,5 @@
 /**
- * End-to-end MCP tests: the stdio server lists 32 tools
+ * End-to-end MCP tests: the stdio server lists 33 tools
  * (including scout_campaign, my_claims, sync_campaign, campaign_portfolio,
  * wave_queue) and the new tools answer.
  * Spawns the built server (dist/cli.js mcp) and speaks JSON-RPC over
@@ -83,11 +83,11 @@ async function listTools(): Promise<{ proc: ChildProcess; tools: RpcResult["tool
 }
 
 describe("mcp tools (v0.18.0)", () => {
-  it("lists 32 tools including the claim-api client trio, the verify/shipcheck/passport trio, and bounty_check", async () => {
+  it("lists 33 tools including the claim-api client trio, the verify/shipcheck/passport trio, and bounty_check", async () => {
     const { proc, tools } = await listTools();
     try {
       const names = tools.map((t) => t.name);
-      assert.equal(names.length, 32, `expected 32 tools, got ${names.length}: ${names.join(",")}`);
+      assert.equal(names.length, 33, `expected 33 tools, got ${names.length}: ${names.join(",")}`);
       assert.ok(names.includes("verify"), "verify listed");
       assert.ok(names.includes("shipcheck"), "shipcheck listed");
       assert.ok(names.includes("passport"), "passport listed");
@@ -102,6 +102,7 @@ describe("mcp tools (v0.18.0)", () => {
       assert.ok(names.includes("claim_via_api"), "claim_via_api listed");
       assert.ok(names.includes("heartbeat_via_api"), "heartbeat_via_api listed");
       assert.ok(names.includes("xray_issues"), "xray_issues listed");
+      assert.ok(names.includes("racecheck_issue"), "racecheck_issue listed");
       assert.ok(names.includes("ci_prep"), "ci_prep listed");
       assert.ok(names.includes("pr_radar"), "pr_radar listed");
       assert.ok(names.includes("pr_brief"), "pr_brief listed");
