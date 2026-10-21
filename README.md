@@ -25,11 +25,11 @@ Three layers, from decide to solve to coordinate:
 
 | Layer | Question it answers | Flagship commands |
 |---|---|---|
-| **Decide** | Is this issue mine to take? Is this repo worth my time? | `check`, `scan`, `friction`, `xray`, `wave`, `preflight` |
+| **Decide** | Is this issue mine to take? Is this repo worth my time? | `check`, `scan`, `friction`, `xray`, `racecheck`, `wave`, `preflight` |
 | **Solve** | Will my PR pass? What broke? What do I do next? | `ci-prep`, `ci`, `review`, `brief`, `verify`, `autopilot`, `babysit`, `evidence` |
 | **Coordinate** | Who is working on what, and who resolves conflicts? | `claim` (+ Claim Protocol), `guard`, `radar`, `digest`, `passport` |
 
-* **Decide.** `check` reads an issue, its comments, linked and mentioned PRs (timeline plus search plus comment references), and the repo's rules, then answers in plain words: GO, RISKY, TAKEN, GATED, or STALE. `scan` ranks a repo's open issues so you pick a winnable one first. `friction` scores a repo 0 to 100 on how hard it really is to get a PR merged, with every gate quoting the file its evidence came from. `xray` (Timeline X-Ray) deep-verifies candidates against their issue timelines before you write a line, catching hidden in-flight PRs including reporter-owned fix PRs; `scan --deep` demotes anything taken before it shows you the list. `wave` turns the Agent Policy Index into a build queue in one command: winnable open repos, x-rayed starter issues, behavioral gates excluded.
+* **Decide.** `check` reads an issue, its comments, linked and mentioned PRs (timeline plus search plus comment references), and the repo's rules, then answers in plain words: GO, RISKY, TAKEN, GATED, or STALE. `scan` ranks a repo's open issues so you pick a winnable one first. `friction` scores a repo 0 to 100 on how hard it really is to get a PR merged, with every gate quoting the file its evidence came from. `xray` (Timeline X-Ray) deep-verifies candidates against their issue timelines before you write a line, catching hidden in-flight PRs including reporter-owned fix PRs; `scan --deep` demotes anything taken before it shows you the list. `racecheck` (Keyword Race Check) catches the race X-Ray cannot see: an open PR fixing the same problem that never links the issue, found by the issue's problem keywords (filenames, identifiers, distinctive terms) instead of links, with RACE / SUSPECT / CLEAR verdicts and quoted keyword evidence; `scan --deep` and `xray` consult it automatically. `wave` turns the Agent Policy Index into a build queue in one command: winnable open repos, x-rayed starter issues, behavioral gates excluded.
 * **Solve.** `ci-prep` runs a repo's own pull-request checks locally before you push (tests, lint, typecheck, plus conventions like changesets, commit format, DCO), so avoidable CI failures never appear in front of a maintainer. `ci` triages red PRs into pre-existing vs likely-yours vs external-blocker against base-branch history. `review` classifies every review thread as likely-real, likely-noise, or needs-decision and drafts your replies. `verify` reports the honest red-green test delta of your change. `autopilot` verifies bot findings against the code at head and fixes the mechanical items (DCO surgery, conflict re-merges, formatting) itself. `brief` assembles a verified one-screen brief for any PR: change shape by area and risk, CI triaged against base-branch history, findings classified real vs false-positive with evidence, test evidence present or explicitly marked absent, merge blockers, and a one-line look-at-this-first. `babysit` watches your open PRs and reports one prioritized action list.
 * **Coordinate.** `claim` posts a protocol claim (expiring lease, public queue, heartbeats; full spec in [`protocol/SPEC.md`](protocol/SPEC.md)), with a hosted app client option via `--via-api`. `guard` analyzes an incoming PR for a maintainer: competing fix, prior claims, missing artifacts, first-time contributor. `digest` reports a repo's PR races, claimed-by-other conflicts, stale claims, and assignment-gate conflicts. `radar` scans the whole open-PR queue and clusters competing or duplicate PRs with evidence per cluster and a suggested keep, labeled a heuristic, never a verdict. `passport` renders a contributor's merged work plus claim record.
 
@@ -38,12 +38,12 @@ Every verdict and every report cites its evidence: the quoted policy line, the c
 ## Who it is for
 
 * **Contributors (human).** Run `check` before you spend an evening on an issue. Run `scan` when you are picking what to work on. Run `ci-prep` before you push.
-* **AI agents and coding tools.** One command (`init --agent claude-code`, also cursor, copilot, windsurf, cline) installs the MCP config plus the one behavior rule: check Greenlight before opening a PR. Agents waste the most tokens fixing already-taken issues; 32 MCP tools make the whole engine available mid-run.
+* **AI agents and coding tools.** One command (`init --agent claude-code`, also cursor, copilot, windsurf, cline) installs the MCP config plus the one behavior rule: check Greenlight before opening a PR. Agents waste the most tokens fixing already-taken issues; 33 MCP tools make the whole engine available mid-run.
 * **Maintainers.** `guard` on each incoming PR, `radar` across the whole open queue, `digest` for the weekly triage, and the roadmap below for the control room: stale-claim sweeps, policy enforcement, AI-PR filtering.
 
 ## Proof, stated plainly
 
-* 1079 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
+* 1101 tests, all passing, including a fixture corpus pinned to real campaign cases (a taken issue, a weak PR mention, claim-first gates, scoped claims, half-shipped issues, stale claims, paused-PR workflows).
 * Dogfooded on real campaigns: the toolkit has authored 80+ pull requests across dozens of public open-source repos. Every feature exists because a real contribution died without it.
 * Distributed everywhere the audience already looks: npm (`@reneturcios/greenlight`), the MCP Registry, and GHCR (`ghcr.io/cloudcorprecords/greenlight`), plus Docker and direct MCP stdio.
 * Two living datasets ship with it: the Contribution Friction Index (`data/friction-index.json`) and the Agent Policy Index (505 repos, 127 gated, 19 agent bans, published at `docs/policy.html`), both built from real campaign field work, not scraped guesses.
@@ -103,7 +103,7 @@ One command sets it up:
 npx @reneturcios/greenlight init --agent claude-code
 ```
 
-(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 32 tools (see the list below).
+(also `cursor`, `copilot`, `windsurf`, `cline`; repeat `--agent` for more than one). Init copies the MCP config into your project and installs the workflow instruction snippet that teaches your agent the one behavior rule: **check Greenlight before it opens a PR.** Prefer doing it by hand? The [`integrations/`](integrations/README.md) drop-in pack has ready-to-copy MCP configs plus the same snippets. Then verify with a "list your MCP tools" prompt; the greenlight server carries 33 tools (see the list below).
 
 ## CLI
 
@@ -132,6 +132,10 @@ npx @reneturcios/greenlight scan PrefectHQ/fastmcp
 # Deep-verify candidates against their timelines first (catches hidden in-flight PRs)
 npx @reneturcios/greenlight xray usebruno/bruno --issues 8149,9319
 npx @reneturcios/greenlight scan usebruno/bruno --deep
+
+# Keyword race check: is an open PR already fixing this issue without
+# ever linking it? (link-based checks cannot see it; exit 1 on RACE)
+npx @reneturcios/greenlight racecheck sveltejs/kit 17465
 
 # Scans stop on a wall-time budget (default 600s; override with --max-time <seconds>).
 # A scan that hits the budget returns the results gathered so far, labeled partial:
@@ -290,11 +294,12 @@ The same engine is exposed over stdio for coding agents (Claude, Cursor, Cline).
 }
 ```
 
-Tools (32):
+Tools (33):
 
 * `check_issue` - verdict for one issue URL
 * `scan_repo` - rank a repo's open issues, GO first (label-tagged starter issues, falling back to recent open unassigned issues; `deep: true` timeline-x-rays the candidates first)
 * `xray_issues` - Timeline X-Ray: deep-verify candidate issues against their timelines (hidden in-flight PRs, reporter-owned fix PRs, comment claims); GO / RISKY / TAKEN per issue with PR evidence
+* `racecheck_issue` - Keyword Race Check for one issue: find open PRs fixing the same problem without ever linking it (the sveltejs/kit #17465 vs PR #17453 case); RACE / SUSPECT / CLEAR with matched keywords quoted per PR
 * `repo_friction` - friction score for a repo
 * `wave_queue` - build queue in one call: filters the Agent Policy Index for winnable open repos, x-rays starter issues (CLEAR / RISKY / TAKEN), excludes behavioral gates, skips repos where you already have an open PR
 * `verify` - honest base-vs-head test delta for a checked-out repo (red-first, never raw counts)

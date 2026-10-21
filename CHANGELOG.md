@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.20.0 - 2026-10-20
+
+- **Keyword Race Check (`racecheck`).** New CLI command `greenlight racecheck <owner/repo> <issue-number> [--json]` and new MCP tool `racecheck_issue` (33 tools). Born from the sveltejs/kit field loss: our PR #17489 for issue #17465 was closed in favor of PR #17453 (opened two days earlier), which fixed the same problem but never mentioned the issue, so every link-based check (claims, timeline cross-references, Timeline X-Ray) saw a clean race. Racecheck extracts an issue's significant problem keywords (filenames like $types.d.ts, CamelCase/snake_case identifiers, distinctive title terms, quoted phrases; stopwords and generic words like fix/bug/error are filtered out), then searches the repo's open PRs by keyword and scans the open-PR list for overlap. Verdicts: RACE (>= 2 significant matches, or 1 rare term, or 1 phrase, or a shared changed file), SUSPECT (one weak match), CLEAR. Every non-CLEAR verdict quotes PR number, title, author, created date, and the exact matched keywords. `scan --deep` / the xray path consult racecheck automatically: a RACE demotes an issue from CLEAR to TAKEN with the flag `keyword-race`, a SUSPECT demotes GO to RISKY. False-positive discipline is delimiter-aware (oauth2 is one token, never oauth + 2; pure numbers are never keywords) and pinned by regression fixtures, including the Svelte case itself.
+
 ## v0.18.0 - 2026-10-19
 
 Capability items from the iteration audit. 6 new tests (1045 total, all passing), 32 MCP tools.
