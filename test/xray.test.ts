@@ -390,6 +390,31 @@ describe("bruno field regression (2026-10-18)", () => {
     const r = await xrayIssue("acme", "wb6", 6927);
     assert.equal(r.verdict, "GO");
   });
+
+  // v0.21.0 hardening pin: the same two issues flipped to TAKEN in the
+  // field solely because our own PRs (#9569 for #7227, #9570 for #6927)
+  // cross-reference them. Same fixture, one added cross-referencing
+  // closing PR: GO must become TAKEN, so the flip is attributable to
+  // the cross-reference alone.
+  it("#7227 flips to TAKEN when our own PR #9569 cross-references it", async () => {
+    bruno("wb5x", 7227, {
+      author: "mlkauppila",
+      timeline: [xrefEvent("wb5x", 9569)],
+      prs: { 9569: prDetail("wb5x", 9569, { body: "Fixes #7227", author: "CloudCorpRecords" }) },
+    });
+    const r = await xrayIssue("acme", "wb5x", 7227);
+    assert.equal(r.verdict, "TAKEN");
+  });
+
+  it("#6927 flips to TAKEN when our own PR #9570 cross-references it", async () => {
+    bruno("wb6x", 6927, {
+      author: "rreyn-bruno",
+      timeline: [xrefEvent("wb6x", 9570)],
+      prs: { 9570: prDetail("wb6x", 9570, { body: "Fixes #6927", author: "CloudCorpRecords" }) },
+    });
+    const r = await xrayIssue("acme", "wb6x", 6927);
+    assert.equal(r.verdict, "TAKEN");
+  });
 });
 
 describe("applyXrayDemotion", () => {
