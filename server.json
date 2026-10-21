@@ -6,13 +6,13 @@
     "url": "https://github.com/CloudCorpRecords/greenlight",
     "source": "github"
   },
-  "version": "0.19.0",
+  "version": "0.20.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@reneturcios/greenlight",
-      "version": "0.19.0",
+      "version": "0.20.0",
       "runtimeHint": "npx",
       "packageArguments": [
         {
@@ -26,7 +26,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/cloudcorprecords/greenlight:0.19.0",
+      "identifier": "ghcr.io/cloudcorprecords/greenlight:0.20.0",
       "runtimeHint": "docker",
       "runtimeArguments": [
         {
