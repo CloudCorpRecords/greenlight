@@ -581,6 +581,9 @@ async function cmdRacecheck(repoRef: string, issueArg: string | undefined, args:
   for (const m of result.matches) {
     console.log(`  [${m.verdict}] ${m.evidence}`);
   }
+  for (const m of result.ignoredMatches ?? []) {
+    console.log(`  [ignored] ${m.evidence} (${m.ignoreReason})`);
+  }
   if (result.verdict === "RACE") process.exitCode = 1;
 }
 

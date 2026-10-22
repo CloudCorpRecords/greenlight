@@ -25,6 +25,12 @@ import {
   searchSeeds,
   suppressByDocumentFrequency,
   stripUrls,
+  isDependencyBotAuthor,
+  isDependencyBotBranch,
+  isBotShapedDependencyCandidate,
+  isDependencyFile,
+  isDependencyOnlyFileList,
+  isDependencyUpdateBotPR,
   type RaceIssue,
   type RacePRCandidate,
 } from "../src/racecheck.js";
@@ -585,3 +591,183 @@ describe("xray integration: the keyword race demotes a link-clean issue", () => 
     assert.equal(result.racecheck?.matches[0].number, 17453);
   });
 });
+
+describe("v0.21.1 dependency-bot exclusion (sveltejs/kit PR #17481 regression)", () => {
+  // Modeled on the verified live case: PR sveltejs/kit#17481,
+  // "chore(deps): update all non-major dependencies" by renovate[bot]
+  // on branch renovate/all-minor-patch, files package.json and
+  // pnpm-lock.yaml only. Its body is a dependency table plus the
+  // upstream release notes of the bumped packages; those notes share
+  // enough problem vocabulary with issue #17465 (root, deleted,
+  // regenerated, sync) to clear the RACE-by-terms bar even though the
+  // PR cannot be implementing the issue. Verified against the live
+  // API on 2026-10-22: the real body scores RACE against the real
+  // issue with the pre-fix scorer.
+  const RENOVATE_PR: RacePRCandidate = {
+    number: 17481,
+    title: "chore(deps): update all non-major dependencies",
+    body:
+      "This PR contains the following updates:\n\n" +
+      "| Package | Change | Age | Confidence |\n|---|---|---|---|\n" +
+      "| [oxfmt](https://oxc.rs) | `^0.73.0` -> `^0.74.0` | | |\n" +
+      "| [pnpm](https://pnpm.io) | `12.11.2` -> `12.14.0` | | |\n\n" +
+      "---\n\n### Release Notes\n\n" +
+      "<details><summary>oxc-project/oxc (oxfmt)</summary>\n\n" +
+      "Bug Fixes\n" +
+      "- formatter: deleted cache entries are regenerated on every sync pass\n" +
+      "- formatter: root config discovery keeps its previous behavior\n" +
+      "</details>",
+    author: "renovate[bot]",
+    createdAt: "2026-10-19T00:00:00Z",
+    url: "https://github.com/sveltejs/kit/pull/17481",
+    headRef: "renovate/all-minor-patch",
+  } as RacePRCandidate;
+  const DEP_ONLY_FILES = ["package.json", "pnpm-lock.yaml"];
+
+  it("the renovate fixture text-matches at RACE level on its own (precondition)", () => {
+    const s = scoreCandidate(extractKeywords(SVELTE_ISSUE), RENOVATE_PR);
+    assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+  });
+
+  it("a renovate dependency-only PR does not produce RACE and is reported as ignored", async () => {
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [RENOVATE_PR], { 17481: DEP_ONLY_FILES })
+    );
+    assert.equal(result.verdict, "CLEAR", `matches: ${result.matches.map((m) => m.evidence).join(" | ")}`);
+    assert.equal(result.matches.length, 0);
+    assert.equal(result.ignoredMatches?.length, 1, `ignored: ${JSON.stringify(result.ignoredMatches)}`);
+    assert.equal(result.ignoredMatches?.[0].number, 17481);
+    assert.equal(result.ignoredMatches?.[0].author, "renovate[bot]");
+    assert.ok(
+      (result.ignoredMatches?.[0].ignoreReason ?? "").includes("dependency"),
+      result.ignoredMatches?.[0].ignoreReason
+    );
+    assert.ok(result.reasons.join(" ").includes("17481"), `reasons: ${result.reasons.join(" | ")}`);
+  });
+
+  it("a renovate PR that also touches a source file still counts", async () => {
+    const files = [...DEP_ONLY_FILES, "packages/kit/src/core/sync/write_types/index.js"];
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [RENOVATE_PR], { 17481: files })
+    );
+    assert.equal(result.verdict, "RACE");
+    assert.equal(result.matches[0].number, 17481);
+    assert.equal(result.ignoredMatches?.length ?? 0, 0);
+  });
+
+  it("a human PR with the same title, body and dep-only files still counts", async () => {
+    const human: RacePRCandidate = {
+      ...RENOVATE_PR,
+      author: "human-dev",
+      headRef: "chore/deps-refresh",
+    } as RacePRCandidate;
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [human], { 17481: DEP_ONLY_FILES })
+    );
+    assert.equal(result.verdict, "RACE");
+    assert.equal(result.matches[0].number, 17481);
+    assert.equal(result.ignoredMatches?.length ?? 0, 0);
+  });
+
+  it("a dependabot dependency-only PR is ignored the same way", async () => {
+    const dependabot: RacePRCandidate = {
+      ...RENOVATE_PR,
+      number: 17482,
+      title: "chore(deps): bump lodash from 4.17.20 to 4.17.21",
+      author: "dependabot[bot]",
+      headRef: "dependabot/npm_and_yarn/lodash-4.17.21",
+      url: "https://github.com/sveltejs/kit/pull/17482",
+    } as RacePRCandidate;
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [dependabot], { 17482: ["package.json", "package-lock.json"] })
+    );
+    assert.equal(result.verdict, "CLEAR");
+    assert.equal(result.ignoredMatches?.length, 1);
+    assert.equal(result.ignoredMatches?.[0].number, 17482);
+  });
+
+  it("a renovate/* branch alone marks the candidate as bot-shaped", async () => {
+    const branchOnly: RacePRCandidate = {
+      ...RENOVATE_PR,
+      author: "octocat",
+    } as RacePRCandidate;
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [branchOnly], { 17481: DEP_ONLY_FILES })
+    );
+    assert.equal(result.verdict, "CLEAR");
+    assert.equal(result.ignoredMatches?.length, 1);
+  });
+
+  it("a bot-shaped PR whose files cannot be shown dep-only still counts (fail open)", async () => {
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [RENOVATE_PR], {})
+    );
+    assert.equal(result.verdict, "RACE");
+    assert.equal(result.matches[0].number, 17481);
+    assert.equal(result.ignoredMatches?.length ?? 0, 0);
+  });
+
+  it("helper predicates: bot shape, dependency files, and the combined exclusion", () => {
+    assert.equal(isDependencyBotAuthor("renovate[bot]"), true);
+    assert.equal(isDependencyBotAuthor("dependabot[bot]"), true);
+    assert.equal(isDependencyBotAuthor("dependabot-preview[bot]"), true);
+    assert.equal(isDependencyBotAuthor("my-renovate-fork[bot]"), true);
+    assert.equal(isDependencyBotAuthor("github-actions[bot]"), false);
+    assert.equal(isDependencyBotAuthor("racer"), false);
+    assert.equal(isDependencyBotBranch("renovate/all-minor-patch"), true);
+    assert.equal(isDependencyBotBranch("dependabot/npm_and_yarn/lodash-4.17.21"), true);
+    assert.equal(isDependencyBotBranch("feat/renovate-ui"), false);
+    assert.equal(isDependencyBotBranch(undefined), false);
+    assert.equal(isBotShapedDependencyCandidate({ author: "x", headRef: "renovate/foo" }), true);
+    assert.equal(isBotShapedDependencyCandidate({ author: "x" }), false);
+
+    for (const f of [
+      "package.json", "packages/kit/package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml",
+      "yarn.lock", "bun.lockb", "Cargo.toml", "Cargo.lock", "go.mod", "go.sum",
+      "requirements.txt", "requirements-dev.txt", "requirements/base.txt",
+      "Pipfile.lock", "poetry.lock", "composer.json", "Gemfile.lock", "pom.xml",
+    ]) {
+      assert.equal(isDependencyFile(f), true, f);
+    }
+    for (const f of [
+      "src/index.ts", "packages/kit/src/routes/+page.svelte", "README.md",
+      ".github/workflows/ci.yml", "vite.config.ts", "svelte.config.js",
+    ]) {
+      assert.equal(isDependencyFile(f), false, f);
+    }
+    assert.equal(isDependencyOnlyFileList(["package.json", "pnpm-lock.yaml"]), true);
+    assert.equal(isDependencyOnlyFileList(["package.json", "src/index.ts"]), false);
+    assert.equal(isDependencyOnlyFileList([]), false);
+
+    assert.equal(
+      isDependencyUpdateBotPR({ author: "renovate[bot]", headRef: "renovate/x" }, ["package.json"]),
+      true
+    );
+    assert.equal(
+      isDependencyUpdateBotPR({ author: "renovate[bot]" }, ["package.json", "src/a.ts"]),
+      false
+    );
+    assert.equal(
+      isDependencyUpdateBotPR({ author: "human" }, ["package.json"]),
+      false
+    );
+  });
+
+  it("with a genuine racer also present, the verdict is RACE from the racer and the bot PR is only ignored", async () => {
+    const result = await racecheckIssue(
+      "sveltejs", "kit", 17465,
+      depsFor(SVELTE_ISSUE, [RENOVATE_PR, SVELTE_RACER], { 17481: DEP_ONLY_FILES })
+    );
+    assert.equal(result.verdict, "RACE");
+    assert.deepEqual(result.matches.map((m) => m.number), [17453]);
+    assert.equal(result.ignoredMatches?.length, 1);
+    assert.equal(result.ignoredMatches?.[0].number, 17481);
+  });
+});
+

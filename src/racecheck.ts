@@ -57,6 +57,28 @@
  *     than ~25% of the repo's scanned open-PR bodies (and in at
  *     least 2 of them) is template boilerplate and is dropped
  *     before scoring.
+ *
+ * Dependency-bot exclusion (v0.21.1, from the residual v0.20.1 noise
+ * item): in the sveltejs/kit #17465 battery, PR #17481 ("chore(deps):
+ * update all non-major dependencies" by renovate[bot], branch
+ * renovate/all-minor-patch) scored RACE. Its 51k-char body is a
+ * dependency table plus the upstream release notes of the bumped
+ * packages, and those notes happen to share enough problem vocabulary
+ * with the issue (root, sync, trailing, output, empty, out: 6 term
+ * hits, 2 of them title terms) to clear the RACE-by-terms bar. But a
+ * dependency-update bot PR that changes only dependency manifests and
+ * lockfiles cannot be implementing a feature or bug fix, so it can
+ * never be a competitor. The pipeline therefore runs one extra pass
+ * after scoring: a text-matching candidate that is bot-shaped
+ * (dependency-bot author, or a renovate/* or dependabot/* branch)
+ * gets its changed files fetched, and when every changed file is a
+ * dependency manifest or lockfile the candidate is excluded from the
+ * verdict and reported in ignoredMatches with the reason, instead of
+ * driving RACE or SUSPECT. The check is deliberately narrow: it runs
+ * only for bot-shaped candidates (so the extra API calls stay
+ * bounded in huge queues), it never applies to human PRs, a bot PR
+ * that touches any non-dependency file still counts in full, and an
+ * unreadable or empty file list fails open (the candidate counts).
  */
 import { apiCallsUsed, apiGet, cacheGet, cacheSet } from "./github.js";
 
@@ -91,6 +113,8 @@ export interface RacePRCandidate {
   author: string;
   createdAt: string;
   url: string;
+  /** Head branch name (pulls API only; search results carry none). */
+  headRef?: string;
 }
 
 export interface RaceMatch {
@@ -109,6 +133,17 @@ export interface RaceMatch {
   evidence: string;
 }
 
+/**
+ * A text-matching candidate excluded from the verdict because it is a
+ * dependency-update bot PR (v0.21.1): reported for transparency, never
+ * a RACE or SUSPECT driver. Carries the full match shape plus why it
+ * was ignored and the changed-file list that proved it dep-only.
+ */
+export interface IgnoredMatch extends RaceMatch {
+  ignoreReason: string;
+  changedFiles: string[];
+}
+
 export interface RacecheckResult {
   owner: string;
   repo: string;
@@ -118,6 +153,8 @@ export interface RacecheckResult {
   verdict: RaceVerdict;
   keywords: KeywordSet;
   matches: RaceMatch[];
+  /** Dependency-bot PRs excluded from the verdict (v0.21.1). */
+  ignoredMatches: IgnoredMatch[];
   reasons: string[];
   /** API calls consumed (measured, for budget honesty). */
   apiCalls: number;
@@ -592,6 +629,104 @@ export function suppressByDocumentFrequency(
   };
 }
 
+/**
+ * Dependency-update bot detection (v0.21.1). A candidate is
+ * "bot-shaped" when its author is a known dependency bot login (or a
+ * similar [bot] login naming renovate or dependabot), or when its
+ * head branch lives under renovate/ or dependabot/. Bot shape alone
+ * never excludes anything: it only selects the candidates whose
+ * changed files are worth one extra fetch.
+ */
+const DEPENDENCY_BOT_LOGINS = new Set([
+  "renovate[bot]",
+  "dependabot[bot]",
+  "dependabot-preview[bot]",
+  "renovate-bot",
+  "dependabot",
+]);
+
+export function isDependencyBotAuthor(author: string): boolean {
+  const a = author.toLowerCase();
+  if (DEPENDENCY_BOT_LOGINS.has(a)) return true;
+  return a.endsWith("[bot]") && (a.includes("renovate") || a.includes("dependabot"));
+}
+
+export function isDependencyBotBranch(headRef?: string): boolean {
+  if (!headRef) return false;
+  const b = headRef.toLowerCase();
+  return (
+    b === "renovate" ||
+    b === "dependabot" ||
+    b.startsWith("renovate/") ||
+    b.startsWith("dependabot/")
+  );
+}
+
+export function isBotShapedDependencyCandidate(pr: {
+  author: string;
+  headRef?: string;
+}): boolean {
+  return isDependencyBotAuthor(pr.author) || isDependencyBotBranch(pr.headRef);
+}
+
+/**
+ * Dependency manifests and lockfiles, by basename: the complete set
+ * of files a dependency-update bot PR may touch while still being
+ * incapable of implementing an issue fix. Anything outside this set
+ * (source, tests, docs, workflows, config with logic) keeps the PR in
+ * the race.
+ */
+const DEPENDENCY_FILE_BASENAMES = new Set([
+  // JavaScript / TypeScript
+  "package.json", "package-lock.json", "npm-shrinkwrap.json",
+  "pnpm-lock.yaml", "pnpm-workspace.yaml", "yarn.lock",
+  "bun.lockb", "bun.lock", "deno.lock",
+  // Rust
+  "cargo.toml", "cargo.lock",
+  // Go
+  "go.mod", "go.sum",
+  // Python
+  "pipfile", "pipfile.lock", "poetry.lock", "uv.lock", "pdm.lock",
+  // PHP
+  "composer.json", "composer.lock",
+  // Ruby
+  "gemfile", "gemfile.lock",
+  // JVM
+  "pom.xml", "build.gradle", "build.gradle.kts", "gradle.lockfile",
+  // .NET
+  "packages.lock.json",
+]);
+
+export function isDependencyFile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  const base = lower.split("/").pop() ?? "";
+  if (DEPENDENCY_FILE_BASENAMES.has(base)) return true;
+  // Python requirements and constraints files: requirements.txt,
+  // requirements-dev.txt, and friends at any depth, plus any .txt
+  // inside a requirements/ directory (requirements/base.txt).
+  if (/^requirements[^/]*\.txt$/.test(base)) return true;
+  if (/^constraints[^/]*\.txt$/.test(base)) return true;
+  if (/(^|\/)requirements\/[^/]+\.txt$/.test(lower)) return true;
+  return false;
+}
+
+/**
+ * True only for a non-empty file list in which every file is a
+ * dependency manifest or lockfile. An empty list proves nothing (the
+ * fetch may have failed or been stubbed), so it never excludes.
+ */
+export function isDependencyOnlyFileList(files: string[]): boolean {
+  return files.length > 0 && files.every((f) => isDependencyFile(f));
+}
+
+/** The full exclusion predicate: bot-shaped AND provably dep-only. */
+export function isDependencyUpdateBotPR(
+  pr: { author: string; headRef?: string },
+  changedFiles: string[]
+): boolean {
+  return isBotShapedDependencyCandidate(pr) && isDependencyOnlyFileList(changedFiles);
+}
+
 function evidenceFor(pr: RacePRCandidate, score: CandidateScore): string {
   const parts: string[] = [];
   if (score.rareHits.length > 0) parts.push(`rare term(s): ${score.rareHits.join(", ")}`);
@@ -634,6 +769,7 @@ interface RawIssueItem {
   state?: unknown;
   created_at?: unknown;
   html_url?: unknown;
+  head?: { ref?: unknown };
 }
 
 function toCandidate(item: RawIssueItem): RacePRCandidate {
@@ -644,6 +780,7 @@ function toCandidate(item: RawIssueItem): RacePRCandidate {
     author: String(item.user?.login ?? "unknown"),
     createdAt: String(item.created_at ?? ""),
     url: String(item.html_url ?? ""),
+    headRef: typeof item.head?.ref === "string" ? item.head.ref : undefined,
   };
 }
 
@@ -747,6 +884,9 @@ async function defaultFetchFiles(owner: string, repo: string, prNumber: number):
  * list degrades to the other source; only an unreadable issue is an
  * ERROR. Changed files are fetched for at most MAX_FILE_FETCHES
  * text-matching candidates, and only when the issue names files.
+ * One further bounded fetch set: each bot-shaped scored candidate
+ * (dependency-bot author or branch) gets one files fetch for the
+ * v0.21.1 dep-only exclusion check.
  */
 export async function racecheckIssue(
   owner: string,
@@ -772,6 +912,7 @@ export async function racecheckIssue(
       verdict: "ERROR",
       keywords: { rare: [], terms: [], phrases: [], files: [] },
       matches: [],
+      ignoredMatches: [],
       reasons: [`racecheck issue fetch failed: ${err instanceof Error ? err.message : String(err)}`],
       apiCalls: apiCallsUsed() - callsBefore,
     };
@@ -779,9 +920,10 @@ export async function racecheckIssue(
 
   let keywords = extractKeywords(issue, { owner, repo });
   let suppressed: string[] = [];
+  let ignoredMatches: IgnoredMatch[] = [];
   const done = (verdict: RaceVerdict, matches: RaceMatch[], reasons: string[]): RacecheckResult => ({
     owner, repo, number, url, title: issue.title,
-    verdict, keywords, matches, reasons,
+    verdict, keywords, matches, ignoredMatches, reasons,
     apiCalls: apiCallsUsed() - callsBefore,
   });
 
@@ -795,7 +937,14 @@ export async function racecheckIssue(
   } catch { /* best-effort */ }
   try {
     for (const c of await listOpenPRs(owner, repo, limit)) {
-      if (!byNumber.has(c.number)) byNumber.set(c.number, c);
+      const existing = byNumber.get(c.number);
+      if (!existing) {
+        byNumber.set(c.number, c);
+      } else if (!existing.headRef && c.headRef) {
+        // Search results carry no head branch; the list copy does, and
+        // the branch is half of the dependency-bot shape test.
+        existing.headRef = c.headRef;
+      }
     }
   } catch { /* best-effort */ }
 
@@ -847,7 +996,41 @@ export async function racecheckIssue(
     }
   }
 
-  const matches = scored
+  // Dependency-bot exclusion pass (v0.21.1): a scored candidate that
+  // is bot-shaped gets its changed files fetched (one extra call per
+  // bot-shaped match, so the cost stays bounded in huge queues), and
+  // a provably dep-only file list moves it out of the verdict into
+  // ignoredMatches. A fetch failure or an empty or source-bearing
+  // file list fails open: the candidate keeps its score.
+  const kept: Array<{ pr: RacePRCandidate; score: CandidateScore }> = [];
+  for (const entry of scored) {
+    if (!isBotShapedDependencyCandidate(entry.pr)) {
+      kept.push(entry);
+      continue;
+    }
+    let files: string[] | null = null;
+    try {
+      files = await fetchFiles(owner, repo, entry.pr.number);
+    } catch {
+      files = null; // best-effort: unproven shape keeps its score
+    }
+    if (files !== null && isDependencyOnlyFileList(files)) {
+      const match = toMatch(entry.pr, entry.score);
+      ignoredMatches.push({
+        ...match,
+        ignoreReason:
+          `dependency-update bot PR (@${entry.pr.author}` +
+          `${entry.pr.headRef ? `, branch ${entry.pr.headRef}` : ""}) changing only ` +
+          `dependency manifests and lockfiles: ${files.join(", ")}; ` +
+          `a dep-only change cannot implement this issue`,
+        changedFiles: files,
+      });
+    } else {
+      kept.push(entry);
+    }
+  }
+
+  const matches = kept
     .filter((s) => s.score.verdict)
     .map((s) => toMatch(s.pr, s.score))
     .sort((a, b) => {
@@ -855,8 +1038,16 @@ export async function racecheckIssue(
       return b.matchedKeywords.length - a.matchedKeywords.length || a.number - b.number;
     });
 
-  const withNote = (reasons: string[]): string[] =>
-    suppressionNote ? [...reasons, suppressionNote] : reasons;
+  const ignoredNote =
+    ignoredMatches.length > 0
+      ? `ignored ${ignoredMatches.length} dependency-update bot PR(s) that cannot implement this issue: ${ignoredMatches.map((m) => `#${m.number} by @${m.author} (${m.ignoreReason})`).join("; ")}`
+      : null;
+  const withNote = (reasons: string[]): string[] => {
+    const out = [...reasons];
+    if (suppressionNote) out.push(suppressionNote);
+    if (ignoredNote) out.push(ignoredNote);
+    return out;
+  };
   if (matches.some((m) => m.verdict === "RACE")) {
     const races = matches.filter((m) => m.verdict === "RACE");
     return done("RACE", matches, withNote([
