@@ -369,9 +369,9 @@ describe("action.yml is a valid composite action", () => {
     assert.equal(yamlGet(doc, ["runs", "using"]), "composite");
   });
   it("runs setup-node, the guard via npx, and github-script", () => {
-    assert.ok(doc.includes("actions/setup-node@v4"));
+    assert.ok(doc.includes("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020"));
     assert.ok(doc.includes("npx -y @reneturcios/greenlight@latest guard"));
-    assert.ok(doc.includes("actions/github-script@v7"));
+    assert.ok(doc.includes("actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b"));
     assert.ok(doc.includes("greenlight-guard"), "must use the hidden comment marker");
   });
   it("tolerates exit code 3 (findings) as a non-error", () => {
