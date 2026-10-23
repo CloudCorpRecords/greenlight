@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { classifyLinkStrength, isClosingPR } from "../src/linkstrength.js";
+import { classifyLinkStrength, isClosingPR, hasGenuineIssueReference } from "../src/linkstrength.js";
 
 // Real-world shape behind issue #1: pdfcn PR #91 closes #70 and lists
 // sibling issues #60-#65 in its body. It is a "closing" PR for 70 only.
@@ -97,5 +97,55 @@ describe("isClosingPR", () => {
 
   it("defaults a missing strength to mention (old caches stay safe)", () => {
     assert.equal(isClosingPR({}), false);
+  });
+});
+
+describe("hasGenuineIssueReference (v0.21.2 GL-2)", () => {
+  it("bare digits inside an attachment UUID are NOT a reference", () => {
+    assert.equal(
+      hasGenuineIssueReference({
+        title: "fix: graphql schema error messages",
+        body: "![s](https://github.com/user-attachments/assets/60645217-9611-47bd-9ccb-ee5eddce84b8)",
+        branch: "fix/graphql-errors",
+        issueNumber: 9611,
+      }),
+      false
+    );
+    assert.equal(
+      hasGenuineIssueReference({
+        title: "some PR",
+        body: "the number 9611 appears as plain digits in prose",
+        branch: "main",
+        issueNumber: 9611,
+      }),
+      false
+    );
+  });
+
+  it("a #<n> token, an issue URL, or a branch token IS a reference", () => {
+    assert.equal(
+      hasGenuineIssueReference({ title: "x", body: "Related to #9611", branch: "main", issueNumber: 9611 }),
+      true
+    );
+    assert.equal(
+      hasGenuineIssueReference({
+        title: "x",
+        body: "See https://github.com/usebruno/bruno/issues/9611 for context",
+        branch: "main",
+        issueNumber: 9611,
+      }),
+      true
+    );
+    assert.equal(
+      hasGenuineIssueReference({ title: "x", body: "", branch: "feat/9611-combined-docs", issueNumber: 9611 }),
+      true
+    );
+  });
+
+  it("#96110 does not count as a reference to #9611", () => {
+    assert.equal(
+      hasGenuineIssueReference({ title: "x", body: "see #96110", branch: "main", issueNumber: 9611 }),
+      false
+    );
   });
 });

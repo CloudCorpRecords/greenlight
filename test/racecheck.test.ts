@@ -771,3 +771,117 @@ describe("v0.21.1 dependency-bot exclusion (sveltejs/kit PR #17481 regression)",
   });
 });
 
+// --- v0.21.2 (GL-1): prose abbreviations and generic-term false RACE ---
+// Field case (production validation 2026-10-22): usebruno/bruno#9611, a
+// clean feature request, racechecked RACE with 15 RACE matches whose only
+// rare hit was "e.g" — the prose abbreviation harvested by specialTokens —
+// and sveltejs/kit#17529 graded a "Version Packages" release-train PR and
+// an @font-face PR as RACE on generic title terms alone.
+
+const BRUNO_9611_ISSUE: RaceIssue = {
+  title: "Display of combined docs at the requests",
+  body:
+    "Bruno should display the combined documentation of a request, e.g. the docs " +
+    "inherited from the folder. For example a folder structure with a \"Public Subfolder\" " +
+    "and a \"Restricted Subfolder\" should show the combined docs, e.g. in the docs tab. " +
+    "The api response image should be included.",
+  labels: ["enhancement"],
+  author: "reporter",
+};
+
+describe("v0.21.2 GL-1: abbreviation rare tokens", () => {
+  it("specialTokens does not harvest prose abbreviations (e.g, i.e) as rare tokens", () => {
+    const toks = specialTokens("Use the combined docs, e.g. the folder docs, i.e. inherited ones.");
+    assert.ok(!toks.includes("e.g"), `tokens: ${toks.join(",")}`);
+    assert.ok(!toks.includes("i.e"), `tokens: ${toks.join(",")}`);
+  });
+
+  it("extractKeywords on the bruno #9611 model yields no abbreviation rare token", () => {
+    const kw = extractKeywords(BRUNO_9611_ISSUE, { owner: "usebruno", repo: "bruno" });
+    assert.ok(!kw.rare.includes("e.g"), `rare: ${kw.rare.join(",")}`);
+    assert.ok(!kw.rare.includes("i.e"), `rare: ${kw.rare.join(",")}`);
+  });
+
+  it("a PR matching only the abbreviation plus generic terms is not RACE", () => {
+    const kw = extractKeywords(BRUNO_9611_ISSUE, { owner: "usebruno", repo: "bruno" });
+    const s = scoreCandidate(kw, {
+      title: "fix: collection runner iteration data files",
+      body: "The runner reads data files, e.g. csv files, and shows an image of the api response.",
+    });
+    assert.notEqual(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+  });
+
+  it("pipeline: bruno #9611 model with e.g-laden unrelated PRs is not RACE and does not demote to TAKEN", async () => {
+    const prs: RacePRCandidate[] = [7666, 9061, 9376].map((n) => ({
+      number: n,
+      title: `unrelated PR ${n}`,
+      body: "This change touches the api docs, e.g. an image link in the response.",
+      author: "someone",
+      createdAt: "2026-10-01T00:00:00Z",
+      url: `https://github.com/usebruno/bruno/pull/${n}`,
+    }));
+    const result = await racecheckIssue("usebruno", "bruno", 9611, depsFor(BRUNO_9611_ISSUE, prs));
+    assert.notEqual(result.verdict, "RACE", `matches: ${result.matches.map((m) => m.evidence).join(" | ")}`);
+    assert.ok(!result.matches.some((m) => m.verdict === "RACE"));
+    const target = { verdict: "GO", reasons: [] as string[], flags: [] as string[] };
+    applyRaceDemotion(target, result);
+    assert.notEqual(target.verdict, "TAKEN");
+  });
+});
+
+describe("v0.21.2 GL-1: non-file rare hits need corroboration for RACE", () => {
+  const kwId = extractKeywords({
+    title: "View transition promise never resolves",
+    body: "The currentTransition.updateCallbackDone promise and the sync_init hook are involved.",
+    labels: [],
+    author: "x",
+  });
+
+  it("a single non-file rare hit alone is SUSPECT, not RACE", () => {
+    const s = scoreCandidate(kwId, { title: "Cleanup", body: "Notes on updateCallbackDone timing." });
+    assert.equal(s.verdict, "SUSPECT", `score: ${JSON.stringify(s)}`);
+    assert.deepEqual(s.rareHits, ["updatecallbackdone"]);
+  });
+
+  it("two distinct non-file rare hits corroborate to RACE", () => {
+    const s = scoreCandidate(kwId, {
+      title: "Cleanup",
+      body: "Notes on updateCallbackDone timing and the sync_init hook.",
+    });
+    assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+    assert.ok(s.rareHits.length >= 2);
+  });
+
+  it("a single non-file rare hit plus a phrase hit is RACE", () => {
+    const s = scoreCandidate(kwId, {
+      title: "View transition promise never resolves",
+      body: "updateCallbackDone timing",
+    });
+    assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+  });
+});
+
+describe("v0.21.2 GL-1: term-only RACE needs distinctive title terms", () => {
+  it("generic title terms alone (Version Packages model) do not reach RACE", () => {
+    const kw = {
+      rare: [] as string[],
+      terms: ["adapter", "cloudflare", "platform", "proxy", "keeps", "reloads", "env", "wrangler", "stale"],
+      phrases: [] as string[],
+      files: [] as string[],
+      titleTerms: ["adapter", "cloudflare", "proxy", "keeps", "reloads", "env"],
+      titlePhrases: [] as string[],
+    };
+    const s = scoreCandidate(kw, {
+      title: "Version Packages",
+      body: "These adapter platform packages keep the cloudflare proxy reloads working in every env.",
+    });
+    assert.notEqual(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+  });
+
+  it("distinctive title terms still reach RACE by terms", () => {
+    const kw = extractKeywords(SVELTE_ISSUE);
+    const s = scoreCandidate(kw, { title: "Deleted entries regenerated during sync", body: "" });
+    assert.equal(s.verdict, "RACE");
+  });
+});
+

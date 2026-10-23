@@ -61,3 +61,35 @@ describe("detectServerSideOnly", () => {
     assert.equal(called, false);
   });
 });
+
+describe("v0.21.2 GL-5: feature-request example text is not error text", () => {
+  const FEATURE_BODY =
+    "It would be nice if the docs view combined the folder docs. Example structure:\n" +
+    "- \"Public Subfolder\"\n- \"Restricted Subfolder\"\n" +
+    "The combined docs should be displayed at the request level.";
+
+  it("extractErrorStrings ignores capitalized quoted example names without error context", () => {
+    const out = extractErrorStrings(FEATURE_BODY);
+    assert.ok(!out.includes("Public Subfolder"), `candidates: ${out.join(" | ")}`);
+    assert.ok(!out.includes("Restricted Subfolder"), `candidates: ${out.join(" | ")}`);
+  });
+
+  it("detectServerSideOnly stays silent for the feature-request body", async () => {
+    let called = false;
+    const out = await detectServerSideOnly("usebruno", "bruno", FEATURE_BODY, {
+      codeSearch: async () => {
+        called = true;
+        return 0;
+      },
+    });
+    assert.equal(out, null);
+    assert.equal(called, false);
+  });
+
+  it("a quoted span WITH error context is still a candidate", () => {
+    const out = extractErrorStrings(
+      'Saving fails with the error "Permission Denied For Workspace" and the request is rejected.'
+    );
+    assert.ok(out.includes("Permission Denied For Workspace"), `candidates: ${out.join(" | ")}`);
+  });
+});
