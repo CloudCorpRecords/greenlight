@@ -37,7 +37,13 @@ describe("greenlight init", () => {
     assert.equal(r.files.length, 2);
     assert.ok(r.files.every((f) => f.action === "created"));
     const doc = mcpJson(join(projectDir, ".mcp.json"));
-    assert.deepEqual(doc.mcpServers.greenlight.args, ["-y", "@reneturcios/greenlight", "mcp"]);
+    // v0.21.2: the shipped pack config is pinned to the package version
+    // (P-196); init installs it verbatim, so the installed args are the
+    // pinned form for the current version.
+    const pkgVersion = (
+      JSON.parse(readFileSync(join(defaultPackDir(), "..", "package.json"), "utf8")) as { version: string }
+    ).version;
+    assert.deepEqual(doc.mcpServers.greenlight.args, ["-y", `@reneturcios/greenlight@${pkgVersion}`, "mcp"]);
     const claude = readFileSync(join(projectDir, "CLAUDE.md"), "utf8");
     assert.ok(claude.includes(INIT_BEGIN_MARKER));
     assert.ok(claude.includes("check_issue"));

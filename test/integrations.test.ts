@@ -17,6 +17,16 @@ function jsonFiles(dir: string, out: string[] = []): string[] {
 
 const REQUIRED_COMMAND = "npx";
 const REQUIRED_ARGS = ["-y", "@reneturcios/greenlight", "mcp"];
+// v0.21.2: the shipped client configs were pinned to the package
+// version (P-196, supply-chain pinning). A pinned arg is acceptable
+// only when it pins EXACTLY the current package version — a stale pin
+// is a release bug, and an unpinned arg stays acceptable.
+const PKG_VERSION = (
+  JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
+const PINNED_ARGS = ["-y", `@reneturcios/greenlight@${PKG_VERSION}`, "mcp"];
 
 describe("integrations pack", () => {
   it("every .json in integrations/ parses", () => {
@@ -36,7 +46,11 @@ describe("integrations pack", () => {
       assert.ok(map && typeof map === "object", `${f}: needs mcpServers or servers`);
       for (const [name, entry] of Object.entries(map) as Array<[string, any]>) {
         assert.equal(entry.command, REQUIRED_COMMAND, `${f} [${name}].command`);
-        assert.deepEqual(entry.args, REQUIRED_ARGS, `${f} [${name}].args`);
+        assert.ok(
+          JSON.stringify(entry.args) === JSON.stringify(REQUIRED_ARGS) ||
+            JSON.stringify(entry.args) === JSON.stringify(PINNED_ARGS),
+          `${f} [${name}].args must be ${JSON.stringify(REQUIRED_ARGS)} or pinned to the current version ${JSON.stringify(PINNED_ARGS)}, got ${JSON.stringify(entry.args)}`
+        );
         if (doc.servers) {
           assert.equal(entry.type, "stdio", `${f} [${name}].type (VS Code needs stdio)`);
         }
