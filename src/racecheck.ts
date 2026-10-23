@@ -23,11 +23,14 @@
  *      race evidence.
  *
  * Verdicts (per candidate, then overall):
- *   RACE    — strong match: 1 rare term (filename, $-token,
- *             identifier), OR 1 matched multi-word phrase, OR a shared
- *             changed file PLUS a rare or phrase hit, OR >= 3 term
- *             matches with at least two terms derived from the issue
- *             TITLE.
+ *   RACE    — strong match: 1 FILE-like rare term (filename,
+ *             $-token), OR >= 2 distinct rare terms, OR 1 matched
+ *             multi-word phrase, OR a shared changed file PLUS a rare
+ *             or phrase hit, OR >= 3 term matches with at least two
+ *             DISTINCTIVE terms derived from the issue TITLE.
+ *             (v0.21.2: a single non-file rare term, and generic title
+ *             vocabulary, no longer reach RACE alone — the bruno#9611
+ *             "e.g" false-RACE fix.)
  *   SUSPECT — anything weaker: body-only term overlap (never RACE),
  *             a single term match, a shared file on its own or with
  *             only a bare term for company.
@@ -292,6 +295,19 @@ function isSignificantWord(w: string): boolean {
  * CamelCase and snake_case identifiers. These are the rare terms: one
  * hit is already race evidence.
  */
+/**
+ * Prose abbreviations that look like dotted identifiers to the regex
+ * below ("e.g." -> "e.g", "i.e." -> "i.e"). They are ordinary English,
+ * never filenames or identifiers (v0.21.2, GL-1: the bruno#9611 false
+ * RACE was built entirely on "e.g" harvested from issue prose).
+ */
+const PROSE_ABBREVIATIONS = new Set(
+  (
+    "e.g,i.e,etc,vs,approx,fig,figs,dr,mr,mrs,ms,prof,sr,jr,st,inc,ltd,corp," +
+    "no,nos,vol,pp,a.m,p.m,u.s,u.k,ph.d,m.d,ed,eds,al,ca"
+  ).split(",")
+);
+
 export function specialTokens(text: string): string[] {
   const out = new Set<string>();
   const dotted = /[A-Za-z0-9_$][A-Za-z0-9_$./-]*\.[A-Za-z0-9]+/g;
@@ -300,7 +316,15 @@ export function specialTokens(text: string): string[] {
     const tok = m[0].replace(/[.\-/]+$/, "").toLowerCase();
     // A dotted token needs a letter: pure version strings (3.10,
     // 0.20.0) are not identifiers and never rare.
-    if (tok.length >= 3 && /[a-z]/.test(tok)) out.add(tok);
+    if (tok.length < 3 || !/[a-z]/.test(tok)) continue;
+    // Prose abbreviations are not rare tokens (v0.21.2): a denylist,
+    // plus the structural rule that a token whose every dot-segment is
+    // a single letter (e.g, i.e, u.s.a) is an abbreviation, not a file
+    // or identifier — real dotted names have a longer segment (d.ts,
+    // importer.ts, $types.d.ts).
+    if (PROSE_ABBREVIATIONS.has(tok)) continue;
+    if (tok.split(".").every((s) => s.length <= 1)) continue;
+    out.add(tok);
   }
   const dollar = /\$[A-Za-z0-9_][A-Za-z0-9_.-]*/g;
   while ((m = dollar.exec(text)) !== null) {
@@ -563,12 +587,28 @@ export function scoreCandidate(
   }
 
   const otherHits = rareHits.length + phraseHits.length + termHits.length;
+  // v0.21.2 (GL-1): a NON-file rare hit alone is no longer RACE-grade.
+  // A single identifier/abbreviation-shaped token appearing in a PR
+  // body is weak evidence (bruno#9611: 15 unrelated PRs "raced" on one
+  // harvested token). File-like rare hits (a named file, a $-artifact)
+  // stay RACE-grade alone — a PR naming the issue's file is specific
+  // in a way a bare word never is. Non-file rare hits need
+  // corroboration: a second distinct rare hit, a phrase hit, or a
+  // shared changed file (the file-hit branch below).
+  const fileRareHits = rareHits.filter((r) => looksLikeFile(r) || keywords.files.includes(r));
+  // Term-only RACE needs DISTINCTIVE title terms (v0.21.2, GL-1):
+  // generic tech vocabulary (adapter, platform, proxy, env, reloads…)
+  // appears in every third PR in a repo and cannot carry a RACE on its
+  // own — svelte "Version Packages" and an @font-face PR both cleared
+  // the old bar on such words alone.
+  const distinctiveTitleTermHits = titleTermHits.filter((t) => !NON_DISTINCTIVE_TERMS.has(t));
   let verdict: CandidateScore["verdict"] = null;
   if (
-    rareHits.length >= 1 ||
+    fileRareHits.length >= 1 ||
     phraseHits.length >= 1 ||
+    rareHits.length >= 2 ||
     (fileHits.length >= 1 && rareHits.length + phraseHits.length >= 1) ||
-    (termHits.length >= 3 && titleTermHits.length >= 2)
+    (termHits.length >= 3 && titleTermHits.length >= 2 && distinctiveTitleTermHits.length >= 2)
   ) {
     verdict = "RACE";
   } else if (otherHits >= 1 || fileHits.length >= 1) {
@@ -576,6 +616,26 @@ export function scoreCandidate(
   }
   return { verdict, rareHits, phraseHits, termHits, titleTermHits, fileHits };
 }
+
+/**
+ * Ordinary tech/English vocabulary that is never distinctive enough to
+ * carry a term-only RACE (v0.21.2): these words describe where code
+ * runs and how software generally behaves, not what one specific
+ * problem is. Used only as a floor on the RACE-by-terms branch;
+ * extraction and SUSPECT grading are unaffected.
+ */
+const NON_DISTINCTIVE_TERMS = new Set(
+  (
+    "adapter,adapters,platform,platforms,proxy,proxies,env,environment,environments," +
+    "keeps,keep,keeping,reload,reloads,reloaded,reloading,version,versions,package," +
+    "packages,release,releases,server,servers,client,clients,browser,window,windows," +
+    "load,loads,loading,loaded,dev,development,build,builds,building,config," +
+    "configuration,configurations,data,state,states,local,remote,public,private," +
+    "image,images,api,apis,service,services,default,defaults,custom,current,list," +
+    "lists,view,views,web,project,projects,module,modules,library,libraries," +
+    "framework,frameworks,system,systems,start,starts,starting,stop,stops,stopped"
+  ).split(",")
+);
 
 /**
  * Document-frequency suppression (v0.20.1). A keyword that appears in
