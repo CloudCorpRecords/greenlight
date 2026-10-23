@@ -524,3 +524,48 @@ describe("xrayIssues + sortXrayResults", () => {
     assert.ok(r.apiCalls <= 6, `per-issue budget: ${r.apiCalls} calls`);
   });
 });
+
+describe("v0.21.2 GL-2: search hits without a genuine issue reference are dropped", () => {
+  it("attachment-UUID digit collision (bruno#9611 in PR #7754 model) yields no linked PRs and GO", async () => {
+    const repo = freshRepo("wx-uuid");
+    mockApi(
+      issueRoutes(repo, 9611, {
+        timeline: [],
+        search: [searchHit(repo, 7754)],
+        prs: {
+          7754: prDetail(repo, 7754, {
+            body:
+              "fix: graphql schema error messages\n\n" +
+              "![screenshot](https://github.com/user-attachments/assets/60645217-9611-47bd-9ccb-ee5eddce84b8)",
+            author: "stranger",
+          }),
+        },
+      })
+    );
+    const r = await xrayIssue("acme", repo, 9611);
+    assert.deepEqual(r.linkedPRs, [], `linkedPRs: ${JSON.stringify(r.linkedPRs)}`);
+    assert.equal(r.verdict, "GO", `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(!r.flags.includes("weak-pr-mention"), `flags: ${r.flags.join(",")}`);
+  });
+
+  it("a search hit whose body genuinely references the issue still counts as a mention", async () => {
+    const repo = freshRepo("wx-genuine");
+    mockApi(
+      issueRoutes(repo, 9611, {
+        timeline: [],
+        search: [searchHit(repo, 7755)],
+        prs: {
+          7755: prDetail(repo, 7755, {
+            body: "Related to #9611 — screenshot: https://github.com/user-attachments/assets/60645217-9611-47bd-9ccb-ee5eddce84b8",
+            author: "stranger",
+          }),
+        },
+      })
+    );
+    const r = await xrayIssue("acme", repo, 9611);
+    assert.equal(r.linkedPRs.length, 1);
+    assert.equal(r.linkedPRs[0].number, 7755);
+    assert.equal(r.linkedPRs[0].linkStrength, "mention");
+    assert.equal(r.verdict, "RISKY");
+  });
+});

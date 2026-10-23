@@ -838,3 +838,73 @@ describe("staleness decay (v0.19.0, item 17)", () => {
     assert.ok(result.reasons.some((r) => r.includes("stale signal: claim by old-timer 200 day(s) ago")));
   });
 });
+
+describe("v0.21.2 GL-3: timeline xref narration", () => {
+  it("a cross-repo mention-strength xref is NOT narrated as 'in flight' next to a closing PR", () => {
+    const snapshot = load("pdfcn-61-closing.json");
+    snapshot.linkedPRs = [
+      ...snapshot.linkedPRs,
+      {
+        number: 89,
+        state: "open",
+        title: "docs: sync translation",
+        url: "https://github.com/somefork/pdfcn-ko/pull/89",
+        linkStrength: "mention",
+        via: "timeline",
+      },
+    ];
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "TAKEN");
+    assert.ok(result.reasons[0].includes("closes this issue"));
+    assert.ok(
+      !result.reasons.some((r) => r.includes("in flight") && r.includes("#89")),
+      `reasons: ${result.reasons.join(" | ")}`
+    );
+    assert.ok(
+      result.reasons.some((r) => r.includes("#89") && r.includes("cross-referenced")),
+      `reasons: ${result.reasons.join(" | ")}`
+    );
+  });
+
+  it("a same-repo closing-strength xref keeps the 'in flight' narration", () => {
+    const snapshot = load("pdfcn-61-closing.json");
+    snapshot.linkedPRs = [
+      ...snapshot.linkedPRs,
+      {
+        number: 92,
+        state: "open",
+        title: "Alternative resume block implementation",
+        url: "https://github.com/shadcn-labs/pdfcn/pull/92",
+        linkStrength: "closing",
+        via: "timeline",
+      },
+    ];
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "TAKEN");
+    assert.ok(
+      result.reasons.some((r) => r.includes("in flight") && r.includes("#92")),
+      `reasons: ${result.reasons.join(" | ")}`
+    );
+  });
+
+  it("a same-repo mention-strength xref is plain cross-reference narration, not 'in flight'", () => {
+    const snapshot = load("pdfcn-61-closing.json");
+    snapshot.linkedPRs = [
+      ...snapshot.linkedPRs,
+      {
+        number: 17478,
+        state: "open",
+        title: "Version Packages",
+        url: "https://github.com/shadcn-labs/pdfcn/pull/17478",
+        linkStrength: "mention",
+        via: "timeline",
+      },
+    ];
+    const result = scoreIssue(snapshot, NOW);
+    assert.equal(result.verdict, "TAKEN");
+    assert.ok(
+      !result.reasons.some((r) => r.includes("in flight") && r.includes("#17478")),
+      `reasons: ${result.reasons.join(" | ")}`
+    );
+  });
+});
