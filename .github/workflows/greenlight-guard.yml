@@ -16,9 +16,14 @@ on:
 permissions:
   pull-requests: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   guard:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out the repo
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
