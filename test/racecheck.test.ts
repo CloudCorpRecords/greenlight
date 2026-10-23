@@ -883,5 +883,48 @@ describe("v0.21.2 GL-1: term-only RACE needs distinctive title terms", () => {
     const s = scoreCandidate(kw, { title: "Deleted entries regenerated during sync", body: "" });
     assert.equal(s.verdict, "RACE");
   });
+
+  it("a title phrase built only of generic words does not reach RACE (Version Packages model)", () => {
+    const kw = {
+      rare: [] as string[],
+      terms: ["adapter", "cloudflare", "platform", "proxy", "wrangler"],
+      phrases: ["adapter cloudflare", "platform proxy", "proxy wrangler"],
+      files: [] as string[],
+      titleTerms: ["adapter", "cloudflare", "platform", "proxy", "wrangler"],
+      titlePhrases: ["adapter cloudflare", "platform proxy", "proxy wrangler"],
+    };
+    const s = scoreCandidate(kw, {
+      title: "Version Packages",
+      body: "Release train for the adapter cloudflare packages; platform proxy and proxy wrangler bumps.",
+    });
+    assert.notEqual(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+    assert.ok(s.phraseHits.length >= 1, "the phrases do match — they are just not RACE-grade alone");
+  });
+
+  it("a title phrase containing a distinctive word still reaches RACE", () => {
+    const kw = {
+      rare: [] as string[],
+      terms: ["root", "route"],
+      phrases: ["root route"],
+      files: [] as string[],
+      titleTerms: ["root", "route"],
+      titlePhrases: ["root route"],
+    };
+    const s = scoreCandidate(kw, { title: "Cleanup", body: "The root route handling changed." });
+    assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+  });
+
+  it("an author-quoted phrase keeps single-hit RACE even when its words are common", () => {
+    const kw = {
+      rare: [] as string[],
+      terms: ["cloudflare", "workers"],
+      phrases: ["cloudflare workers"],
+      files: [] as string[],
+      titleTerms: [] as string[],
+      titlePhrases: [] as string[],
+    };
+    const s = scoreCandidate(kw, { title: "Cleanup", body: "See the cloudflare workers note." });
+    assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+  });
 });
 

@@ -602,10 +602,21 @@ export function scoreCandidate(
   // own — svelte "Version Packages" and an @font-face PR both cleared
   // the old bar on such words alone.
   const distinctiveTitleTermHits = titleTermHits.filter((t) => !NON_DISTINCTIVE_TERMS.has(t));
+  // Same floor for TITLE-derived phrases (v0.21.3): title bigrams are
+  // generated mechanically from title words, so a bigram built only of
+  // generic words ("adapter cloudflare", "platform proxy") is generic
+  // vocabulary in sequence, not a distinctive phrase — svelte's
+  // "Version Packages" release train matched three of them verbatim.
+  // Author-QUOTED phrases are exempt: a quoted string is a deliberate
+  // artifact (usually error text), and keeps single-hit RACE grade.
+  const titlePhraseSet = new Set(keywords.titlePhrases ?? []);
+  const strongPhraseHits = phraseHits.filter(
+    (p) => !titlePhraseSet.has(p) || p.split(" ").some((w) => !NON_DISTINCTIVE_TERMS.has(w))
+  );
   let verdict: CandidateScore["verdict"] = null;
   if (
     fileRareHits.length >= 1 ||
-    phraseHits.length >= 1 ||
+    strongPhraseHits.length >= 1 ||
     rareHits.length >= 2 ||
     (fileHits.length >= 1 && rareHits.length + phraseHits.length >= 1) ||
     (termHits.length >= 3 && titleTermHits.length >= 2 && distinctiveTitleTermHits.length >= 2)
@@ -633,7 +644,13 @@ const NON_DISTINCTIVE_TERMS = new Set(
     "configuration,configurations,data,state,states,local,remote,public,private," +
     "image,images,api,apis,service,services,default,defaults,custom,current,list," +
     "lists,view,views,web,project,projects,module,modules,library,libraries," +
-    "framework,frameworks,system,systems,start,starts,starting,stop,stops,stopped"
+    "framework,frameworks,system,systems,start,starts,starting,stop,stops,stopped," +
+    // Vendor/platform names: in any repo that integrates them they are
+    // the shared substrate vocabulary of a third of the PR queue
+    // (cloudflare/wrangler in sveltejs/kit), not one problem's signal.
+    // They stay RACE-grade in file paths, rare tokens and quoted
+    // phrases — this floor only governs title terms and title phrases.
+    "cloudflare,wrangler,vercel,netlify,aws,azure,gcp,firebase,supabase,docker,kubernetes"
   ).split(",")
 );
 
