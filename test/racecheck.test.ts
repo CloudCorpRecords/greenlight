@@ -914,6 +914,30 @@ describe("v0.21.2 GL-1: term-only RACE needs distinctive title terms", () => {
     assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
   });
 
+  it("a shared changed file PLUS strong term overlap is RACE even when the terms are generic (kit #17530 model)", () => {
+    // The genuine triage-bot racer for sveltejs/kit#17529: it changes
+    // the exact file the issue names and its text overlaps on the
+    // issue's (generic, vendor-flavored) title vocabulary. The file
+    // hit is the distinctiveness; the v0.20.1 cubrid lesson (file +
+    // ONE bare term = SUSPECT) is preserved by the >=3 term / >=2
+    // title-term bar.
+    const kw = {
+      rare: [] as string[],
+      terms: ["adapter", "cloudflare", "proxy", "wrangler", "config", "reloads", "env"],
+      phrases: [] as string[],
+      files: ["packages/adapter-cloudflare/src/virtual-cloudflare-workers.js"],
+      titleTerms: ["adapter", "cloudflare", "proxy", "wrangler", "config", "reloads", "env"],
+      titlePhrases: [] as string[],
+    };
+    const s = scoreCandidate(
+      kw,
+      { title: "fix: read the current Cloudflare proxy after wrangler config reloads", body: "env handling" },
+      ["packages/adapter-cloudflare/src/virtual-cloudflare-workers.js", "packages/adapter-cloudflare/src/index.js"]
+    );
+    assert.equal(s.verdict, "RACE", `score: ${JSON.stringify(s)}`);
+    assert.ok(s.fileHits.length >= 1);
+  });
+
   it("an author-quoted phrase keeps single-hit RACE even when its words are common", () => {
     const kw = {
       rare: [] as string[],

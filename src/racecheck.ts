@@ -619,6 +619,15 @@ export function scoreCandidate(
     strongPhraseHits.length >= 1 ||
     rareHits.length >= 2 ||
     (fileHits.length >= 1 && rareHits.length + phraseHits.length >= 1) ||
+    // v0.21.4: a shared changed file PLUS strong term overlap is RACE
+    // even when every term is generic — the changed file (the exact
+    // file the issue names) is itself the distinctive evidence, and
+    // the >=3 term / >=2 title-term bar keeps the v0.20.1 cubrid
+    // lesson (file + one bare term = SUSPECT) intact. This is the
+    // sveltejs/kit#17530 shape: the triage-bot racer changes
+    // virtual-cloudflare-workers.js and overlaps the issue's
+    // vendor-flavored title vocabulary.
+    (fileHits.length >= 1 && termHits.length >= 3 && titleTermHits.length >= 2) ||
     (termHits.length >= 3 && titleTermHits.length >= 2 && distinctiveTitleTermHits.length >= 2)
   ) {
     verdict = "RACE";
