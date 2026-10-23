@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { IssueSnapshot, LinkedPR, CommentSignal, GateKind, Gate, MentionedPR, DuplicateTarget, PolicySourceProvenance } from "./types.js";
-import { classifyLinkStrength, type LinkStrength } from "./linkstrength.js";
+import { classifyLinkStrength, hasGenuineIssueReference, type LinkStrength } from "./linkstrength.js";
 import { detectWorkflowGates, type WorkflowFile } from "./gates.js";
 import { isBotAuthor } from "./claims.js";
 import { detectServerSideOnly } from "./server-side.js";
@@ -413,6 +413,9 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
     let title = cand.title;
     let state = cand.state;
     let prAuthor = "";
+    let detailOk = false;
+    let detailBody = "";
+    let detailBranch = "";
     try {
       const detail = (await apiGet(`/repos/${owner}/${repo}/pulls/${cand.number}`)) as {
         title?: unknown;
@@ -422,6 +425,9 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
         head?: { ref?: unknown };
         user?: { login?: unknown };
       };
+      detailOk = true;
+      detailBody = String(detail.body ?? "");
+      detailBranch = String(detail.head?.ref ?? "");
       // v0.13.0 (xray): capture the PR author so Timeline X-Ray can spot
       // the reporter's own fix PR (mention-strength, search-discovered).
       prAuthor = String(
@@ -431,15 +437,28 @@ export async function fetchLinkedPRs(owner: string, repo: string, number: number
       // The individual PR fetch is authoritative on state (covers
       // timeline-only PRs the search pass never saw).
       state = detail.merged_at != null ? "merged" : detail.state === "closed" ? "closed" : "open";
-      const branch = String(detail.head?.ref ?? "");
       linkStrength = classifyLinkStrength({
         title,
-        body: String(detail.body ?? ""),
-        branch,
+        body: detailBody,
+        branch: detailBranch,
         issueNumber: number,
       });
     } catch {
       linkStrength = "mention"; // could not read the PR; treat as a weak reference
+    }
+    // v0.21.2 (GL-2): a SEARCH-discovered candidate whose fetched detail
+    // contains no genuine reference to the issue (#<n> token, issue
+    // URL, or branch token) is not a mention at all — GitHub search
+    // matches bare digit runs inside attachment UUIDs (bruno#9611 in
+    // PR #7754's screenshot UUID). Drop it. Timeline candidates are
+    // exempt: the cross-reference event IS the reference. A failed
+    // detail fetch fails open (kept as a weak mention, as before).
+    if (
+      cand.via === "search" &&
+      detailOk &&
+      !hasGenuineIssueReference({ title, body: detailBody, branch: detailBranch, issueNumber: number })
+    ) {
+      continue;
     }
     prs.push({ number: cand.number, state, title, url: cand.url, linkStrength, via: cand.via, author: prAuthor });
   }
