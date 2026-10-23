@@ -1,1 +1,1 @@
-{"mcpServers":{"greenlight":{"args":["-y","@reneturcios/greenlight","mcp"],"command":"npx"}}}
+{"mcpServers":{"greenlight":{"args":["-y","@reneturcios/greenlight@0.21.1","mcp"],"command":"npx"}}}
