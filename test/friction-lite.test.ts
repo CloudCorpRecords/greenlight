@@ -9,9 +9,9 @@
  * signals null with note "lite".
  *
  * The mock serves the immich gate fixture as the repo's CONTRIBUTING.md
- * (agents_banned, which carries no friction weight), so lite scores 100
- * while full scores 100 - 20 (0% external merge share) + 3.5 (7 starter
- * issues) = 84.
+ * (agents_banned; since v0.21.2 GL-4 it carries a -50 friction weight),
+ * so lite scores 50 while full scores 50 - 20 (0% external merge
+ * share) + 3.5 (7 starter issues) = 34 (rounded).
  */
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -107,10 +107,10 @@ describe("friction --lite", () => {
     mockGithub();
     const lite = await fetchFrictionSummary(OWNER, REPO, { lite: true });
     const full = await fetchFrictionSummary(OWNER, REPO);
-    // agents_banned carries no friction weight, so lite scores a clean 100.
-    assert.equal(lite.score, 100);
-    // full: 100 + (0.0 - 0.5) * 40 (0% external merge share) + 3.5 (7 starter issues) = 84.
-    assert.equal(full.score, 84);
+    // agents_banned carries a -50 weight since v0.21.2 (GL-4).
+    assert.equal(lite.score, 50);
+    // full: 50 + (0.0 - 0.5) * 40 (0% external merge share) + 3.5 (7 starter issues) = 34 (rounded).
+    assert.equal(full.score, 34);
     assert.ok(full.score < lite.score);
   });
 

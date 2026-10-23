@@ -197,4 +197,20 @@ describe("starter candidate estimate is never scored (item 16)", () => {
     assert.equal(r.signals.starterLabelCount, 4);
     assert.equal(r.signals.openGoodFirstIssueCount, 4);
   });
+
+  it("v0.21.2 GL-4: agents_banned is heavily penalized and agents_disclosure carries a small weight", () => {
+    const banned = scoreFriction(base({ gates: gatesOn(["agents_banned"]) }));
+    assert.equal(banned.score, 100 - 50, `reasons: ${banned.reasons.join(" | ")}`);
+    const both = scoreFriction(base({ gates: gatesOn(["agents_banned", "agents_disclosure"]) }));
+    assert.equal(both.score, 100 - 50 - 5, `reasons: ${both.reasons.join(" | ")}`);
+    const disclosureOnly = scoreFriction(base({ gates: gatesOn(["agents_disclosure"]) }));
+    assert.equal(disclosureOnly.score, 100 - 5);
+    // Even with max bonuses, a banned repo cannot present as easiest-possible.
+    const boosted = scoreFriction(base({
+      gates: gatesOn(["agents_banned"]),
+      externalPRMergeRate: 1,
+      openGoodFirstIssueCount: 100,
+    }));
+    assert.ok(boosted.score < 100, `boosted banned score: ${boosted.score}`);
+  });
 });
