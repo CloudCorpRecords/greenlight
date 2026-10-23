@@ -489,3 +489,8 @@ Full release history lives in [`CHANGELOG.md`](CHANGELOG.md).
 ## License
 
 MIT. See LICENSE.
+
+---
+
+Built by [Rene Turcios](https://github.com/CloudCorpRecords) — vibe coder / agent-native dev building in public in SF. If Greenlight saved you a weekend, star this repo and [follow @CloudCorpRecords](https://github.com/CloudCorpRecords) for the next tool.
+The family: [prwatch](https://github.com/CloudCorpRecords/prwatch) · [claimcheck](https://github.com/CloudCorpRecords/claimcheck) · [gatefile](https://github.com/CloudCorpRecords/gatefile) · [hookcheck](https://github.com/CloudCorpRecords/hookcheck) · [injectcheck](https://github.com/CloudCorpRecords/injectcheck) · [actionpin](https://github.com/CloudCorpRecords/actionpin) — all on npm under `@reneturcios/` and in the official MCP Registry.
