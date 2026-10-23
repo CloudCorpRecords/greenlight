@@ -24,6 +24,17 @@ export interface ServerSideDeps {
  * explicit "error:" lines. Bounded at 4 candidates; each 8-160 chars so
  * short tokens do not become useless search queries.
  */
+/**
+ * Error-context vocabulary (v0.21.2, GL-5): a double-quoted capitalized
+ * span counts as candidate error text only when error-ish wording
+ * appears in or around it. Feature requests quote capitalized example
+ * names ("Public Subfolder" in a hypothetical folder tree) that are
+ * not error text at all; without this gate the heuristic asserted a
+ * backend-enforced "error" that does not exist (bruno#9611).
+ */
+const ERROR_CONTEXT =
+  /\b(error|errors|fail|fails|failed|failure|exception|throw|throws|thrown|reject|rejected|denied|invalid|status|code|http|unable|cannot|crash|permission|denied|warning|returned|returns)\b/i;
+
 export function extractErrorStrings(body: string): string[] {
   const out: string[] = [];
   const add = (s: string): void => {
@@ -31,7 +42,16 @@ export function extractErrorStrings(body: string): string[] {
     if (t.length >= 8 && t.length <= 160 && !out.includes(t)) out.push(t);
   };
   for (const m of body.matchAll(/`([^`]{8,160})`/g)) add(m[1]);
-  for (const m of body.matchAll(/"([A-Z][^"\n]{7,159})"/g)) add(m[1]);
+  for (const m of body.matchAll(/"([A-Z][^"\n]{7,159})"/g)) {
+    // Gate double-quoted spans on error context in the surrounding
+    // text (the span itself included: genuine error strings carry
+    // error vocabulary — "Invalid connection status…"). Backticked
+    // spans and explicit error: lines are deliberate error quoting
+    // and stay ungated.
+    const start = Math.max(0, (m.index ?? 0) - 100);
+    const window = body.slice(start, (m.index ?? 0) + m[0].length + 100);
+    if (ERROR_CONTEXT.test(window)) add(m[1]);
+  }
   for (const m of body.matchAll(/\berror\s*[:=]\s*["']?([^"'\n]{8,160})/gi)) add(m[1]);
   return out.slice(0, 4);
 }

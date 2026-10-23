@@ -15,6 +15,8 @@
  *     claim_first           -5
  *     cla_required          -5
  *     dco_required          -5
+ *     agents_banned        -50 (v0.21.2)
+ *     agents_disclosure     -5 (v0.21.2)
  *   outcome signals (only when computed, never guessed):
  *     external PR merge rate: +(rate - 0.5) * 40
  *       (a 100% external merge rate adds 20; 0% subtracts 20)
@@ -55,6 +57,14 @@ const GATE_WEIGHTS: Record<string, number> = {
   // refused, so it costs half the blanket pause.
   scoped_prs_paused: -20,
   external_prs_closed: -50,
+  // v0.21.2 (GL-4): agent gates previously carried NO weight, so an
+  // agent-banned repo (astral-sh/uv, AI_POLICY bans autonomous-agent
+  // PRs) scored 100/100 — the easiest possible — for exactly the
+  // audience the ban targets. A ban is on par with collaborators_only
+  // / external_prs_closed; a disclosure duty is a small paperwork cost
+  // on par with cla/dco.
+  agents_banned: -50,
+  agents_disclosure: -5,
   discussion_first: -10,
   claim_first: -5,
   cla_required: -5,

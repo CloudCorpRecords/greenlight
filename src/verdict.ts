@@ -196,9 +196,25 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     const others = openTimelineXrefs.filter((pr) => pr.number !== openClosingPR.number);
     if (others.length > 0) {
       flags.push("cross-referenced-pr");
-      reasons.push(
-        `also cross-referenced in the issue timeline and in flight: ${others.map(xrefLabel).join("; ")}`
-      );
+      // v0.21.2 (GL-3): only a SAME-REPO, closing-strength xref is
+      // narrated as an in-flight competitor. Cross-repo/fork xrefs
+      // (a Korean docs-sync PR in a fork) and mention-strength xrefs
+      // (perennial release-train PRs that cross-reference hundreds of
+      // issues) are plain cross-references — calling them "in flight"
+      // trained readers to distrust correct TAKEN verdicts.
+      const sameRepoPrefix = `https://github.com/${snapshot.owner}/${snapshot.repo}/pull/`;
+      const inFlight = others.filter((pr) => pr.url.startsWith(sameRepoPrefix) && isClosingPR(pr));
+      const plainXrefs = others.filter((pr) => !inFlight.includes(pr));
+      if (inFlight.length > 0) {
+        reasons.push(
+          `also cross-referenced in the issue timeline and in flight: ${inFlight.map(xrefLabel).join("; ")}`
+        );
+      }
+      if (plainXrefs.length > 0) {
+        reasons.push(
+          `also cross-referenced in the issue timeline: ${plainXrefs.map(xrefLabel).join("; ")}`
+        );
+      }
     }
     return { verdict: "TAKEN", reasons, claims, gates, flags };
   }

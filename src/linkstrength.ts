@@ -52,3 +52,29 @@ export function classifyLinkStrength({ title, body, branch, issueNumber }: LinkI
 export function isClosingPR(pr: Pick<LinkedPR, "linkStrength"> & { linkStrength?: LinkStrength }): boolean {
   return (pr.linkStrength ?? "mention") === "closing";
 }
+
+/**
+ * Does this PR genuinely reference the issue at all? (v0.21.2, GL-2)
+ *
+ * GitHub's issue-number search tokenizes "#9611" loosely: it matches
+ * the bare digits inside unrelated strings — usebruno/bruno PR #7754
+ * "referenced" issue #9611 only because an image-attachment UUID
+ * (60645217-9611-47bd-…) contains the digit run. classifyLinkStrength
+ * cannot see that: closing and mention both presuppose a reference.
+ * This is the missing third outcome — NO reference — checked on the
+ * fetched PR detail: a "#<n>" token in title/body, the issue's URL,
+ * or the issue number as a standalone branch token. Bare digit runs
+ * (UUIDs, plain numbers in prose) do not count.
+ */
+export function hasGenuineIssueReference({ title, body, branch, issueNumber }: LinkInput): boolean {
+  const n = String(Math.trunc(Math.abs(issueNumber)));
+  const hashRe = new RegExp(`#${n}\\b`);
+  if (hashRe.test(title) || hashRe.test(body)) return true;
+  const urlRe = new RegExp(`/issues/${n}\\b`);
+  if (urlRe.test(title) || urlRe.test(body)) return true;
+  if (branch) {
+    const branchRe = new RegExp(`(^|[^0-9])${n}([^0-9]|$)`);
+    if (branchRe.test(branch)) return true;
+  }
+  return false;
+}
