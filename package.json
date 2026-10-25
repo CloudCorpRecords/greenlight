@@ -4,7 +4,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1",
-    "zod": "^3"
+    "zod": "^4"
   },
   "description": "Pre-flight and coordination layer for open-source contribution: issue verdicts, Timeline X-Ray, PR radar and review briefs. CLI + MCP server.",
   "devDependencies": {
