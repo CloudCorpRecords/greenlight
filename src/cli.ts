@@ -42,6 +42,14 @@ import {
 } from "./github.js";
 import { xrayIssue, xrayIssues, sortXrayResults, applyXrayDemotion } from "./xray.js";
 import { racecheckIssue } from "./racecheck.js";
+import {
+  TrustStore,
+  defaultTrustFilePath,
+  isTrustDimension,
+  trustModeFromEnv,
+  type TrustDimension,
+} from "./trust.js";
+import { analyzePolicyIndex, applySeedMarks } from "./trust-seeds.js";
 import { CLAIM_MARKER } from "./protocol.js";
 import { llmEnabled, llmModelId } from "./llm-claims.js";
 import type { LlmLayerStatus, PolicySourceProvenance } from "./types.js";
@@ -565,7 +573,15 @@ async function cmdRacecheck(repoRef: string, issueArg: string | undefined, args:
     return;
   }
   const { owner, repo } = parseRepoRef(ref);
-  const result = await racecheckIssue(owner, repo, number);
+  // Lane B: with GREENLIGHT_TRUST_MEMORY=dry-run or on, racecheck
+  // consults the trust store before vetting. Off (default) passes no
+  // store at all, so the shipped path is untouched.
+  const trustMode = trustModeFromEnv();
+  const trustOpts =
+    trustMode === "off"
+      ? {}
+      : { trustMode, trustStore: new TrustStore(defaultTrustFilePath()) };
+  const result = await racecheckIssue(owner, repo, number, {}, trustOpts);
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
     if (result.verdict === "RACE") process.exitCode = 1;
@@ -585,6 +601,106 @@ async function cmdRacecheck(repoRef: string, issueArg: string | undefined, args:
     console.log(`  [ignored] ${m.evidence} (${m.ignoreReason})`);
   }
   if (result.verdict === "RACE") process.exitCode = 1;
+}
+
+/**
+ * Repo trust memory (Lane B of the dyva-patterns plan).
+ *
+ *   greenlight trust list [--json] [--file <path>]
+ *   greenlight trust show <owner/repo> [--json]
+ *   greenlight trust clear <owner/repo> <dimension> --reason "<why>" [--by <who>]
+ *   greenlight trust seed
+ *   greenlight trust seed-index <policy.json>   (dry run: counts only, writes nothing)
+ *
+ * list and show are reads. Clearing a mark requires naming the repo
+ * and a reason, and the clear is itself logged in the store.
+ */
+async function cmdTrust(args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const sub = (args[1] ?? "list").toLowerCase();
+  const flagValue = (name: string): string | undefined => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const store = new TrustStore(flagValue("--file") ?? defaultTrustFilePath());
+
+  if (sub === "seed") {
+    const n = applySeedMarks(store);
+    console.log(`trust: wrote ${n} seed marks to ${store.filePath}`);
+    return;
+  }
+  if (sub === "seed-index") {
+    const path = args[2] && !args[2].startsWith("--") ? args[2] : undefined;
+    if (!path) {
+      console.error("Error: trust seed-index needs a Policy Index JSON path");
+      process.exitCode = 1;
+      return;
+    }
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as { entries?: unknown[] };
+    const report = analyzePolicyIndex((parsed.entries ?? []) as never);
+    console.log(JSON.stringify({ input: path, dryRun: true, ...report }, null, 2));
+    return;
+  }
+  if (sub === "list") {
+    const entries = store.list();
+    if (asJson) {
+      console.log(JSON.stringify(entries, null, 2));
+      return;
+    }
+    if (entries.length === 0) {
+      console.log("trust: no marks recorded");
+      return;
+    }
+    for (const e of entries) {
+      console.log(`${e.state.padEnd(10)} ${e.dimension.padEnd(9)} ${e.repo} [${e.label}] ${e.evidence}`);
+    }
+    return;
+  }
+  if (sub === "show") {
+    const repo = args[2];
+    if (!repo) {
+      console.error("Error: trust show needs an owner/repo");
+      process.exitCode = 1;
+      return;
+    }
+    const rows = (["prs", "comments", "claims"] as TrustDimension[])
+      .map((d) => store.derive(d, repo))
+      .filter((d) => d !== null);
+    if (asJson) {
+      console.log(JSON.stringify(rows, null, 2));
+      return;
+    }
+    if (rows.length === 0) {
+      console.log(`trust: no marks for ${repo}`);
+      return;
+    }
+    for (const e of rows) {
+      console.log(`${e.state.padEnd(10)} ${e.dimension.padEnd(9)} ${e.repo} [${e.label}] source ${e.source}, checked ${e.checkedAt.slice(0, 10)}: ${e.evidence}`);
+    }
+    return;
+  }
+  if (sub === "clear") {
+    const repo = args[2];
+    const dimension = (args[3] ?? "").toLowerCase();
+    const reason = flagValue("--reason");
+    if (!repo || !isTrustDimension(dimension) || !reason) {
+      console.error(
+        "Error: trust clear needs an owner/repo, a dimension (prs, comments, or claims), and --reason \"<why>\""
+      );
+      process.exitCode = 1;
+      return;
+    }
+    try {
+      store.clear(dimension, repo, reason, flagValue("--by") ?? "operator");
+      console.log(`trust: cleared the ${dimension} mark for ${repo} (logged with its reason)`);
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+    }
+    return;
+  }
+  console.error(`Error: unknown trust subcommand "${sub}" (list, show, clear, seed, seed-index)`);
+  process.exitCode = 1;
 }
 
 /**
@@ -1782,6 +1898,7 @@ async function main(): Promise<void> {
     if (command === "scan" && target) return await cmdScan(target, args.includes("--json"), args);
     if (command === "xray" && target) return await cmdXray(target, args);
     if (command === "racecheck" && target) return await cmdRacecheck(target, positional[2], args);
+    if (command === "trust") return await cmdTrust(args);
     if (command === "friction" && target) return await cmdFriction(target, args.includes("--json"), args);
     if (command === "wave") return await cmdWave(args);
     if (command === "ci" && target) return await cmdCi(target, args.includes("--json"));

@@ -84,8 +84,9 @@
  * unreadable or empty file list fails open (the candidate counts).
  */
 import { apiCallsUsed, apiGet, cacheGet, cacheSet } from "./github.js";
+import { canonicalRepoKey, type TrustStore } from "./trust.js";
 
-export type RaceVerdict = "RACE" | "SUSPECT" | "CLEAR" | "ERROR";
+export type RaceVerdict = "RACE" | "SUSPECT" | "CLEAR" | "ERROR" | "SKIP";
 
 export interface KeywordSet {
   /** Rare tokens: filenames/paths, $-tokens, CamelCase/snake identifiers, quoted code. */
@@ -147,6 +148,28 @@ export interface IgnoredMatch extends RaceMatch {
   changedFiles: string[];
 }
 
+/** One trust-memory entry the consult found for this repo. */
+export interface RacecheckTrustEntry {
+  dimension: "prs" | "comments" | "claims";
+  state: string;
+  label: string;
+  source: string;
+  evidence: string;
+  checkedAt: string;
+}
+
+/**
+ * The trust-memory consult result (Lane B), present on the result
+ * only when the GREENLIGHT_TRUST_MEMORY flag was active for the run.
+ */
+export interface RacecheckTrustInfo {
+  mode: "dry-run" | "on";
+  repoKey: string;
+  blocked: boolean;
+  entries: RacecheckTrustEntry[];
+  note: string;
+}
+
 export interface RacecheckResult {
   owner: string;
   repo: string;
@@ -161,6 +184,8 @@ export interface RacecheckResult {
   reasons: string[];
   /** API calls consumed (measured, for budget honesty). */
   apiCalls: number;
+  /** Trust-memory consult, only when the flag was active (Lane B). */
+  trust?: RacecheckTrustInfo;
 }
 
 export interface RacecheckDeps {
@@ -979,7 +1004,7 @@ export async function racecheckIssue(
   repo: string,
   number: number,
   deps: RacecheckDeps = {},
-  opts: { limit?: number } = {}
+  opts: { limit?: number; trustMode?: "off" | "dry-run" | "on"; trustStore?: TrustStore } = {}
 ): Promise<RacecheckResult> {
   const callsBefore = apiCallsUsed();
   const url = `https://github.com/${owner}/${repo}/issues/${number}`;
@@ -988,6 +1013,57 @@ export async function racecheckIssue(
   const listOpenPRs = deps.listOpenPRs ?? defaultListOpenPRs;
   const fetchFiles = deps.fetchFiles ?? defaultFetchFiles;
   const limit = Math.max(1, Math.min(opts.limit ?? DEFAULT_PR_LIMIT, 200));
+
+  // Trust memory consult (Lane B of the dyva-patterns plan, behind
+  // the GREENLIGHT_TRUST_MEMORY flag): racecheck asks the trust
+  // store about this repo on the claims and prs dimensions BEFORE
+  // vetting. A blocked mark means the repo is known hostile, so
+  // mode "on" returns SKIP before a single API call is spent
+  // reading comments or PR lists. Mode "dry-run" records the
+  // consult on the result and vets exactly as before. With the
+  // flag off (the default) or no store supplied, this block never
+  // runs and behavior is unchanged.
+  let trustInfo: RacecheckTrustInfo | undefined;
+  const trustMode = opts.trustMode ?? "off";
+  if (trustMode !== "off" && opts.trustStore) {
+    const repoKey = canonicalRepoKey(`${owner}/${repo}`);
+    const entries: RacecheckTrustEntry[] = [];
+    for (const dimension of ["claims", "prs"] as const) {
+      const d = opts.trustStore.derive(dimension, repoKey);
+      if (d) {
+        entries.push({
+          dimension: d.dimension,
+          state: d.state,
+          label: d.label,
+          source: d.source,
+          evidence: d.evidence,
+          checkedAt: d.checkedAt,
+        });
+      }
+    }
+    const blockedEntry = entries.find((e) => e.state === "blocked");
+    trustInfo = {
+      mode: trustMode,
+      repoKey,
+      blocked: blockedEntry !== undefined,
+      entries,
+      note: blockedEntry
+        ? `trust memory: ${repoKey} is blocked on the ${blockedEntry.dimension} dimension (${blockedEntry.label}, source ${blockedEntry.source}, checked ${blockedEntry.checkedAt.slice(0, 10)}): ${blockedEntry.evidence}`
+        : `trust memory: no blocked mark for ${repoKey}`,
+    };
+    if (trustInfo.blocked && trustMode === "on") {
+      return {
+        owner, repo, number, url, title: "",
+        verdict: "SKIP",
+        keywords: { rare: [], terms: [], phrases: [], files: [] },
+        matches: [],
+        ignoredMatches: [],
+        reasons: [`${trustInfo.note}; skipped before vetting, no API calls spent`],
+        apiCalls: 0,
+        trust: trustInfo,
+      };
+    }
+  }
 
   let issue: RaceIssue;
   try {
@@ -1001,6 +1077,7 @@ export async function racecheckIssue(
       ignoredMatches: [],
       reasons: [`racecheck issue fetch failed: ${err instanceof Error ? err.message : String(err)}`],
       apiCalls: apiCallsUsed() - callsBefore,
+      ...(trustInfo ? { trust: trustInfo } : {}),
     };
   }
 
@@ -1009,8 +1086,13 @@ export async function racecheckIssue(
   let ignoredMatches: IgnoredMatch[] = [];
   const done = (verdict: RaceVerdict, matches: RaceMatch[], reasons: string[]): RacecheckResult => ({
     owner, repo, number, url, title: issue.title,
-    verdict, keywords, matches, ignoredMatches, reasons,
+    verdict, keywords, matches, ignoredMatches,
+    reasons:
+      trustInfo && trustInfo.blocked && trustInfo.mode === "dry-run"
+        ? [`${trustInfo.note}; dry-run only, the verdict below is unchanged`, ...reasons]
+        : reasons,
     apiCalls: apiCallsUsed() - callsBefore,
+    ...(trustInfo ? { trust: trustInfo } : {}),
   });
 
   if (keywords.rare.length === 0 && keywords.terms.length === 0 && keywords.phrases.length === 0) {

@@ -77,6 +77,22 @@ export const COMMANDS: CommandHelp[] = [
     examples: ["greenlight racecheck sveltejs/kit 17465"],
   },
   {
+    name: "trust",
+    usage: "greenlight trust <list|show|clear|seed|seed-index> [owner/repo] [dimension] [--reason \"<why>\"] [--json]",
+    description: "Repo trust memory (Lane B): the campaign's accumulated, provenance-carrying record of which repos are gated, hostile, or welcoming, keyed by (dimension, repo) across prs, comments, and claims. Negative evidence is stored apart from good records and can never overwrite them; conflicts resolve by checked recency; status is derived on read from an append-only signal log. list and show are reads; clearing a mark requires naming the repo and a reason, and the clear is itself logged. seed writes the known gated repos; seed-index dry-runs a Policy Index export and reports counts without writing. racecheck consults the store before vetting only when GREENLIGHT_TRUST_MEMORY is dry-run or on.",
+    flags: [
+      "--reason \"<why>\" (required for clear: why the mark no longer stands)",
+      "--by <who> (who cleared the mark, default operator)",
+      "--file <path> (store path, default ~/.greenlight/trust.json or GREENLIGHT_TRUST_FILE)",
+      "--json (machine-readable output)",
+    ],
+    examples: [
+      "greenlight trust list",
+      "greenlight trust show activepieces/activepieces",
+      "greenlight trust clear activepieces/activepieces prs --reason \"maintainer reopened outside PRs\"",
+    ],
+  },
+  {
     name: "friction",
     usage: "greenlight friction <owner/repo> [--json] [--no-behavioral] [--lite]",
     description: "How hard it is to land an outside PR here, 0-100 (100 = easiest). Now also catches behavioral gates: maintainers who reject AI-built PRs in practice.",
