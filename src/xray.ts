@@ -32,6 +32,13 @@
  *   - open mention-strength PR by anyone else        -> RISKY (weak-pr-mention)
  *   - 2+ fresh full-strength comment claimants       -> TAKEN (claim race)
  *   - 1 fresh full-strength comment claimant         -> RISKY (claimed)
+ *   - 1 stale-band (46-180d) full-strength claimant  -> RISKY (stale claim)
+ *   - strong PARTIAL (scoped) claimant               -> RISKY (partial-claim;
+ *     part of the work is taken, the rest may be open)
+ *   - claims older than STALE_SIGNAL_DAYS (180d) with no closing PR in
+ *     the linked set are DECAYED (verdict parity, v0.19.0 item 17):
+ *     disclosed with the "stale-signal" flag and a down-weighting
+ *     reason, but they never count toward a race or a claim verdict
  *   - only closed/merged linked PRs, or nothing      -> GO (with a note)
  *
  * Closed/merged PRs are evidence, never blockers. Every linked PR is
@@ -43,6 +50,17 @@
  * invisible to every rule above (sveltejs/kit #17453 vs issue #17465);
  * a RACE result demotes the issue to TAKEN with the flag
  * "keyword-race", a SUSPECT result demotes GO to RISKY.
+ *
+ * v0.22.1: the claim rules now match the verdict engine exactly. The
+ * x-ray used to (1) count claims the check pipeline had already
+ * decayed, so a claim race from over 180 days ago with no PR ever
+ * opened still read TAKEN here while `check` read the same issue
+ * clean; (2) name claimFlags[0], the newest claim of ANY strength, as
+ * the claimant in its single-claim reason, so a soft "take a look"
+ * commenter was blamed for someone else's strong claim; and (3)
+ * ignore strong partial claims entirely, where `check` caps the same
+ * issue at RISKY (rule 5b). All three divergences are pinned by
+ * regression tests in test/xray.test.ts.
  */
 import {
   apiCallsUsed,
@@ -54,6 +72,7 @@ import {
 } from "./github.js";
 import { isClosingPR } from "./linkstrength.js";
 import { detectClaims, strongClaimants } from "./claims.js";
+import { FRESH_CLAIM_DAYS, STALE_SIGNAL_DAYS } from "./verdict.js";
 import { racecheckIssue, applyRaceDemotion, type RacecheckResult } from "./racecheck.js";
 
 export type XrayVerdict = "GO" | "RISKY" | "TAKEN" | "ERROR";
@@ -242,7 +261,8 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
   // Lazy by design (see module doc): claim flags cannot overturn a
   // PR-driven verdict, so this fetch is skipped when open PRs exist.
   let claimFlags: XrayClaimFlag[] = [];
-  let freshStrong = 0;
+  let fullStrong: ReturnType<typeof strongClaimants> = [];
+  let partialStrong: ReturnType<typeof strongClaimants> = [];
   try {
     const comments = await fetchComments(owner, repo, number);
     const claims = detectClaims(issueAuthor, comments);
@@ -255,13 +275,35 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
     for (const c of claimFlags) {
       flags.push(`claimed-by @${c.author} (${c.ageDays}d ago: "${c.phrase}")`);
     }
-    freshStrong = strongClaimants(claims).filter((c) => c.scope !== "partial").length;
+    // Verdict parity (v0.22.1): the check pipeline decays a claim whose
+    // author went silent more than STALE_SIGNAL_DAYS ago when no closing
+    // PR was ever opened (verdict.ts, v0.19.0 item 17). The x-ray used
+    // to count those claims at full strength, so an ancient claim race
+    // read TAKEN here while `check` read the same issue clean. Decayed
+    // claims stay in claimFlags as evidence and are disclosed here;
+    // they just never count toward a verdict.
+    const hasClosingPR = xrayPRs.some((p) => isClosingPR(p));
+    const decayed = new Set(
+      claims.filter((c) => c.ageDays > STALE_SIGNAL_DAYS && !hasClosingPR)
+    );
+    if (decayed.size > 0) {
+      flags.push("stale-signal");
+      for (const c of decayed) {
+        reasons.push(
+          `stale signal: claim by ${c.author} ${c.ageDays} day(s) ago exceeds the ${STALE_SIGNAL_DAYS}-day staleness threshold with no PR opened; down-weighted`
+        );
+      }
+    }
+    const liveStrong = strongClaimants(claims).filter((c) => !decayed.has(c));
+    fullStrong = liveStrong.filter((c) => c.scope !== "partial");
+    partialStrong = liveStrong.filter((c) => c.scope === "partial");
   } catch {
     // Comments are best-effort; a failure degrades to no claim flags.
   }
 
-  if (freshStrong >= 2) {
-    reasons.push(`claim race: ${freshStrong} strong claimants in comments`);
+  if (fullStrong.length >= 2) {
+    const names = fullStrong.map((c) => c.author).join(", ");
+    reasons.push(`claim race: ${fullStrong.length} strong claimants in comments (${names})`);
     flags.push("claimed");
     return done("TAKEN", claimFlags);
   }
@@ -274,12 +316,39 @@ export async function xrayIssue(owner: string, repo: string, number: number): Pr
     return finishWithRace("RISKY", claimFlags);
   }
 
-  if (freshStrong === 1) {
-    const c = claimFlags[0];
-    reasons.push(
-      `claimed by ${c.author} ${c.ageDays} day(s) ago ("${c.phrase}"), no PR in flight`
-    );
+  if (fullStrong.length === 1) {
+    // Name the actual strong claimant. The pre-0.22.1 code used
+    // claimFlags[0], the newest claim of ANY strength, so a soft
+    // commenter was named as the claimant for someone else's claim.
+    const c = fullStrong[0];
     flags.push("claimed");
+    if (c.ageDays <= FRESH_CLAIM_DAYS) {
+      reasons.push(
+        `claimed by ${c.author} ${c.ageDays} day(s) ago ("${c.phrase}"), no PR in flight`
+      );
+    } else {
+      reasons.push(
+        `stale claim by ${c.author} ${c.ageDays} day(s) ago ("${c.phrase}"), no PR in flight`
+      );
+      flags.push("stale_claim");
+    }
+    return finishWithRace("RISKY", claimFlags);
+  }
+
+  if (partialStrong.length > 0) {
+    // Verdict rule 5b parity: a strong scoped claim takes part of the
+    // issue. It never makes the issue TAKEN, but an otherwise-GO issue
+    // is RISKY because part of the work is already spoken for. The
+    // pre-0.22.1 x-ray filtered partial claims out and read GO.
+    const c = partialStrong[0];
+    const part = c.scopeWord ? `the ${c.scopeWord} part` : "part of the issue";
+    flags.push("claimed");
+    flags.push("partial-claim");
+    if (c.ageDays <= FRESH_CLAIM_DAYS) {
+      reasons.push(`${c.author} claimed ${part} ${c.ageDays} day(s) ago; the rest may still be open`);
+    } else {
+      reasons.push(`stale partial claim by ${c.author} ${c.ageDays} day(s) ago ("${c.phrase}"); the rest may still be open`);
+    }
     return finishWithRace("RISKY", claimFlags);
   }
 

@@ -569,3 +569,98 @@ describe("v0.21.2 GL-2: search hits without a genuine issue reference are droppe
     assert.equal(r.verdict, "RISKY");
   });
 });
+
+describe("v0.22.1 claim parity with the verdict engine", () => {
+  const daysAgoIso = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+
+  it("an ancient claim race decays: 2 strong claims over 180d old, no PR ever opened -> GO with stale-signal disclosure", async () => {
+    const repo = freshRepo("wx-decay-race");
+    mockApi(
+      issueRoutes(repo, 1100, {
+        comments: [
+          commentPayload("alice", "I'd like to take this on", daysAgoIso(400)),
+          commentPayload("bob", "I would like to work on this issue", daysAgoIso(390)),
+        ],
+      })
+    );
+    const r = await xrayIssue("acme", repo, 1100);
+    assert.equal(r.verdict, "GO", `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(r.flags.includes("stale-signal"), `flags: ${r.flags.join(",")}`);
+    assert.equal(r.claimFlags.length, 2, "decayed claims stay as evidence");
+    assert.ok(r.reasons.some((x) => x.includes("down-weighted")), `reasons: ${r.reasons.join(" | ")}`);
+  });
+
+  it("an ancient single strong claim decays -> GO, not RISKY", async () => {
+    const repo = freshRepo("wx-decay-one");
+    mockApi(
+      issueRoutes(repo, 1200, {
+        comments: [commentPayload("alice", "I'd like to work on this issue", daysAgoIso(400))],
+      })
+    );
+    const r = await xrayIssue("acme", repo, 1200);
+    assert.equal(r.verdict, "GO", `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(r.flags.includes("stale-signal"), `flags: ${r.flags.join(",")}`);
+    assert.ok(!r.flags.includes("claimed"), `flags: ${r.flags.join(",")}`);
+  });
+
+  it("ancient claims do NOT decay when a closing PR exists in the linked set", async () => {
+    const repo = freshRepo("wx-decay-blocked");
+    mockApi(
+      issueRoutes(repo, 1300, {
+        timeline: [xrefEvent(repo, 1301)],
+        prs: { 1301: prDetail(repo, 1301, { body: "Closes #1300", state: "closed", author: "someone" }) },
+        comments: [
+          commentPayload("alice", "I'd like to take this on", daysAgoIso(400)),
+          commentPayload("bob", "I would like to work on this issue", daysAgoIso(390)),
+        ],
+      })
+    );
+    const r = await xrayIssue("acme", repo, 1300);
+    assert.equal(r.verdict, "TAKEN", `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(r.reasons.some((x) => x.includes("claim race")), `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(!r.flags.includes("stale-signal"), `flags: ${r.flags.join(",")}`);
+  });
+
+  it("the single-claim reason names the strong claimant, not a newer soft commenter", async () => {
+    const repo = freshRepo("wx-attribute");
+    mockApi(
+      issueRoutes(repo, 1400, {
+        comments: [
+          commentPayload("helper", "I'd like to work on this issue", daysAgoIso(5)),
+          commentPayload("looker", "I'm going to take a look at this one", daysAgoIso(1)),
+        ],
+      })
+    );
+    const r = await xrayIssue("acme", repo, 1400);
+    assert.equal(r.verdict, "RISKY", `reasons: ${r.reasons.join(" | ")}`);
+    assert.equal(r.claimFlags[0].author, "looker", "the soft claim is the newest, so claimFlags[0] is the trap");
+    assert.ok(r.reasons.some((x) => x.includes("claimed by helper")), `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(!r.reasons.some((x) => x.includes("claimed by looker")), `reasons: ${r.reasons.join(" | ")}`);
+  });
+
+  it("a stale-band single claim (100d) -> RISKY named as a stale claim", async () => {
+    const repo = freshRepo("wx-stale-band");
+    mockApi(
+      issueRoutes(repo, 1500, {
+        comments: [commentPayload("alice", "I'd like to work on this issue", daysAgoIso(100))],
+      })
+    );
+    const r = await xrayIssue("acme", repo, 1500);
+    assert.equal(r.verdict, "RISKY", `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(r.flags.includes("stale_claim"), `flags: ${r.flags.join(",")}`);
+    assert.ok(r.reasons.some((x) => x.includes("stale claim by alice")), `reasons: ${r.reasons.join(" | ")}`);
+  });
+
+  it("a strong partial claim -> RISKY with partial-claim flag (verdict rule 5b parity)", async () => {
+    const repo = freshRepo("wx-partial");
+    mockApi(
+      issueRoutes(repo, 1600, {
+        comments: [commentPayload("scoped", "Taking the remaining fallback ask", daysAgoIso(2))],
+      })
+    );
+    const r = await xrayIssue("acme", repo, 1600);
+    assert.equal(r.verdict, "RISKY", `reasons: ${r.reasons.join(" | ")}`);
+    assert.ok(r.flags.includes("partial-claim"), `flags: ${r.flags.join(",")}`);
+    assert.ok(r.reasons.some((x) => x.includes("scoped claimed the remaining part")), `reasons: ${r.reasons.join(" | ")}`);
+  });
+});
