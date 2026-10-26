@@ -122,6 +122,14 @@ let statePath: string;
 beforeEach(() => {
   stateDir = mkdtempSync(join(tmpdir(), "babysit-"));
   statePath = join(stateDir, "babysit.json");
+  // Hermetic claims registry: babysit() calls that do not pass an explicit
+  // claimsRegistryPath resolve the registry through GREENLIGHT_CLAIMS_FILE
+  // (see defaultRegistryPath in src/claims-registry.ts). Point it at a
+  // nonexistent file inside this test's temp dir so the suite can never
+  // read, live-check, or retire claims from the operator's real registry
+  // at ~/.greenlight/my-claims.json. Tests that exercise the claims
+  // section pass their own claimsRegistryPath, which takes precedence.
+  process.env.GREENLIGHT_CLAIMS_FILE = join(stateDir, "my-claims.json");
 });
 
 describe("buildPrReport: the clean first-run picture", () => {
