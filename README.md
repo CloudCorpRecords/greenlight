@@ -1,6 +1,14 @@
 # Greenlight
 
+[![npm version](https://img.shields.io/npm/v/@reneturcios/greenlight.svg)](https://www.npmjs.com/package/@reneturcios/greenlight) [![npm downloads](https://img.shields.io/npm/dm/@reneturcios/greenlight.svg)](https://www.npmjs.com/package/@reneturcios/greenlight) [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.CloudCorpRecords%2Fgreenlight-blue)](https://registry.modelcontextprotocol.io/)
+
 **Greenlight is the pre-flight and coordination layer for open-source contribution: the software that stands between an outside contributor (increasingly an AI agent) and the maintainers of a public repo, and answers the questions no other tool answers. Can I contribute here at all? Is this issue secretly taken? What are the house rules? Who else is racing me? And for maintainers: who is flooding my queue, and what is safe to merge?**
+
+## Quickstart
+
+```bash
+npx @reneturcios/greenlight check <issue-url>
+```
 
 ## Why this layer exists
 
@@ -492,5 +500,7 @@ MIT. See LICENSE.
 
 ---
 
-Built by [Rene Turcios](https://github.com/CloudCorpRecords) — vibe coder / agent-native dev building in public in SF. If Greenlight saved you a weekend, star this repo and [follow @CloudCorpRecords](https://github.com/CloudCorpRecords) for the next tool.
+Built by [Rene Turcios](https://github.com/CloudCorpRecords) — vibe coder / agent-native dev building in public in SF. [Follow @CloudCorpRecords](https://github.com/CloudCorpRecords) for the next tool.
 The family: [prwatch](https://github.com/CloudCorpRecords/prwatch) · [claimcheck](https://github.com/CloudCorpRecords/claimcheck) · [gatefile](https://github.com/CloudCorpRecords/gatefile) · [hookcheck](https://github.com/CloudCorpRecords/hookcheck) · [injectcheck](https://github.com/CloudCorpRecords/injectcheck) · [actionpin](https://github.com/CloudCorpRecords/actionpin) — all on npm under `@reneturcios/` and in the official MCP Registry.
+
+If Greenlight saved you a weekend, star this repo: it helps other contributors find it.
