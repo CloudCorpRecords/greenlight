@@ -712,6 +712,60 @@ describe("scoped intake pause (v0.17.0)", () => {
   });
 });
 
+describe("stale bot (closed-unmerged dataset case: tscircuit/circuit-to-svg#858)", () => {
+  function clean(): IssueSnapshot {
+    const base = load("pdfcn-58.json");
+    return {
+      ...base,
+      comments: [],
+      linkedPRs: [],
+      commentMentionedPRs: [],
+      contributing: undefined,
+      updatedAt: NOW.toISOString(),
+    };
+  }
+
+  it("caps a clean issue at RISKY with the stale-bot window quoted", () => {
+    const snapshot = clean();
+    const result = scoreIssue(
+      {
+        ...snapshot,
+        workflowGates: [
+          {
+            kind: "stale_bot",
+            detected: true,
+            evidence:
+              "workflow file: stalebot.yml (actions/stale: PR marked stale after 2 idle days, closed 1 day after the mark unless activity resumes)",
+            source: ".github/workflows/stalebot.yml",
+          },
+        ],
+      },
+      NOW
+    );
+    assert.equal(result.verdict, "RISKY");
+    assert.ok(result.flags.includes("stale-bot"));
+    assert.ok(result.reasons.some((r) => r.includes("stale bot")));
+    assert.ok(result.reasons.some((r) => r.includes("closed 1 day after the mark")));
+    const g = result.gates.find((x) => x.kind === "stale_bot")!;
+    assert.equal(g.detected, true);
+    assert.equal(g.source, ".github/workflows/stalebot.yml");
+  });
+
+  it("never gates on a stale bot alone", () => {
+    const snapshot = clean();
+    const result = scoreIssue(
+      {
+        ...snapshot,
+        workflowGates: [
+          { kind: "stale_bot", detected: true, evidence: "workflow file: stale.yml", source: ".github/workflows/stale.yml" },
+        ],
+      },
+      NOW
+    );
+    assert.notEqual(result.verdict, "GATED");
+  });
+});
+
 describe("staleness decay (v0.19.0, item 17)", () => {
   function clean(): IssueSnapshot {
     const base = load("pdfcn-58.json");

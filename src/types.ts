@@ -191,7 +191,20 @@ export type GateKind =
    * AI Usage Policy + AGENTS.md). A flag, never a verdict change: prep
    * turns it into concrete required actions.
    */
-  | "agents_disclosure";
+  | "agents_disclosure"
+  /**
+   * The repo runs a stale bot (usually actions/stale in a workflow) that
+   * marks inactive PRs stale and auto-closes them after a configured
+   * window unless activity resumes. Not an intake block: the PR opens
+   * fine and dies later, on a clock the contributor cannot see from the
+   * issue page. Field case 2026-10-25: tscircuit/circuit-to-svg#858 was
+   * closed by github-actions[bot] after stale marks with zero human
+   * reviews; the repo's stalebot.yml marks PRs stale after 2 idle days
+   * and closes them 1 day after the mark. Detected from workflow files
+   * (see detectWorkflowGates); the verdict surfaces it as a flag plus a
+   * RISKY cap so the clock is priced before a build starts.
+   */
+  | "stale_bot";
 
 /** Another issue this one is marked a duplicate of, with its live state. */
 export interface DuplicateTarget {

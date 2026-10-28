@@ -473,6 +473,23 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     verdict = "RISKY";
   }
 
+  // Rule 10c: stale bot. The repo's automation closes inactive PRs on a
+  // configured clock (actions/stale), so an opened PR can die without
+  // any human ever reading it (tscircuit/circuit-to-svg#858: marked
+  // stale, closed by github-actions[bot] 1 day later, zero reviews).
+  // This never gates (the bot does not block opening) and never reads
+  // as a defect in the issue itself; it caps at RISKY with the parsed
+  // window quoted, so the babysit cadence for this repo is chosen with
+  // the clock in view before a build starts.
+  const staleBot = gates.find((g) => g.kind === "stale_bot" && g.detected);
+  if (staleBot) {
+    flags.push("stale-bot");
+    reasons.push(
+      `stale bot: ${staleBot.evidence ? `"${staleBot.evidence}"; ` : ""}an idle PR here is closed by automation, so it needs activity inside that window`
+    );
+    verdict = "RISKY";
+  }
+
   // Rule 11: comment-mentioned PR cross-check. A PR cited in a non-author
   // comment whose title/body mentions this issue number may already cover
   // part of the work: downgrade an otherwise-GO verdict to RISKY. A merged

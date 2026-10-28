@@ -17,6 +17,10 @@
  *     dco_required          -5
  *     agents_banned        -50 (v0.21.2)
  *     agents_disclosure     -5 (v0.21.2)
+ *     stale_bot            -10 (a lifecycle clock on any PR opened here;
+ *                           only scored when a source actually documents
+ *                           the bot, since the friction pass reads prose
+ *                           and committed gatefiles, not workflow files)
  *   outcome signals (only when computed, never guessed):
  *     external PR merge rate: +(rate - 0.5) * 40
  *       (a 100% external merge rate adds 20; 0% subtracts 20)
@@ -65,6 +69,7 @@ const GATE_WEIGHTS: Record<string, number> = {
   // on par with cla/dco.
   agents_banned: -50,
   agents_disclosure: -5,
+  stale_bot: -10,
   discussion_first: -10,
   claim_first: -5,
   cla_required: -5,

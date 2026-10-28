@@ -264,6 +264,23 @@ const RULES: GateRule[] = [
       /ai[-\s]?generated.{0,60}(disclos|prefix|declare)/i,
     ],
   },
+  {
+    // Stale-bot lifecycle risk. The primary detector is the workflow
+    // pass (detectWorkflowGates parses actions/stale configs and their
+    // PR windows); these prose patterns only catch repos that document
+    // the bot in contributor-facing text. A stale bot never blocks an
+    // opening, so this is never a hard gate: it prices the clock a PR
+    // lives on (field case tscircuit/circuit-to-svg#858, closed by the
+    // bot after stale marks with zero human review).
+    kind: "stale_bot",
+    regexes: [
+      /actions\/stale\b/i,
+      /\bstale[-\s]?bot\b/i,
+      /days-before-(pr-)?stale/i,
+      /will be closed if no further activity/i,
+      /marked as stale.{0,100}(will be closed|auto\w*-?closed)/i,
+    ],
+  },
 ];
 
 /**
@@ -536,6 +553,7 @@ export function gateLabel(kind: GateKind): string {
     case "external_prs_closed": return "external PRs closed by automation";
     case "agents_banned": return "agent contributions banned";
     case "agents_disclosure": return "AI disclosure required";
+    case "stale_bot": return "stale bot auto-closes inactive PRs";
   }
 }
 
@@ -554,6 +572,7 @@ export interface WorkflowFile {
  * whose steps close PRs from non-members.
  */
 export function detectWorkflowGates(files: WorkflowFile[]): Gate[] {
+  const gates: Gate[] = [];
   const NAME_RE = /clos(e|ing|ure).*(external|outside)|(external|outside).*clos(e|ing|ure)/i;
   // Order-agnostic: "close ... outside contributors' PRs" and "close PRs
   // from outside contributors" both count. "prs?\b" catches "PR", "prs",
@@ -565,16 +584,82 @@ export function detectWorkflowGates(files: WorkflowFile[]): Gate[] {
   );
   const hit = files.find((f) => NAME_RE.test(f.name)) ??
     files.find((f) => f.content !== undefined && CONTENT_RE.test(f.content));
-  if (!hit) return [];
-  const byName = NAME_RE.test(hit.name);
-  return [
-    {
+  if (hit) {
+    const byName = NAME_RE.test(hit.name);
+    gates.push({
       kind: "external_prs_closed",
       detected: true,
       evidence: byName
         ? `workflow file: ${hit.name}`
         : `workflow file: ${hit.name} (closes external PRs: "${snippet(hit.content ?? "", CONTENT_RE)}")`,
       source: `.github/workflows/${hit.name}`,
-    },
-  ];
+    });
+  }
+  const stale = detectStaleBotGate(files);
+  if (stale) gates.push(stale);
+  return gates;
+}
+
+/** actions/stale documented defaults when a config omits the PR window. */
+const STALE_DEFAULT_STALE_DAYS = 60;
+const STALE_DEFAULT_CLOSE_DAYS = 7;
+
+function staleInput(content: string, key: string): number | undefined {
+  const m = content.match(new RegExp(`${key}:\\s*(-?\\d+)`));
+  return m ? Number(m[1]) : undefined;
+}
+
+/**
+ * Detect a stale bot (actions/stale) that auto-closes pull requests, and
+ * parse its PR window: a PR is marked stale after N idle days and closed
+ * M days after the mark unless activity resumes. The bot is a lifecycle
+ * risk, not an intake gate, so the gate is detected-only and the verdict
+ * layer caps at RISKY with the window quoted in the evidence.
+ *
+ * Field case 2026-10-25: tscircuit/circuit-to-svg runs stalebot.yml with
+ * days-before-pr-stale 2 and days-before-pr-close 1; PR #858 sat through
+ * its stale marks with no human review and github-actions[bot] closed
+ * it. Nothing in the pre-flight output priced that 3-day total window.
+ *
+ * actions/stale semantics honored here: PR-specific inputs fall back to
+ * the generic days-before-stale / days-before-close inputs, which fall
+ * back to the action defaults (60 / 7). A close window of -1 disables
+ * auto-close, so no gate is emitted. A file whose name alone says stale
+ * (content not fetchable) emits with the action defaults and says so.
+ */
+export function detectStaleBotGate(files: WorkflowFile[]): Gate | null {
+  const byContent = files.find(
+    (f) => f.content !== undefined && /actions\/stale@/.test(f.content)
+  );
+  const file = byContent ?? files.find((f) => /stale/i.test(f.name));
+  if (!file) return null;
+  if (!byContent) {
+    return {
+      kind: "stale_bot",
+      detected: true,
+      evidence:
+        `workflow file: ${file.name} (stale bot by filename; window not fetchable, ` +
+        `actions/stale defaults assumed: PR stale after ${STALE_DEFAULT_STALE_DAYS} idle days, ` +
+        `closed ${STALE_DEFAULT_CLOSE_DAYS} days after the mark)`,
+      source: `.github/workflows/${file.name}`,
+    };
+  }
+  const content = file.content ?? "";
+  const staleDays =
+    staleInput(content, "days-before-pr-stale") ??
+    staleInput(content, "days-before-stale") ??
+    STALE_DEFAULT_STALE_DAYS;
+  const closeDays =
+    staleInput(content, "days-before-pr-close") ??
+    staleInput(content, "days-before-close") ??
+    STALE_DEFAULT_CLOSE_DAYS;
+  if (closeDays < 0) return null; // bot marks but never auto-closes PRs
+  return {
+    kind: "stale_bot",
+    detected: true,
+    evidence:
+      `workflow file: ${file.name} (actions/stale: PR marked stale after ${staleDays} idle day${staleDays === 1 ? "" : "s"}, ` +
+      `closed ${closeDays} day${closeDays === 1 ? "" : "s"} after the mark unless activity resumes)`,
+    source: `.github/workflows/${file.name}`,
+  };
 }

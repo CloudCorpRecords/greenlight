@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseGates, parseGatesFromSources, parseGatefileJson, hardGates, gateLabel, detectWorkflowGates } from "../src/gates.js";
+import { parseGates, parseGatesFromSources, parseGatefileJson, hardGates, gateLabel, detectWorkflowGates, detectStaleBotGate } from "../src/gates.js";
 
 describe("parseGates", () => {
   it("detects assignment requirement (FastMCP style)", () => {
@@ -96,7 +96,7 @@ describe("parseGates", () => {
 
   it("returns all gates (now eleven) with false when nothing matches", () => {
     const gates = parseGates("Thanks for contributing! Just open a PR.");
-    assert.equal(gates.length, 12);
+    assert.equal(gates.length, 13); // 13 kinds since stale_bot
     assert.ok(gates.every((g) => !g.detected));
   });
 
@@ -173,7 +173,7 @@ describe("parseGatesFromSources", () => {
 
   it("returns all eleven kinds even when nothing matches", () => {
     const gates = parseGatesFromSources([{ file: "AGENTS.md", text: "Run the linter." }]);
-    assert.equal(gates.length, 12);
+    assert.equal(gates.length, 13); // 13 kinds since stale_bot
     assert.ok(gates.every((g) => g.detected === false));
   });
 });
@@ -241,6 +241,84 @@ describe("paused and auto-closed outside PRs (field case 2026-10-15)", () => {
   });
 });
 
+describe("stale bot detection (closed-unmerged dataset case: tscircuit/circuit-to-svg#858)", () => {
+  // The repo's real .github/workflows/stalebot.yml (fetched live
+  // 2026-10-27, PR section verbatim): PRs go stale after 2 idle days
+  // and are closed 1 day after the mark. PR #858 died exactly on this
+  // clock with zero human reviews.
+  const TSCIRCUIT_STALEBOT =
+    "name: 'Close stale issues and PRs'\n" +
+    "on:\n  schedule:\n    - cron: '30 1 * * *'\n" +
+    "jobs:\n  stale:\n    runs-on: ubuntu-latest\n    steps:\n" +
+    "      - uses: actions/stale@v9\n" +
+    "        with:\n" +
+    "          stale-pr-message: 'This PR has been automatically marked as stale because it has had no recent activity. It will be closed if no further activity occurs.'\n" +
+    "          close-pr-message: 'This PR was closed because it has been inactive for 1 day since being marked as stale.'\n" +
+    "          days-before-pr-stale: 2\n" +
+    "          days-before-pr-close: 1\n" +
+    "          exempt-pr-labels: 'pinned,security,help-wanted'\n" +
+    "          stale-pr-label: 'no-pr-activity'\n";
+
+  it("flags actions/stale with the parsed PR window", () => {
+    const gates = detectWorkflowGates([{ name: "stalebot.yml", content: TSCIRCUIT_STALEBOT }]);
+    assert.equal(gates.length, 1);
+    const g = gates[0];
+    assert.equal(g.kind, "stale_bot");
+    assert.equal(g.detected, true);
+    assert.equal(g.source, ".github/workflows/stalebot.yml");
+    assert.ok(g.evidence.includes("stale after 2 idle days"), g.evidence);
+    assert.ok(g.evidence.includes("closed 1 day after the mark"), g.evidence);
+    assert.equal(gateLabel("stale_bot"), "stale bot auto-closes inactive PRs");
+    // A lifecycle clock is a risk to price, never an intake block.
+    assert.ok(!hardGates(gates).some((x) => x.kind === "stale_bot"));
+  });
+
+  it("falls back to the generic window, then to action defaults", () => {
+    const generic = detectStaleBotGate([
+      { name: "stale.yml", content: "steps:\n  - uses: actions/stale@v5\n    with:\n      days-before-stale: 30\n      days-before-close: 5\n" },
+    ]);
+    assert.ok(generic);
+    assert.ok(generic.evidence.includes("stale after 30 idle days"), generic.evidence);
+    assert.ok(generic.evidence.includes("closed 5 days after the mark"), generic.evidence);
+    const defaults = detectStaleBotGate([
+      { name: "stale.yml", content: "steps:\n  - uses: actions/stale@v9\n" },
+    ]);
+    assert.ok(defaults);
+    assert.ok(defaults.evidence.includes("stale after 60 idle days"), defaults.evidence);
+    assert.ok(defaults.evidence.includes("closed 7 days after the mark"), defaults.evidence);
+  });
+
+  it("stays quiet when the bot never auto-closes PRs (close window -1)", () => {
+    const g = detectStaleBotGate([
+      { name: "stale.yml", content: "steps:\n  - uses: actions/stale@v9\n    with:\n      days-before-pr-stale: 10\n      days-before-pr-close: -1\n" },
+    ]);
+    assert.equal(g, null);
+  });
+
+  it("stays quiet when 'stale' is only a word in an ordinary workflow", () => {
+    const gates = detectWorkflowGates([
+      { name: "ci.yml", content: "name: CI\njobs:\n  test:\n    steps:\n      - run: echo 'clearing stale cache'\n" },
+    ]);
+    assert.deepEqual(gates, []);
+  });
+
+  it("flags a stale-named workflow whose content is not fetchable, defaults disclosed", () => {
+    const g = detectStaleBotGate([{ name: "stale.yml" }]);
+    assert.ok(g);
+    assert.equal(g.kind, "stale_bot");
+    assert.ok(g.evidence.includes("defaults assumed"), g.evidence);
+  });
+
+  it("parseGates catches repos that document the bot in prose", () => {
+    const gates = parseGates(
+      "Inactive PRs are handled by our stale bot: a PR is marked as stale after 30 days and will be closed if no further activity occurs."
+    );
+    const g = gates.find((x) => x.kind === "stale_bot")!;
+    assert.equal(g.detected, true);
+    assert.ok(!hardGates(gates).some((x) => x.kind === "stale_bot"));
+  });
+});
+
 describe("agent policy gates (v0.9.0)", () => {
   it("detects an agent ban in AGENTS.md style prose", () => {
     const text =
@@ -277,7 +355,7 @@ describe("agent policy gates (v0.9.0)", () => {
 
   it("stays byte-identical quiet when no agent policy exists", () => {
     const gates = parseGates("# Contributing\n\nFork, branch, and open a PR. Tests must pass.");
-    assert.equal(gates.length, 12);
+    assert.equal(gates.length, 13); // 13 kinds since stale_bot
     for (const g of gates) {
       assert.equal(g.detected, false, g.kind);
       assert.equal(g.evidence, "");
