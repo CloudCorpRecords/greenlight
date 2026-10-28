@@ -26,7 +26,7 @@
     "readme:count": "bash scripts/sync-readme-test-count.sh"
   },
   "type": "module",
-  "version": "0.22.1",
+  "version": "0.23.0",
   "mcpName": "io.github.CloudCorpRecords/greenlight",
   "publishConfig": {
     "access": "public"
