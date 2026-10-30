@@ -1335,6 +1335,35 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "ACRA/acra",
+   "url": "https://github.com/ACRA/acra",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6501,
+   "language": "Kotlin",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 171.79
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T12:14:32Z",
+   "open_issues": 3
+  },
+  {
    "repo": "actions/starter-workflows",
    "url": "https://github.com/actions/starter-workflows",
    "policy_classes": [
@@ -2250,6 +2279,67 @@
    "pushed_at": "2026-10-17T19:52:02Z",
    "open_issues": 1902,
    "outsider_merge_share": 86
+  },
+  {
+   "repo": "agones-dev/agones",
+   "url": "https://github.com/agones-dev/agones",
+   "policy_classes": [
+    "agents-disclosure",
+    "cla-required",
+    "dco-required"
+   ],
+   "headline": "AI assistance must be disclosed",
+   "what_to_do": "Disclose AI use in the PR as the policy requires (trailer or description note).",
+   "evidence": "5k scan 2026-10-19: agents-disclosure in CONTRIBUTING.md: \"Listing AI tooling as a co-author, co-signing commits using an AI tool, or using the assisted-by, co-developed or similar commit trailer is not allowed.\"; cla-required in CONTRIBUTING.md: \"## Contributor License Agreement Contributions to this project must be accompanied by a Contributor License Agreement.\"; dco-required in AGENTS.md: \"DCO is bot-enforced, and an unsigned commit blocks the PR. - Squash the branch to a single commit before it merges.\"",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7088,
+   "language": "Go",
+   "friction_lite_outsider_share": 0.259,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 47,
+    "gates_detected": [
+     {
+      "kind": "assignment_required",
+      "evidence": "tarting, check the issue is not already being worked on: no assignee, no linked PR, and no recent comment from someone else taking it. Do no..."
+     },
+     {
+      "kind": "cla_required",
+      "evidence": "here are just a few small guidelines you need to follow. ## Contributor License Agreement Contributions to this project must be accompanied ..."
+     },
+     {
+      "kind": "dco_required",
+      "evidence": "ng instructions below. ### Developer Certificate of Origin (DCO) All contributions to Agones must be signed off in accordance with the [Deve..."
+     },
+     {
+      "kind": "discussion_first",
+      "evidence": "over. - If the issue still has open questions or unresolved discussion, do not implement it. Go back to the issue, raise the questions, and ..."
+     },
+     {
+      "kind": "agents_disclosure",
+      "evidence": "are responsible for understanding every change. If you used AI tools in preparing your PR, you must disclose this in the description of your..."
+     }
+    ],
+    "outsider_merge_share": 0.26,
+    "outsider_merge_share_pct": 26,
+    "reasons": [
+     "assignment required before PR (-25)",
+     "CLA signature required (-5)",
+     "DCO sign-off required (-5)",
+     "discussion first (-10)",
+     "AI disclosure required (-5)",
+     "external PR merge rate 26% (-9.6)",
+     "14 open good-first-issues (+7.0)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 122.92
+   },
+   "good_first_issues": 2,
+   "pushed_at": "2026-10-27T03:56:24Z",
+   "open_issues": 67,
+   "outsider_merge_share": 26
   },
   {
    "repo": "AgriciDaniel/claude-ads",
@@ -5849,6 +5939,36 @@
    "outsider_merge_share": 0
   },
   {
+   "repo": "anus-dev/ANUS",
+   "url": "https://github.com/anus-dev/ANUS",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6556,
+   "language": "JavaScript",
+   "friction_lite_outsider_share": 0.333,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 141.7
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-01T16:32:18Z",
+   "open_issues": 74,
+   "outsider_merge_share": 33
+  },
+  {
    "repo": "anvaka/city-roads",
    "url": "https://github.com/anvaka/city-roads",
    "policy_classes": [
@@ -6861,6 +6981,44 @@
    "pushed_at": "2026-10-20T14:57:40Z",
    "open_issues": 357,
    "outsider_merge_share": 7
+  },
+  {
+   "repo": "apache/zeppelin",
+   "url": "https://github.com/apache/zeppelin",
+   "policy_classes": [
+    "cla-required"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: cla-required in AGENTS.md: \"<!-- Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file distributed with this work for additional information regarding copyright ownership.\"",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6667,
+   "language": "Java",
+   "friction_lite_outsider_share": 0.708,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [
+     {
+      "kind": "cla_required",
+      "evidence": "d to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE file distributed with this work f..."
+     }
+    ],
+    "outsider_merge_share": 0.71,
+    "outsider_merge_share_pct": 71,
+    "reasons": [
+     "CLA signature required (-5)",
+     "external PR merge rate 71% (+8.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 155.83
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T11:40:06Z",
+   "open_issues": 65,
+   "outsider_merge_share": 71
   },
   {
    "repo": "apache/zookeeper",
@@ -9437,6 +9595,39 @@
    "outsider_merge_share": 86
   },
   {
+   "repo": "automerge/automerge",
+   "url": "https://github.com/automerge/automerge",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6694,
+   "language": "JavaScript",
+   "friction_lite_outsider_share": 0.714,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.71,
+    "outsider_merge_share_pct": 71,
+    "reasons": [
+     "external PR merge rate 71% (+8.4)",
+     "1 open good-first-issues (+0.5)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 159.22
+   },
+   "good_first_issues": 1,
+   "pushed_at": "2026-10-26T06:18:35Z",
+   "open_issues": 140,
+   "outsider_merge_share": 71
+  },
+  {
    "repo": "AutoMQ/automq",
    "url": "https://github.com/AutoMQ/automq",
    "policy_classes": [
@@ -10820,6 +11011,38 @@
    "outsider_merge_share": 15
   },
   {
+   "repo": "basketikun/chatgpt2api",
+   "url": "https://github.com/basketikun/chatgpt2api",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6778,
+   "language": "Python",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 153.5
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-25T11:19:02Z",
+   "open_issues": 38,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "batrapulkit/squidbrake",
    "url": "https://github.com/batrapulkit/squidbrake",
    "policy_classes": [
@@ -11828,6 +12051,38 @@
    "pushed_at": "2026-10-18T06:16:13Z",
    "open_issues": 368,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "binaricat/Netcatty",
+   "url": "https://github.com/binaricat/Netcatty",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6906,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.25,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 90,
+    "gates_detected": [],
+    "outsider_merge_share": 0.25,
+    "outsider_merge_share_pct": 25,
+    "reasons": [
+     "external PR merge rate 25% (-10.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 213.76
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T06:58:42Z",
+   "open_issues": 107,
+   "outsider_merge_share": 25
   },
   {
    "repo": "binarywang/WxJava",
@@ -12860,6 +13115,38 @@
    "pushed_at": "2026-10-08T15:06:27Z",
    "open_issues": 33,
    "outsider_merge_share": 30
+  },
+  {
+   "repo": "bojieli/ai-infra-book",
+   "url": "https://github.com/bojieli/ai-infra-book",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7123,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.286,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 92,
+    "gates_detected": [],
+    "outsider_merge_share": 0.29,
+    "outsider_merge_share_pct": 29,
+    "reasons": [
+     "external PR merge rate 29% (-8.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 19.27
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-01T08:19:29Z",
+   "open_issues": 9,
+   "outsider_merge_share": 29
   },
   {
    "repo": "bokeh/bokeh",
@@ -13907,6 +14194,39 @@
    "good_first_issues": 4,
    "pushed_at": "2026-09-29T15:49:15Z",
    "open_issues": 177,
+   "outsider_merge_share": 100
+  },
+  {
+   "repo": "builtbybel/FluentCleaner",
+   "url": "https://github.com/builtbybel/FluentCleaner",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6638,
+   "language": "C#",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)",
+     "1 open good-first-issues (+0.5)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 127.88
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-09-17T20:33:21Z",
+   "open_issues": 27,
    "outsider_merge_share": 100
   },
   {
@@ -18146,6 +18466,36 @@
    "outsider_merge_share": 60
   },
   {
+   "repo": "cloudquery/cloudquery",
+   "url": "https://github.com/cloudquery/cloudquery",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6547,
+   "language": "Go",
+   "friction_lite_outsider_share": 0.897,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 269.67
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T17:04:25Z",
+   "open_issues": 171,
+   "outsider_merge_share": 90
+  },
+  {
    "repo": "cloudreve/cloudreve",
    "url": "https://github.com/cloudreve/cloudreve",
    "policy_classes": [
@@ -19790,12 +20140,11 @@
    "repo": "coollabsio/coolify",
    "url": "https://github.com/coollabsio/coolify",
    "policy_classes": [
-    "agents-disclosure",
-    "discussion-first"
+    "agents-disclosure"
    ],
    "headline": "AI use must be mentioned in the PR description",
    "what_to_do": "Disclose any AI tool use in the PR description. AI-generated PRs submitted without clear understanding of the change will be closed.",
-   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): in CONTRIBUTING.md, AI Usage Disclosure: \"If AI tools were used at any stage, mention it in the pull request description.\" The file separately warns that AI-generated pull requests without clear understanding will be closed. A disclosure rule, not a ban. Greenlight v0.21.4 flywheel correction: adds discussion-first: in CONTRIBUTING.md: \"There are many ways to help: - Answer questions in GitHub Discussions or Discord - Report reproducible bugs - Submit pull requests to fix issues - Add new one-click services - Improve documentation Coolify is a PaaS used by 400,000+ people worldwide and maintained by two active maintainers.\"",
+   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): in CONTRIBUTING.md, AI Usage Disclosure: \"If AI tools were used at any stage, mention it in the pull request description.\" The file separately warns that AI-generated pull requests without clear understanding will be closed. A disclosure rule, not a ban.",
    "our_record": null,
    "scanned_on": "2026-10-18",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
@@ -20191,6 +20540,38 @@
    "pushed_at": "2026-10-18T09:18:35Z",
    "open_issues": 82,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "crestalnetwork/intentkit",
+   "url": "https://github.com/crestalnetwork/intentkit",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6524,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.462,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 98,
+    "gates_detected": [],
+    "outsider_merge_share": 0.46,
+    "outsider_merge_share_pct": 46,
+    "reasons": [
+     "external PR merge rate 46% (-1.6)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 159.61
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-09-16T12:17:32Z",
+   "open_issues": 97,
+   "outsider_merge_share": 46
   },
   {
    "repo": "crewAIInc/crewAI",
@@ -22686,6 +23067,39 @@
    "good_first_issues": 0,
    "pushed_at": "2026-10-15T14:53:12Z",
    "open_issues": 2642
+  },
+  {
+   "repo": "deepchem/deepchem",
+   "url": "https://github.com/deepchem/deepchem",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7097,
+   "language": "Python",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)",
+     "23 open good-first-issues (+10.0)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 226.65
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-08-20T19:01:34Z",
+   "open_issues": 1261,
+   "outsider_merge_share": 100
   },
   {
    "repo": "deepfakes/faceswap",
@@ -27464,6 +27878,38 @@
    "outsider_merge_share": 76
   },
   {
+   "repo": "elder-plinius/T3MP3ST",
+   "url": "https://github.com/elder-plinius/T3MP3ST",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6642,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 80,
+    "gates_detected": [],
+    "outsider_merge_share": 0,
+    "outsider_merge_share_pct": 0,
+    "reasons": [
+     "external PR merge rate 0% (-20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 238.68
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-09-08T16:37:44Z",
+   "open_issues": 12,
+   "outsider_merge_share": 0
+  },
+  {
    "repo": "elebumm/RedditVideoMakerBot",
    "url": "https://github.com/elebumm/RedditVideoMakerBot",
    "policy_classes": [
@@ -27594,7 +28040,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.82
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T15:44:33Z",
    "open_issues": 164,
    "outsider_merge_share": 38
@@ -28326,7 +28772,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.5
    },
-   "good_first_issues": null,
+   "good_first_issues": 2,
    "pushed_at": "2026-10-21T07:40:20Z",
    "open_issues": 138,
    "outsider_merge_share": 19
@@ -28844,6 +29290,38 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "espressif/esptool",
+   "url": "https://github.com/espressif/esptool",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6527,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.909,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.91,
+    "outsider_merge_share_pct": 91,
+    "reasons": [
+     "external PR merge rate 91% (+16.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 97.01
+   },
+   "good_first_issues": null,
+   "pushed_at": "2026-10-26T11:11:47Z",
+   "open_issues": 18,
+   "outsider_merge_share": 91
+  },
+  {
    "repo": "etcd-io/bbolt",
    "url": "https://github.com/etcd-io/bbolt",
    "policy_classes": [
@@ -29160,6 +29638,38 @@
    "pushed_at": "2026-08-09T17:20:12Z",
    "open_issues": 634,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "evcxr/evcxr",
+   "url": "https://github.com/evcxr/evcxr",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6508,
+   "language": "Rust",
+   "friction_lite_outsider_share": 0.593,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.59,
+    "outsider_merge_share_pct": 59,
+    "reasons": [
+     "external PR merge rate 59% (+3.6)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 226.0
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T22:23:54Z",
+   "open_issues": 125,
+   "outsider_merge_share": 59
   },
   {
    "repo": "EverMind-AI/EverOS",
@@ -33720,6 +34230,38 @@
    "outsider_merge_share": 71
   },
   {
+   "repo": "FQrabbit/SSTap-Rule",
+   "url": "https://github.com/FQrabbit/SSTap-Rule",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6562,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.8,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [
+     "2 open good-first-issues (+1.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 269.22
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T08:14:02Z",
+   "open_issues": 54,
+   "outsider_merge_share": 80
+  },
+  {
    "repo": "framework7io/framework7",
    "url": "https://github.com/framework7io/framework7",
    "policy_classes": [
@@ -35212,6 +35754,36 @@
    "outsider_merge_share": 11
   },
   {
+   "repo": "genkit-ai/genkit",
+   "url": "https://github.com/genkit-ai/genkit",
+   "policy_classes": [
+    "cla-required"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: cla-required in CONTRIBUTING.md: \"### Sign our Contributor License Agreement Contributions to this project must be accompanied by a [Contributor License Agreement](https://cla.developers.google.com/about) (CLA).\"",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6558,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.889,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 401.06
+   },
+   "good_first_issues": null,
+   "pushed_at": "2026-10-29T21:32:16Z",
+   "open_issues": 841,
+   "outsider_merge_share": 89
+  },
+  {
    "repo": "genlayerlabs/genlayer-project-boilerplate",
    "url": "https://github.com/genlayerlabs/genlayer-project-boilerplate",
    "policy_classes": [
@@ -35308,6 +35880,39 @@
    "pushed_at": "2026-10-17T21:40:27Z",
    "open_issues": 2937,
    "outsider_merge_share": 0
+  },
+  {
+   "repo": "gephi/gephi",
+   "url": "https://github.com/gephi/gephi",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6693,
+   "language": "Java",
+   "friction_lite_outsider_share": 0.138,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 89,
+    "gates_detected": [],
+    "outsider_merge_share": 0.14,
+    "outsider_merge_share_pct": 14,
+    "reasons": [
+     "external PR merge rate 14% (-14.4)",
+     "6 open good-first-issues (+3.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 44.51
+   },
+   "good_first_issues": 6,
+   "pushed_at": "2026-10-28T04:37:05Z",
+   "open_issues": 441,
+   "outsider_merge_share": 14
   },
   {
    "repo": "getagentseal/codeburn",
@@ -35643,6 +36248,38 @@
    "outsider_merge_share": 0
   },
   {
+   "repo": "getsentry/MobileBuildMCP",
+   "url": "https://github.com/getsentry/MobileBuildMCP",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CLAUDE.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6520,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.778,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.78,
+    "outsider_merge_share_pct": 78,
+    "reasons": [
+     "external PR merge rate 78% (+11.2)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 217.36
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T03:44:20Z",
+   "open_issues": 32,
+   "outsider_merge_share": 78
+  },
+  {
    "repo": "getsentry/sentry",
    "url": "https://github.com/getsentry/sentry",
    "policy_classes": [
@@ -35917,13 +36554,14 @@
    "repo": "ggml-org/whisper.cpp",
    "url": "https://github.com/ggml-org/whisper.cpp",
    "policy_classes": [
-    "open"
+    "agents-banned",
+    "agents-disclosure"
    ],
-   "headline": "No agent policy found",
-   "what_to_do": "Normal contribution flow applies.",
-   "evidence": "5k scan 2026-10-18: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "headline": "Agent contributions are banned here",
+   "what_to_do": "Do not submit bulk or fully autonomous agent PRs here; human-led AI work is welcome but must be disclosed in the PR as the policy requires.",
+   "evidence": "5k scan 2026-10-18: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open. Correction 2026-10-29 (live re-read via proxy): agents-banned in CONTRIBUTING.md: \"This project does not accept pull requests that are fully or predominantly AI-generated.\" agents-disclosure in AGENTS.md: \"Disclosure is required when AI meaningfully contributed to your code.\" The same files prohibit AI-written PR descriptions and automated PR submissions.",
    "our_record": null,
-   "scanned_on": "2026-10-18",
+   "scanned_on": "2026-10-29",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
    "stars": 54467,
    "language": "C++",
@@ -36936,13 +37574,13 @@
    "repo": "gleam-lang/gleam",
    "url": "https://github.com/gleam-lang/gleam",
    "policy_classes": [
-    "open"
+    "agents-banned"
    ],
-   "headline": "No agent policy found",
-   "what_to_do": "Normal contribution flow applies.",
-   "evidence": "5k scan 2026-10-18: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "headline": "Agent contributions are banned here",
+   "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
+   "evidence": "5k scan 2026-10-18: read CONTRIBUTING.md; no agent-policy language found. Classified open. Correction 2026-10-29 (live re-read via proxy): agents-banned in CONTRIBUTING.md: \"We do not accept contributions from AI agents.\" The same file requires bug reports, pull request descriptions, and comments to be written by a human, not by AI.",
    "our_record": null,
-   "scanned_on": "2026-10-18",
+   "scanned_on": "2026-10-29",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
    "stars": 21996,
    "language": "Rust",
@@ -37125,6 +37763,35 @@
    "pushed_at": "2026-10-19T11:58:19Z",
    "open_issues": 75,
    "outsider_merge_share": 88
+  },
+  {
+   "repo": "GNOME/gimp",
+   "url": "https://github.com/GNOME/gimp",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6555,
+   "language": "C",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 375.21
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T21:40:25Z",
+   "open_issues": 0
   },
   {
    "repo": "go-acme/lego",
@@ -39328,6 +39995,39 @@
    "outsider_merge_share": 17
   },
   {
+   "repo": "google/perfetto",
+   "url": "https://github.com/google/perfetto",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6715,
+   "language": "C++",
+   "friction_lite_outsider_share": 0.455,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.45,
+    "outsider_merge_share_pct": 45,
+    "reasons": [
+     "external PR merge rate 45% (-2.0)",
+     "5 open good-first-issues (+2.5)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 202.83
+   },
+   "good_first_issues": 5,
+   "pushed_at": "2026-10-29T07:54:48Z",
+   "open_issues": 428,
+   "outsider_merge_share": 45
+  },
+  {
    "repo": "google/re2",
    "url": "https://github.com/google/re2",
    "policy_classes": [
@@ -40287,6 +40987,36 @@
    "pushed_at": "2026-10-24T07:42:16Z",
    "open_issues": 118,
    "outsider_merge_share": 20
+  },
+  {
+   "repo": "gosom/google-maps-scraper",
+   "url": "https://github.com/gosom/google-maps-scraper",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6998,
+   "language": "Go",
+   "friction_lite_outsider_share": 0.375,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 317.01
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-21T10:24:36Z",
+   "open_issues": 69,
+   "outsider_merge_share": 38
   },
   {
    "repo": "gotenberg/gotenberg",
@@ -42226,6 +42956,38 @@
    "pushed_at": "2026-10-22T03:59:14Z",
    "open_issues": 12,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "HapeLee/legado-with-MD3",
+   "url": "https://github.com/HapeLee/legado-with-MD3",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6712,
+   "language": "Kotlin",
+   "friction_lite_outsider_share": 0.846,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.85,
+    "outsider_merge_share_pct": 85,
+    "reasons": [
+     "external PR merge rate 85% (+14.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 154.71
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T20:22:27Z",
+   "open_issues": 88,
+   "outsider_merge_share": 85
   },
   {
    "repo": "hapijs/hapi",
@@ -44529,6 +45291,38 @@
    "good_first_issues": 0,
    "pushed_at": "2026-09-22T12:11:05Z",
    "open_issues": 296
+  },
+  {
+   "repo": "htmlstreamofficial/preline",
+   "url": "https://github.com/htmlstreamofficial/preline",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6514,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 106.55
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-08-31T01:53:38Z",
+   "open_issues": 14,
+   "outsider_merge_share": 100
   },
   {
    "repo": "http-party/node-http-proxy",
@@ -47693,6 +48487,44 @@
    "outsider_merge_share": 67
   },
   {
+   "repo": "iorate/ublacklist",
+   "url": "https://github.com/iorate/ublacklist",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6672,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.8,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [
+     {
+      "kind": "discussion_first",
+      "evidence": "ting Bugs and Suggesting Features Please start with [GitHub Discussions]( instead of opening issues directly. - 🐛 [Bugs](, Report a bug. -..."
+     }
+    ],
+    "outsider_merge_share": 0.8,
+    "outsider_merge_share_pct": 80,
+    "reasons": [
+     "discussion first (-10)",
+     "external PR merge rate 80% (+12.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 44.95
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-23T20:55:53Z",
+   "open_issues": 2,
+   "outsider_merge_share": 80
+  },
+  {
    "repo": "iovisor/bcc",
    "url": "https://github.com/iovisor/bcc",
    "policy_classes": [
@@ -48144,6 +48976,35 @@
    "pushed_at": "2026-10-08T00:16:35Z",
    "open_issues": 4,
    "outsider_merge_share": 38
+  },
+  {
+   "repo": "j3ssie/osmedeus",
+   "url": "https://github.com/j3ssie/osmedeus",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6629,
+   "language": "Go",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 269.19
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-04T17:27:24Z",
+   "open_issues": 6
   },
   {
    "repo": "jackc/pgx",
@@ -49614,6 +50475,38 @@
    "pushed_at": "2026-10-15T09:22:10Z",
    "open_issues": 405,
    "outsider_merge_share": 0
+  },
+  {
+   "repo": "jetlinks/jetlinks-community",
+   "url": "https://github.com/jetlinks/jetlinks-community",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6667,
+   "language": "Java",
+   "friction_lite_outsider_share": 0.519,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.52,
+    "outsider_merge_share_pct": 52,
+    "reasons": [
+     "external PR merge rate 52% (+0.8)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 130.13
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T05:59:01Z",
+   "open_issues": 58,
+   "outsider_merge_share": 52
   },
   {
    "repo": "jgraph/drawio-desktop",
@@ -51489,6 +52382,36 @@
    "good_first_issues": 0,
    "pushed_at": "2026-10-15T23:57:39Z",
    "open_issues": 49,
+   "outsider_merge_share": 100
+  },
+  {
+   "repo": "k0sproject/k0s",
+   "url": "https://github.com/k0sproject/k0s",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6557,
+   "language": "Go",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 243.78
+   },
+   "good_first_issues": 8,
+   "pushed_at": "2026-10-29T20:32:52Z",
+   "open_issues": 263,
    "outsider_merge_share": 100
   },
   {
@@ -54130,6 +55053,39 @@
    "outsider_merge_share": 21
   },
   {
+   "repo": "kulshekhar/ts-jest",
+   "url": "https://github.com/kulshekhar/ts-jest",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7073,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.633,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.63,
+    "outsider_merge_share_pct": 63,
+    "reasons": [
+     "external PR merge rate 63% (+5.2)",
+     "4 open good-first-issues (+2.0)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 198.85
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T10:45:17Z",
+   "open_issues": 79,
+   "outsider_merge_share": 63
+  },
+  {
    "repo": "kvcache-ai/ktransformers",
    "url": "https://github.com/kvcache-ai/ktransformers",
    "policy_classes": [
@@ -54954,6 +55910,35 @@
    "pushed_at": "2026-10-19T05:43:51Z",
    "open_issues": 8,
    "outsider_merge_share": 63
+  },
+  {
+   "repo": "larastan/larastan",
+   "url": "https://github.com/larastan/larastan",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6543,
+   "language": "PHP",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 233.31
+   },
+   "good_first_issues": 1,
+   "pushed_at": "2026-10-29T16:04:27Z",
+   "open_issues": 88
   },
   {
    "repo": "laravel/framework",
@@ -56491,6 +57476,39 @@
    "pushed_at": "2026-09-18T03:02:33Z",
    "open_issues": 586,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "linkedin/Liger-Kernel",
+   "url": "https://github.com/linkedin/Liger-Kernel",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6678,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.739,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.74,
+    "outsider_merge_share_pct": 74,
+    "reasons": [
+     "external PR merge rate 74% (+9.6)",
+     "3 open good-first-issues (+1.5)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 176.47
+   },
+   "good_first_issues": 1,
+   "pushed_at": "2026-10-27T04:24:19Z",
+   "open_issues": 202,
+   "outsider_merge_share": 74
   },
   {
    "repo": "linkerd/linkerd2",
@@ -58488,6 +59506,38 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "lysyi3m/macos-terminal-themes",
+   "url": "https://github.com/lysyi3m/macos-terminal-themes",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6559,
+   "language": "Swift",
+   "friction_lite_outsider_share": 0.692,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.69,
+    "outsider_merge_share_pct": 69,
+    "reasons": [
+     "external PR merge rate 69% (+7.6)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 110.55
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-08-27T11:04:46Z",
+   "open_issues": 0,
+   "outsider_merge_share": 69
+  },
+  {
    "repo": "lz4/lz4",
    "url": "https://github.com/lz4/lz4",
    "policy_classes": [
@@ -59696,6 +60746,35 @@
    "open_issues": 613,
    "pushed_at": "2026-10-19T13:41:47Z",
    "good_first_issues": 3
+  },
+  {
+   "repo": "marionettejs/marionette",
+   "url": "https://github.com/marionettejs/marionette",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7042,
+   "language": "JavaScript",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 397.79
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T08:08:06Z",
+   "open_issues": 3
   },
   {
    "repo": "markdown-it/markdown-it",
@@ -60957,6 +62036,39 @@
    "open_issues": 2221,
    "pushed_at": "2026-10-19T07:57:56Z",
    "good_first_issues": 54
+  },
+  {
+   "repo": "mesonbuild/meson",
+   "url": "https://github.com/mesonbuild/meson",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6654,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.852,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.85,
+    "outsider_merge_share_pct": 85,
+    "reasons": [
+     "external PR merge rate 85% (+14.0)",
+     "20 open good-first-issues (+10.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 193.33
+   },
+   "good_first_issues": 20,
+   "pushed_at": "2026-10-28T20:06:37Z",
+   "open_issues": 2190,
+   "outsider_merge_share": 85
   },
   {
    "repo": "MetaCubeX/mihomo",
@@ -65617,6 +66729,44 @@
    "outsider_merge_share": 35
   },
   {
+   "repo": "MrLesk/Backlog.md",
+   "url": "https://github.com/MrLesk/Backlog.md",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7181,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.138,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 76,
+    "gates_detected": [
+     {
+      "kind": "discussion_first",
+      "evidence": "ainer Workflow Guardrails - Treat GitHub issues as reports, proposals, or evidence, not implementation specs. Do not automatically implement..."
+     }
+    ],
+    "outsider_merge_share": 0.14,
+    "outsider_merge_share_pct": 14,
+    "reasons": [
+     "discussion first (-10)",
+     "external PR merge rate 14% (-14.4)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 139.96
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T01:15:00Z",
+   "open_issues": 85,
+   "outsider_merge_share": 14
+  },
+  {
    "repo": "mswjs/msw",
    "url": "https://github.com/mswjs/msw",
    "policy_classes": [
@@ -66301,6 +67451,35 @@
    "outsider_merge_share": 81
   },
   {
+   "repo": "namidaco/namida",
+   "url": "https://github.com/namidaco/namida",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6729,
+   "language": "Dart",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 16.26
+   },
+   "good_first_issues": null,
+   "pushed_at": "2026-10-26T02:37:41Z",
+   "open_issues": 58
+  },
+  {
    "repo": "NandhaKishorM/laya",
    "url": "https://github.com/NandhaKishorM/laya",
    "policy_classes": [
@@ -66750,6 +67929,38 @@
    "pushed_at": "2026-10-16T16:52:06Z",
    "open_issues": 2106,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "nativescript-vue/nativescript-vue",
+   "url": "https://github.com/nativescript-vue/nativescript-vue",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6536,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 80,
+    "gates_detected": [],
+    "outsider_merge_share": 0,
+    "outsider_merge_share_pct": 0,
+    "reasons": [
+     "external PR merge rate 0% (-20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 278.39
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-26T13:26:00Z",
+   "open_issues": 17,
+   "outsider_merge_share": 0
   },
   {
    "repo": "NativeScript/NativeScript",
@@ -68482,6 +69693,38 @@
    "outsider_merge_share": 69
   },
   {
+   "repo": "NLog/NLog",
+   "url": "https://github.com/NLog/NLog",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6546,
+   "language": "C#",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 294.73
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T15:52:42Z",
+   "open_issues": 56,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "nlohmann/json",
    "url": "https://github.com/nlohmann/json",
    "policy_classes": [
@@ -69366,6 +70609,39 @@
    "pushed_at": "2026-10-15T07:45:44Z",
    "open_issues": 43,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "nteract/papermill",
+   "url": "https://github.com/nteract/papermill",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6497,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.609,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.61,
+    "outsider_merge_share_pct": 61,
+    "reasons": [
+     "external PR merge rate 61% (+4.4)",
+     "70 open good-first-issues (+10.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 145.6
+   },
+   "good_first_issues": null,
+   "pushed_at": "2026-10-05T23:30:41Z",
+   "open_issues": 198,
+   "outsider_merge_share": 61
   },
   {
    "repo": "Nuitka/Nuitka",
@@ -72094,6 +73370,38 @@
    "outsider_merge_share": 37
   },
   {
+   "repo": "OpenDroneMap/ODM",
+   "url": "https://github.com/OpenDroneMap/ODM",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6572,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.958,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.96,
+    "outsider_merge_share_pct": 96,
+    "reasons": [
+     "external PR merge rate 96% (+18.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 166.31
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T16:38:00Z",
+   "open_issues": 127,
+   "outsider_merge_share": 96
+  },
+  {
    "repo": "OpenFeign/feign",
    "url": "https://github.com/OpenFeign/feign",
    "policy_classes": [
@@ -72367,6 +73675,50 @@
    "pushed_at": "2026-10-19T04:55:24Z",
    "open_issues": 300,
    "outsider_merge_share": 70
+  },
+  {
+   "repo": "openmediavault/openmediavault",
+   "url": "https://github.com/openmediavault/openmediavault",
+   "policy_classes": [
+    "cla-required",
+    "dco-required"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: cla-required in CONTRIBUTING.md: \"- You have to sign the CLA online via GitHub. - The feature/improvement must be implemented as generic as possible.\"; dco-required in CONTRIBUTING.md: \"- Each commit message in a GitHub pull request must be signed via `Signed-off-by: Frank Mustermann <frank.mustermann@xxx.yyy>`. A Developer Certificate of Origin (DCO) is necessary to legally ensure that code contributions are original or authorized, maintaining clear, trustworthy, and compliant open-source project contributions.\"",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7042,
+   "language": "PHP",
+   "friction_lite_outsider_share": 0.44,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 88,
+    "gates_detected": [
+     {
+      "kind": "cla_required",
+      "evidence": ". - If there is no related issue, create one. - You have to sign the CLA online via GitHub. - The feature/improvement must be implemented as..."
+     },
+     {
+      "kind": "dco_required",
+      "evidence": "nk.mustermann@xxx.yyy>`. A Developer Certificate of Origin (DCO) is necessary to legally ensure that code contributions are original or auth..."
+     }
+    ],
+    "outsider_merge_share": 0.44,
+    "outsider_merge_share_pct": 44,
+    "reasons": [
+     "CLA signature required (-5)",
+     "DCO sign-off required (-5)",
+     "external PR merge rate 44% (-2.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 315.05
+   },
+   "good_first_issues": null,
+   "pushed_at": "2026-10-28T19:04:06Z",
+   "open_issues": 103,
+   "outsider_merge_share": 44
   },
   {
    "repo": "OpenMined/PySyft",
@@ -76209,6 +77561,38 @@
    "outsider_merge_share": 12
   },
   {
+   "repo": "photoview/photoview",
+   "url": "https://github.com/photoview/photoview",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6559,
+   "language": "Go",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 244.66
+   },
+   "good_first_issues": 23,
+   "pushed_at": "2026-10-29T19:14:02Z",
+   "open_issues": 193,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "PHP-CS-Fixer/PHP-CS-Fixer",
    "url": "https://github.com/PHP-CS-Fixer/PHP-CS-Fixer",
    "policy_classes": [
@@ -76542,6 +77926,36 @@
    "pushed_at": "2026-10-20T22:43:24Z",
    "open_issues": 9,
    "outsider_merge_share": 14
+  },
+  {
+   "repo": "piku/piku",
+   "url": "https://github.com/piku/piku",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6603,
+   "language": "Python",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 267.89
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-09-04T06:40:06Z",
+   "open_issues": 6,
+   "outsider_merge_share": 100
   },
   {
    "repo": "pinchtab/pinchtab",
@@ -78940,6 +80354,38 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "prisma/prisma-examples",
+   "url": "https://github.com/prisma/prisma-examples",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6652,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 223.96
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T20:10:08Z",
+   "open_issues": 53,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "PrismJS/prism",
    "url": "https://github.com/PrismJS/prism",
    "policy_classes": [
@@ -79859,6 +81305,38 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "PufferAI/PufferLib",
+   "url": "https://github.com/PufferAI/PufferLib",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6561,
+   "language": "C",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 359.67
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-14T13:57:46Z",
+   "open_issues": 193,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "pulumi/pulumi",
    "url": "https://github.com/pulumi/pulumi",
    "policy_classes": [
@@ -80753,6 +82231,39 @@
    "pushed_at": "2026-10-20T06:37:37Z",
    "open_issues": 873,
    "outsider_merge_share": 89
+  },
+  {
+   "repo": "python-pendulum/pendulum",
+   "url": "https://github.com/python-pendulum/pendulum",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6680,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.667,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.67,
+    "outsider_merge_share_pct": 67,
+    "reasons": [
+     "external PR merge rate 67% (+6.8)",
+     "1 open good-first-issues (+0.5)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 112.95
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-26T03:47:45Z",
+   "open_issues": 296,
+   "outsider_merge_share": 67
   },
   {
    "repo": "python-pillow/Pillow",
@@ -82714,6 +84225,39 @@
    "pushed_at": "2026-08-23T15:38:44Z",
    "open_issues": 98,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "ravynsoft/ravynos",
+   "url": "https://github.com/ravynsoft/ravynos",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7088,
+   "language": "C",
+   "friction_lite_outsider_share": 0.783,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.78,
+    "outsider_merge_share_pct": 78,
+    "reasons": [
+     "external PR merge rate 78% (+11.2)",
+     "2 open good-first-issues (+1.0)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 109.27
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-09-06T21:02:41Z",
+   "open_issues": 87,
+   "outsider_merge_share": 78
   },
   {
    "repo": "ray-project/ray",
@@ -85391,6 +86935,38 @@
    "outsider_merge_share": 30
   },
   {
+   "repo": "rizsotto/Bear",
+   "url": "https://github.com/rizsotto/Bear",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6533,
+   "language": "Rust",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 160.71
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-25T09:07:03Z",
+   "open_issues": 0,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "rjsf-team/react-jsonschema-form",
    "url": "https://github.com/rjsf-team/react-jsonschema-form",
    "policy_classes": [
@@ -86927,6 +88503,38 @@
    "outsider_merge_share": 85
   },
   {
+   "repo": "rust-lang/miri",
+   "url": "https://github.com/rust-lang/miri",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6702,
+   "language": "Rust",
+   "friction_lite_outsider_share": 0.679,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.68,
+    "outsider_merge_share_pct": 68,
+    "reasons": [
+     "external PR merge rate 68% (+7.2)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 73.35
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T07:46:32Z",
+   "open_issues": 200,
+   "outsider_merge_share": 68
+  },
+  {
    "repo": "rust-lang/rust",
    "url": "https://github.com/rust-lang/rust",
    "policy_classes": [
@@ -87471,6 +89079,44 @@
    "outsider_merge_share": 3
   },
   {
+   "repo": "ryo-ma/github-profile-trophy",
+   "url": "https://github.com/ryo-ma/github-profile-trophy",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6671,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.929,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [
+     {
+      "kind": "discussion_first",
+      "evidence": "functionality, it is best to open an issue to discuss your proposal first. I look forward to seeing what you come up with! ## Run deno lint ..."
+     }
+    ],
+    "outsider_merge_share": 0.93,
+    "outsider_merge_share_pct": 93,
+    "reasons": [
+     "discussion first (-10)",
+     "external PR merge rate 93% (+17.2)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 117.15
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T10:11:32Z",
+   "open_issues": 32,
+   "outsider_merge_share": 93
+  },
+  {
    "repo": "s0md3v/Photon",
    "url": "https://github.com/s0md3v/Photon",
    "policy_classes": [
@@ -87986,6 +89632,38 @@
    "pushed_at": "2026-09-10T22:30:37Z",
    "open_issues": 24,
    "outsider_merge_share": 17
+  },
+  {
+   "repo": "SawyerHood/dev-browser",
+   "url": "https://github.com/SawyerHood/dev-browser",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6705,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.043,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 82,
+    "gates_detected": [],
+    "outsider_merge_share": 0.04,
+    "outsider_merge_share_pct": 4,
+    "reasons": [
+     "external PR merge rate 4% (-18.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 119.12
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-18T22:53:03Z",
+   "open_issues": 20,
+   "outsider_merge_share": 4
   },
   {
    "repo": "SBoudrias/Inquirer.js",
@@ -88549,6 +90227,44 @@
    "outsider_merge_share": 40
   },
   {
+   "repo": "sebastianbergmann/object-enumerator",
+   "url": "https://github.com/sebastianbergmann/object-enumerator",
+   "policy_classes": [
+    "agents-banned"
+   ],
+   "headline": "Agent contributions are banned here",
+   "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
+   "evidence": "5k scan 2026-10-19: agents-banned in .github/CONTRIBUTING.md: \"### Do Not Submit AI-Generated Pull Requests The same goes for (largely) AI-generated pull requests.\"",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6527,
+   "language": "PHP",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 70,
+    "gates_detected": [
+     {
+      "kind": "agents_banned",
+      "evidence": "Please post code and output as text ([using proper markup]( Do not post screenshots of code or output. ## Workflow for Pull Requests 1. Fork..."
+     }
+    ],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "agent contributions banned (-50)",
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 308.48
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T20:20:44Z",
+   "open_issues": 1,
+   "outsider_merge_share": 100
+  },
+  {
    "repo": "sebastianbergmann/phpunit",
    "url": "https://github.com/sebastianbergmann/phpunit",
    "policy_classes": [
@@ -88576,6 +90292,43 @@
    "good_first_issues": 0,
    "pushed_at": "2026-10-17T04:24:54Z",
    "open_issues": 22,
+   "outsider_merge_share": 100
+  },
+  {
+   "repo": "sebastianbergmann/recursion-context",
+   "url": "https://github.com/sebastianbergmann/recursion-context",
+   "policy_classes": [
+    "agents-banned"
+   ],
+   "headline": "Agent contributions are banned here",
+   "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
+   "evidence": "5k scan 2026-10-19: agents-banned in .github/CONTRIBUTING.md: \"### Do Not Submit AI-Generated Pull Requests The same goes for (largely) AI-generated pull requests.\"",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6557,
+   "language": "PHP",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 50,
+    "gates_detected": [
+     {
+      "kind": "agents_banned",
+      "evidence": "Please post code and output as text ([using proper markup]( Do not post screenshots of code or output. ## Workflow for Pull Requests 1. Fork..."
+     }
+    ],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [
+     "agent contributions banned (-50)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 329.65
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-29T13:47:34Z",
+   "open_issues": 3,
    "outsider_merge_share": 100
   },
   {
@@ -89901,6 +91654,44 @@
    "outsider_merge_share": 86
   },
   {
+   "repo": "shibing624/pycorrector",
+   "url": "https://github.com/shibing624/pycorrector",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6534,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.931,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [
+     {
+      "kind": "discussion_first",
+      "evidence": "e]( for your concern. 2. If there is not, open a new one to start a discussion. We hate to close finished PRs! 3. If we decide your concern ..."
+     }
+    ],
+    "outsider_merge_share": 0.93,
+    "outsider_merge_share_pct": 93,
+    "reasons": [
+     "discussion first (-10)",
+     "external PR merge rate 93% (+17.2)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 118.88
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-07-25T14:42:02Z",
+   "open_issues": 25,
+   "outsider_merge_share": 93
+  },
+  {
    "repo": "shidenggui/easytrader",
    "url": "https://github.com/shidenggui/easytrader",
    "policy_classes": [
@@ -91166,6 +92957,38 @@
    "outsider_merge_share": 79
   },
   {
+   "repo": "sipeed/NanoKVM",
+   "url": "https://github.com/sipeed/NanoKVM",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6579,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.857,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.86,
+    "outsider_merge_share_pct": 86,
+    "reasons": [
+     "external PR merge rate 86% (+14.4)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 167.05
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-21T07:19:46Z",
+   "open_issues": 471,
+   "outsider_merge_share": 86
+  },
+  {
    "repo": "sipeed/picoclaw",
    "url": "https://github.com/sipeed/picoclaw",
    "policy_classes": [
@@ -91336,6 +93159,35 @@
    "pushed_at": "2026-10-20T15:43:51Z",
    "open_issues": 349,
    "outsider_merge_share": 53
+  },
+  {
+   "repo": "siteline/swiftui-introspect",
+   "url": "https://github.com/siteline/swiftui-introspect",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6569,
+   "language": "Swift",
+   "friction_lite_outsider_share": null,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": null,
+    "outsider_merge_share_pct": null,
+    "reasons": [],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 317.89
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-07T19:47:25Z",
+   "open_issues": 16
   },
   {
    "repo": "siyuan-note/siyuan",
@@ -92664,6 +94516,39 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "spinframework/spin",
+   "url": "https://github.com/spinframework/spin",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6560,
+   "language": "Rust",
+   "friction_lite_outsider_share": 0.964,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.96,
+    "outsider_merge_share_pct": 96,
+    "reasons": [
+     "external PR merge rate 96% (+18.4)",
+     "8 open good-first-issues (+4.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 134.95
+   },
+   "good_first_issues": 5,
+   "pushed_at": "2026-10-29T21:07:38Z",
+   "open_issues": 261,
+   "outsider_merge_share": 96
+  },
+  {
    "repo": "spinnaker/spinnaker",
    "url": "https://github.com/spinnaker/spinnaker",
    "policy_classes": [
@@ -93465,6 +95350,39 @@
    "outsider_merge_share": 8
   },
   {
+   "repo": "StackStorm/st2",
+   "url": "https://github.com/StackStorm/st2",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6551,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.923,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.92,
+    "outsider_merge_share_pct": 92,
+    "reasons": [
+     "external PR merge rate 92% (+16.8)",
+     "36 open good-first-issues (+10.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 201.58
+   },
+   "good_first_issues": 27,
+   "pushed_at": "2026-10-26T18:39:31Z",
+   "open_issues": 605,
+   "outsider_merge_share": 92
+  },
+  {
    "repo": "stakater/Reloader",
    "url": "https://github.com/stakater/Reloader",
    "policy_classes": [
@@ -93551,6 +95469,38 @@
    "good_first_issues": 0,
    "pushed_at": "2026-10-18T18:05:24Z",
    "open_issues": 55,
+   "outsider_merge_share": 100
+  },
+  {
+   "repo": "standardnotes/app",
+   "url": "https://github.com/standardnotes/app",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6686,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 81.28
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-28T18:20:37Z",
+   "open_issues": 96,
    "outsider_merge_share": 100
   },
   {
@@ -97060,6 +99010,38 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "tealdeer-rs/tealdeer",
+   "url": "https://github.com/tealdeer-rs/tealdeer",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6632,
+   "language": "Rust",
+   "friction_lite_outsider_share": 0.529,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.53,
+    "outsider_merge_share_pct": 53,
+    "reasons": [
+     "external PR merge rate 53% (+1.2)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 410.33
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-24T21:07:01Z",
+   "open_issues": 17,
+   "outsider_merge_share": 53
+  },
+  {
    "repo": "team-spotube/spotube",
    "url": "https://github.com/team-spotube/spotube",
    "policy_classes": [
@@ -97188,6 +99170,44 @@
    "pushed_at": "2026-10-22T14:47:32Z",
    "open_issues": 1478,
    "outsider_merge_share": 50
+  },
+  {
+   "repo": "tech-leads-club/agent-skills",
+   "url": "https://github.com/tech-leads-club/agent-skills",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read AGENTS.md, CLAUDE.md, CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7104,
+   "language": "TypeScript",
+   "friction_lite_outsider_share": 0.556,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 92,
+    "gates_detected": [
+     {
+      "kind": "discussion_first",
+      "evidence": "ase notes for that version. If a maintainer implements your proposal and the credit is missing, say so on the issue. That is a mistake on ou..."
+     }
+    ],
+    "outsider_merge_share": 0.56,
+    "outsider_merge_share_pct": 56,
+    "reasons": [
+     "discussion first (-10)",
+     "external PR merge rate 56% (+2.4)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 181.26
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T19:06:09Z",
+   "open_issues": 40,
+   "outsider_merge_share": 56
   },
   {
    "repo": "TecharoHQ/anubis",
@@ -98649,6 +100669,38 @@
    "pushed_at": "2026-10-03T07:44:40Z",
    "open_issues": 107,
    "outsider_merge_share": 100
+  },
+  {
+   "repo": "thephpleague/oauth2-server",
+   "url": "https://github.com/thephpleague/oauth2-server",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 6670,
+   "language": "PHP",
+   "friction_lite_outsider_share": 0.545,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.55,
+    "outsider_merge_share_pct": 55,
+    "reasons": [
+     "external PR merge rate 55% (+2.0)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 53.34
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-25T08:26:54Z",
+   "open_issues": 74,
+   "outsider_merge_share": 55
   },
   {
    "repo": "thesysdev/openui",
@@ -101413,7 +103465,7 @@
    "headline": "No agent policy found",
    "what_to_do": "Normal contribution flow applies.",
    "evidence": "5k scan 2026-10-18: read AGENTS.md, CLAUDE.md; no agent-policy language found. Classified open.",
-   "our_record": null,
+   "our_record": "Behavioral finding 2026-10-29: live probe found no contribution policy (CONTRIBUTING.md and AI_POLICY.md do not exist; AGENTS.md is house rules for agents and only bars AI attribution in commit messages), but the repo is collaborators-only in practice (outside PRs do not land). Recorded as campaign knowledge, not a file-evidenced policy class, so the class stays as scanned.",
    "scanned_on": "2026-10-18",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
    "stars": 58488,
@@ -108982,6 +111034,39 @@
    "outsider_merge_share": 100
   },
   {
+   "repo": "xingkongliang/skills-manager",
+   "url": "https://github.com/xingkongliang/skills-manager",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7040,
+   "language": "Rust",
+   "friction_lite_outsider_share": 0.462,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 99,
+    "gates_detected": [],
+    "outsider_merge_share": 0.46,
+    "outsider_merge_share_pct": 46,
+    "reasons": [
+     "external PR merge rate 46% (-1.6)",
+     "1 open good-first-issues (+0.5)"
+    ],
+    "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
+    "seconds": 210.15
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T03:21:41Z",
+   "open_issues": 261,
+   "outsider_merge_share": 46
+  },
+  {
    "repo": "xinnan-tech/xiaozhi-esp32-server",
    "url": "https://github.com/xinnan-tech/xiaozhi-esp32-server",
    "policy_classes": [
@@ -109976,6 +112061,38 @@
    "pushed_at": "2026-10-23T08:09:19Z",
    "open_issues": 1,
    "outsider_merge_share": 10
+  },
+  {
+   "repo": "yeasy/blockchain_guide",
+   "url": "https://github.com/yeasy/blockchain_guide",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7083,
+   "language": "Python",
+   "friction_lite_outsider_share": 1.0,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 1,
+    "outsider_merge_share_pct": 100,
+    "reasons": [
+     "external PR merge rate 100% (+20.0)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 107.44
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-22T11:43:44Z",
+   "open_issues": 1,
+   "outsider_merge_share": 100
   },
   {
    "repo": "yeasy/docker_practice",
@@ -111120,6 +113237,38 @@
    "outsider_merge_share": 10
   },
   {
+   "repo": "zai-org/GLM-4",
+   "url": "https://github.com/zai-org/GLM-4",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: probed AGENTS.md, .github/AGENTS.md, docs/AGENTS.md, CLAUDE.md, .github/CLAUDE.md, docs/CLAUDE.md, AI_POLICY.md, .github/AI_POLICY.md, docs/AI_POLICY.md, CONTRIBUTING.md, .github/CONTRIBUTING.md, docs/CONTRIBUTING.md and org AI_POLICY.md; no policy files present. Classified open by absence of policy.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7071,
+   "language": "Python",
+   "friction_lite_outsider_share": 0.895,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.89,
+    "outsider_merge_share_pct": 89,
+    "reasons": [
+     "external PR merge rate 89% (+15.6)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 102.15
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-08-05T07:08:46Z",
+   "open_issues": 45,
+   "outsider_merge_share": 89
+  },
+  {
    "repo": "zaidmukaddam/scira",
    "url": "https://github.com/zaidmukaddam/scira",
    "policy_classes": [
@@ -111797,6 +113946,38 @@
    "outsider_merge_share": 0
   },
   {
+   "repo": "zhukunpenglinyutong/jetbrains-cc-gui",
+   "url": "https://github.com/zhukunpenglinyutong/jetbrains-cc-gui",
+   "policy_classes": [
+    "open"
+   ],
+   "headline": "No agent policy found",
+   "what_to_do": "Normal contribution flow applies.",
+   "evidence": "5k scan 2026-10-19: read CONTRIBUTING.md; no agent-policy language found. Classified open.",
+   "our_record": null,
+   "scanned_on": "2026-10-19",
+   "scan_provenance": "5k scan wave 1, read-only via proxy",
+   "stars": 7311,
+   "language": "Java",
+   "friction_lite_outsider_share": 0.75,
+   "friction_lite_provenance": "scanner's own: outsider share among 30 most recent closed PRs",
+   "greenlight_friction": {
+    "score": 100,
+    "gates_detected": [],
+    "outsider_merge_share": 0.75,
+    "outsider_merge_share_pct": 75,
+    "reasons": [
+     "external PR merge rate 75% (+10.0)"
+    ],
+    "provenance": "greenlight@0.22.1 friction --json via proxy (shipped CLI)",
+    "seconds": 268.78
+   },
+   "good_first_issues": 0,
+   "pushed_at": "2026-10-27T15:13:53Z",
+   "open_issues": 518,
+   "outsider_merge_share": 75
+  },
+  {
    "repo": "ZhuLinsen/daily_stock_analysis",
    "url": "https://github.com/ZhuLinsen/daily_stock_analysis",
    "policy_classes": [
@@ -112237,8 +114418,8 @@
   "name": "Agent Policy Index",
   "publisher": "Greenlight",
   "publisher_url": "https://github.com/CloudCorpRecords/greenlight",
-  "updated": "2026-10-24",
-  "repos": 3383,
+  "updated": "2026-10-30",
+  "repos": 3449,
   "method": "Every entry comes from a real contribution campaign run in October 2026: issues claimed, PRs opened, bots and policies met face to face, plus Greenlight friction measurements. Policy classes marked 'detected' were found by automated scans; classes marked 'verified' were confirmed by a policy file read or by direct campaign contact.",
   "license": "CC-BY-4.0",
   "schema_version": 1
