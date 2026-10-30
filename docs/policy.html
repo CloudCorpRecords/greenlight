@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Agent Policy Index</title>
-<meta name="description" content="How do open source projects treat AI agent contributors? A live, searchable index built from real evidence.">
+<meta name="description" content="How do open source projects treat AI agent contributors? A searchable index built from dated, quoted policy evidence.">
 <style>
 :root{
   --bg:#fffdf6; --surface:#ffffff; --ink:#23262b; --muted:#6d7278; --line:#e9e2d2;
@@ -31,6 +31,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
   padding:12px 18px;font-size:1rem;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .weather .wx{font-size:1.35rem}
 .bandstrip{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.freshline{font-size:.85rem;color:var(--muted);margin-top:10px}
+.stalebadge{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber);border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:700}
 .bandlead{font-size:.8rem;color:var(--muted)}
 .bandchip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 13px;
   font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -129,13 +131,16 @@ footer .egg{cursor:default;opacity:.55}
   <h1>The Agent Policy <span class="green">Index</span></h1>
   <p class="tag">How do open source projects treat AI agent contributors? Every entry below comes from real
   evidence: issues claimed, pull requests opened, bots and policies met face to face. This is the map we wish
-  had existed before we started. Every number on this page is computed live from the data, so it can never go stale.</p>
+  had existed before we started. Every number on this page is computed from the dataset itself, and every
+  entry shows the date its evidence was read, because policies change.</p>
   <div class="stats">
     <div class="stat st-open"><div class="n" id="st-total">…</div><div class="l">repos indexed</div></div>
     <div class="stat st-gate"><div class="n" id="st-gated">…</div><div class="l">carry at least one gate</div></div>
-    <div class="stat st-ban"><div class="n" id="st-banned">…</div><div class="l">close the door to agents entirely</div></div>
-    <div class="stat st-open"><div class="n" id="st-openpct">…</div><div class="l">welcome agent help outright</div></div>
+    <div class="stat st-ban"><div class="n" id="st-banned">…</div><div class="l">ban agents outright</div></div>
+    <div class="stat st-ban"><div class="n" id="st-door">…</div><div class="l">close the door to outside PRs entirely</div></div>
+    <div class="stat st-open"><div class="n" id="st-openpct">…</div><div class="l">have no agent policy on file</div></div>
   </div>
+  <div class="freshline" id="freshline"></div>
   <div class="weather" id="weather" aria-live="polite"><span class="wx">…</span><span>Loading the forecast…</span></div>
   <div class="bandstrip" id="bandstrip" aria-live="polite"></div>
 </div></div>
@@ -195,7 +200,7 @@ footer .egg{cursor:default;opacity:.55}
        <a href="index.html">Friction Index</a></p>
   </div>
   <footer>
-    <p>Built <span id="builddate">2026-10-18</span> &middot; The Agent Policy Index by Greenlight &middot;
+    <p>Built <span id="builddate">2026-10-23</span> &middot; The Agent Policy Index by Greenlight &middot;
     <a href="index.html">The Contribution Friction Index</a></p>
     <p class="egg" id="egg" title="Hi. Yes, the weather report is computed. Everything on this page is computed.">&#10035; nothing here was hard-coded</p>
   </footer>
@@ -208,15 +213,16 @@ var state = {q:"", cls:{}, lang:"", sort:"stars"};
 var filtered = [], rendered = 0, lastScore = {};
 var els = {};
 ["search","langsel","sortsel","chiprow","countline","loading","grid","empty","clearbtn","morewrap","more","sentinel","weather","bandstrip","legend","builddate",
-"st-total","st-gated","st-banned","st-openpct"].forEach(function(id){els[id]=document.getElementById(id);});
+"st-total","st-gated","st-banned","st-door","st-openpct","freshline"].forEach(function(id){els[id]=document.getElementById(id);});
 
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function norm(s){return (s||"").toLowerCase();}
 function fmtK(n){n=Number(n);if(!(n>0))return"";if(n>=1e6)return(n/1e6).toFixed(1).replace(/\.0$/,"")+"M";if(n>=1e3)return(n/1e3).toFixed(1).replace(/\.0$/,"")+"k";return""+Math.round(n);}
-function sevOf(id){if(id==="agents-banned"||id==="paused"||id==="collaborators-only")return"red";if(id==="open"||id==="agents-disclosure")return"green";return"amber";}
+function sevOf(id){if(id==="agents-banned"||id==="paused"||id==="collaborators-only"||id==="maintainer-only")return"red";if(id==="open"||id==="agents-disclosure")return"green";return"amber";}
 function cardSev(cls){var s="green";cls.forEach(function(c){var v=sevOf(c);if(v==="red")s="red";else if(v==="amber"&&s==="green")s="amber";});return s;}
 function gateCount(e){return (e.policy_classes||[]).filter(function(c){return c!=="open";}).length;}
 function dateOf(e){return e.verified_on||e.scanned_on||"";}
+function isStale(e){var d=dateOf(e);if(!d)return false;var t=Date.parse(d);if(isNaN(t))return false;return (Date.now()-t)>30*24*3600*1000;}
 
 /* fuzzy scoring: prefix > word-boundary > substring > word-level char-order match
    (the last only within a single word, so long paragraphs cannot false-match) */
@@ -322,7 +328,8 @@ function cardHTML(e){
   return '<article class="card sev-'+sev+'">'+
     '<div class="card-head"><div class="repo"><a href="'+esc(e.url)+'"><span class="org">'+esc(org)+'/</span>'+esc(name)+'</a></div></div>'+
     '<div class="meta-row">'+lang+starChip(e)+frictionChip(e)+gfiChip(e)+
-    (d?'<span class="ver">'+(e.scan_provenance?'scanned ':'verified ')+esc(d)+'</span>':"")+'</div>'+
+    (d?'<span class="ver">'+(e.scan_provenance?'scanned ':'verified ')+esc(d)+'</span>':"")+
+    (isStale(e)?'<span class="stalebadge">evidence may be stale</span>':"")+'</div>'+
     '<div class="chips">'+chips+'</div>'+
     '<p class="headline">'+esc(e.headline)+'</p>'+
     '<p class="do"><b>What to do:</b> '+esc(e.what_to_do)+'</p>'+
@@ -369,20 +376,24 @@ function buildLegend(){
   }).join("");
 }
 function stats(){
-  var tot=entries.length, gated=0, banned=0, openOnly=0;
+  var tot=entries.length, gated=0, banned=0, doorClosed=0, fresh=0, openOnly=0;
   entries.forEach(function(e){
     var cls=e.policy_classes||[];
     if(cls.indexOf("agents-banned")>=0)banned++;
+    if(cls.indexOf("agents-banned")>=0||cls.indexOf("paused")>=0||cls.indexOf("collaborators-only")>=0||cls.indexOf("maintainer-only")>=0)doorClosed++;
+    if(dateOf(e)&&!isStale(e))fresh++;
     if(gateCount(e)>0)gated++;else openOnly++;
   });
   els["st-total"].textContent=tot;
   els["st-gated"].textContent=gated;
   els["st-banned"].textContent=banned;
+  els["st-door"].textContent=doorClosed;
+  els["freshline"].textContent="Evidence freshness: "+fresh+" of "+tot+" entries were verified within the last 30 days. Every card shows its evidence date; older evidence is badged as possibly stale.";
   var pct=tot?Math.round(openOnly/tot*100):0;
   els["st-openpct"].textContent=pct+"%";
   var share=gated/tot, wx, line;
-  if(share<0.3){wx="&#9728;&#65039;";line="Clear skies: "+pct+"% of indexed repos welcome agent help outright.";}
-  else if(share<0.5){wx="&#9925;";line="Mostly open skies: "+pct+"% of indexed repos welcome agent help outright.";}
+  if(share<0.3){wx="&#9728;&#65039;";line="Clear skies: "+pct+"% of indexed repos have no agent policy on file.";}
+  else if(share<0.5){wx="&#9925;";line="Mostly open skies: "+pct+"% of indexed repos have no agent policy on file. Silence is not a welcome; it just means no policy was found.";}
   else if(share<0.65){wx="&#9925;";line="Patchy clouds: more than half of indexed repos carry at least one gate, so read the policy before you build.";}
   else if(share<0.85){wx="&#9729;&#65039;";line="Gathering clouds: "+gated+" of "+tot+" indexed repos gate agent contributions somewhere.";}
   else{wx="&#9928;";line="Storm conditions: agents face gates in most indexed repos. The evidence on each card is your raincoat.";}
@@ -415,6 +426,7 @@ function boot(){
   fetch("policy.json",{cache:"no-cache"}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}).then(function(d){
     entries=d.entries||[];classes=d.classes||[];
     byId={};classes.forEach(function(c){byId[c.id]=c;});
+    if(byId["open"]){byId["open"]=Object.assign({},byId["open"],{label:"No policy found (silent)",meaning:"No agent policy was found in the files probed. Silence is not a welcome: the repo has not stated a policy either way, so check its recent merged PRs and read any new policy files before building."});classes=classes.map(function(c){return c.id==="open"?byId["open"]:c;});}
     els.loading.style.display="none";
     buildChips();buildLangs();buildLegend();stats();bandStats();apply();
   }).catch(function(err){
