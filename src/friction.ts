@@ -40,7 +40,7 @@
  *
  * Null signals are simply skipped: the index never fabricates numbers.
  */
-import type { FrictionReport, RepoSignals } from "./types.js";
+import type { DoorClosedSummary, FrictionReport, RepoSignals } from "./types.js";
 import { gateLabel, parseGatesFromSources } from "./gates.js";
 import {
   fetchPolicySourcesWithProvenance,
@@ -93,11 +93,7 @@ export const DOOR_CLOSED_KINDS = [
   "external_prs_closed",
 ] as const;
 
-export function doorClosedSummary(gates: RepoSignals["gates"]): {
-  closed: boolean;
-  count: number;
-  kinds: string[];
-} {
+export function doorClosedSummary(gates: RepoSignals["gates"]): DoorClosedSummary {
   const kinds = gates
     .filter((g) => g.detected && (DOOR_CLOSED_KINDS as readonly string[]).includes(g.kind))
     .map((g) => g.kind);
