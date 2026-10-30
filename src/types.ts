@@ -328,12 +328,27 @@ export interface PolicySourceProvenance {
 }
 
 /** A scored repo, stored in data/friction-index.json. */
+/**
+ * v0.24.0: door-closed aggregate, defined exactly as the Agent Policy
+ * Index page defines it: the door is closed to outside PRs when any of
+ * agents_banned, collaborators_only, unsolicited_prs_paused, or
+ * external_prs_closed is detected. Count is the number of those kinds
+ * detected on this repo (0 or more), kinds lists them.
+ */
+export interface DoorClosedSummary {
+  closed: boolean;
+  count: number;
+  kinds: GateKind[];
+}
+
 export interface FrictionReport {
   owner: string;
   repo: string;
   score: number; // 0..100, 100 = easiest
   gates: Gate[];
   reasons: string[];
+  /** v0.24.0: door-closed aggregate over the detected gates. */
+  door_closed?: DoorClosedSummary;
   signals: RepoSignals;
   /**
    * Merge velocity, when computed: share of recent merged PRs authored

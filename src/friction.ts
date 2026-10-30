@@ -80,6 +80,30 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
+/**
+ * v0.24.0: the door-closed gate kinds, matching the Agent Policy Index
+ * page definition (agents-banned, paused, collaborators-only, and the
+ * maintainer-only family, which Greenlight detects as collaborators_only
+ * or external_prs_closed).
+ */
+export const DOOR_CLOSED_KINDS = [
+  "agents_banned",
+  "collaborators_only",
+  "unsolicited_prs_paused",
+  "external_prs_closed",
+] as const;
+
+export function doorClosedSummary(gates: RepoSignals["gates"]): {
+  closed: boolean;
+  count: number;
+  kinds: string[];
+} {
+  const kinds = gates
+    .filter((g) => g.detected && (DOOR_CLOSED_KINDS as readonly string[]).includes(g.kind))
+    .map((g) => g.kind);
+  return { closed: kinds.length > 0, count: kinds.length, kinds };
+}
+
 export function scoreFriction(signals: RepoSignals): FrictionReport {
   let score = 100;
   const reasons: string[] = [];
@@ -139,6 +163,7 @@ export function scoreFriction(signals: RepoSignals): FrictionReport {
     gates: signals.gates,
     reasons,
     signals: signalsOut,
+    door_closed: doorClosedSummary(signals.gates),
   };
 }
 

@@ -1,1 +1,1 @@
-{"servers":{"greenlight":{"args":["-y","@reneturcios/greenlight@0.23.0","mcp"],"command":"npx","type":"stdio"}}}
+{"servers":{"greenlight":{"args":["-y","@reneturcios/greenlight@0.24.0","mcp"],"command":"npx","type":"stdio"}}}

@@ -213,4 +213,19 @@ describe("starter candidate estimate is never scored (item 16)", () => {
     }));
     assert.ok(boosted.score < 100, `boosted banned score: ${boosted.score}`);
   });
+
+  it("reports the door_closed aggregate (v0.24.0, index page definition)", () => {
+    const open = scoreFriction(base());
+    assert.deepEqual(open.door_closed, { closed: false, count: 0, kinds: [] });
+    const banned = scoreFriction(base({ gates: gatesOn(["agents_banned"]) }));
+    assert.deepEqual(banned.door_closed, { closed: true, count: 1, kinds: ["agents_banned"] });
+    const multi = scoreFriction(base({
+      gates: gatesOn(["agents_banned", "collaborators_only", "unsolicited_prs_paused", "external_prs_closed", "claim_first"]),
+    }));
+    assert.equal(multi.door_closed!.closed, true);
+    assert.equal(multi.door_closed!.count, 4);
+    assert.ok(!multi.door_closed!.kinds.includes("claim_first"));
+    const ritualOnly = scoreFriction(base({ gates: gatesOn(["agents_disclosure", "discussion_first"]) }));
+    assert.equal(ritualOnly.door_closed!.closed, false);
+  });
 });

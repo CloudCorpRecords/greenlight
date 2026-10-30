@@ -232,6 +232,20 @@ const RULES: GateRule[] = [
       /(autonomous|unsupervised|ai[-\s]?generated|ai[-\s]?authored)[\w\s,'"()-]{0,120}?\bare\s+strictly\s+prohibited\b/i,
       /(do not|don't|does not|will not) accept.{0,60}(pull requests?|prs?|contributions?).{0,40}generated.{0,40}\bai\b/i,
       /reserve.{0,20}(the )?right to close.{0,80}ai[-\s]?generated/i,
+      // v0.24.0 field cases from the Agent Policy Index drift audit:
+      // gleam-lang/gleam's CONTRIBUTING bans agent contributions in the
+      // plain shape "We do not accept contributions from AI agents"
+      // (no "autonomous", no "generated"), which every pattern above
+      // missed; its index entry sat at open for eleven days on a stale
+      // read. beetbox/beets' AI_POLICY.md confines agents to code
+      // review and refuses agent-created PRs and AI good-first work.
+      /(do not|don't|does not|will not) accept (contributions?|prs?|pull requests?) from (ai|llm) agents?/i,
+      /contributions? from (ai|llm) agents? (are|is) not (accepted|welcome|allowed|permitted)/i,
+      /\b(ai|llm) agents? (are|is) not (welcome|accepted|allowed|permitted)\b/i,
+      /agents? (may|can) only (do|perform|be used for) code reviews?/i,
+      /agent (pr|pull request) creation (is )?not (permitted|allowed)/i,
+      /(pull requests?|prs?) (created|opened) by (ai )?agents? (are|is|will be) not (permitted|allowed|accepted)/i,
+      /(ai|agents?) (is|are) not (to be used )?for good[-\s]?first[-\s]?contribution/i,
       ...SCOPED_BAN_REGEXES,
     ],
   },
@@ -361,6 +375,13 @@ const UNSCOPED_BAN_RES: RegExp[] = [
   /(autonomous|unsupervised|ai[-\s]?generated|ai[-\s]?authored)[\w\s,'"()-]{0,120}?\bare\s+strictly\s+prohibited\b/i,
   /(do not|don't|does not|will not) accept.{0,60}(pull requests?|prs?|contributions?).{0,40}generated.{0,40}\bai\b/i,
   /reserve.{0,20}(the )?right to close.{0,80}ai[-\s]?generated/i,
+  // v0.24.0: the gleam and beets shapes are explicit prohibitions, so
+  // the contradiction resolver must treat them as unscoped too.
+  /(do not|don't|does not|will not) accept (contributions?|prs?|pull requests?) from (ai|llm) agents?/i,
+  /contributions? from (ai|llm) agents? (are|is) not (accepted|welcome|allowed|permitted)/i,
+  /\b(ai|llm) agents? (are|is) not (welcome|accepted|allowed|permitted)\b/i,
+  /agents? (may|can) only (do|perform|be used for) code reviews?/i,
+  /agent (pr|pull request) creation (is )?not (permitted|allowed)/i,
 ];
 
 /**

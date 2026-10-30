@@ -64,6 +64,7 @@ import { parseGatefileJson } from "./gates.js";
 import type { Gate } from "./types.js";
 import { existsSync, readFileSync } from "node:fs";
 import { fetchFrictionSummary } from "./friction.js";
+import { indexDriftFor, findIndexEntry, compareIndexDrift } from "./index-drift.js";
 import {
   createRestClient,
   claimIssue,
@@ -260,6 +261,11 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
   const suggestion = suggestsVerifiedComment(merged.gates)
     ? verifiedCommentSuggestion(snapshot.sourceUrl)
     : null;
+  // v0.24.0: INDEX DRIFT signal. If the published Agent Policy Index
+  // carries this repo, compare its recorded classes against the live
+  // gate read and warn on disagreement (the gleam case: index said
+  // open eleven days after the ban landed). Best-effort, never blocks.
+  const indexDrift = await indexDriftFor(owner, repo, merged.gates);
   if (asJson) {
     console.log(
       JSON.stringify(
@@ -276,6 +282,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
           llm_claims: merged.llm_claims ?? [],
           llm_status: merged.llm_status ?? null,
           suggestion,
+          index_drift: indexDrift,
           renamedFrom: renameNote ? `${parsed.owner}/${parsed.repo}` : null,
         },
         null,
@@ -287,6 +294,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
   if (renameNote) console.log(renameNote);
   printVerdict(snapshot, result, false);
   for (const line of merged.protocolLines) console.log(`  ${line}`);
+  if (indexDrift) console.log(`  ${indexDrift.warning}`);
   if (suggestion) console.log(`  ${suggestion}`);
 }
 
@@ -532,15 +540,33 @@ async function cmdXray(repoRef: string, args: string[]): Promise<void> {
   const results = sortXrayResults(await xrayIssues(owner, repo, numbers));
   const totalCalls = apiCallsUsed() - callsBefore;
 
+  // v0.24.0: INDEX DRIFT signal, same comparison as check. Only runs
+  // the lite friction gate read when the repo is actually in the
+  // published index; best-effort and silent on any failure.
+  let indexDrift: import("./index-drift.js").IndexDrift | null = null;
+  try {
+    const entry = await findIndexEntry(owner, repo);
+    if (entry) {
+      const liteReport = await fetchFrictionSummary(owner, repo, {
+        lite: true,
+        behavioral: false,
+      });
+      indexDrift = compareIndexDrift(entry, liteReport.gates);
+    }
+  } catch {
+    indexDrift = null;
+  }
+
   if (asJson) {
     console.log(
-      JSON.stringify({ repo: `${owner}/${repo}`, deep_verified: true, api_calls: totalCalls, results }, null, 2)
+      JSON.stringify({ repo: `${owner}/${repo}`, deep_verified: true, api_calls: totalCalls, index_drift: indexDrift, results }, null, 2)
     );
     return;
   }
   console.log(
     `Timeline X-Ray of ${owner}/${repo}: ${results.length} issues deep-verified (${totalCalls} API calls)`
   );
+  if (indexDrift) console.log(`  ${indexDrift.warning}`);
   for (const r of results) {
     console.log(`\n${SYMBOL[r.verdict] ?? "[?]"} #${r.number} ${r.title}`);
     console.log(`  ${r.url}`);

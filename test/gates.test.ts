@@ -484,3 +484,42 @@ describe("scoped intake pause (v0.17.0)", () => {
     assert.equal(gates.find((g) => g.kind === "scoped_prs_paused")!.detected, false);
   });
 });
+
+describe("agent ban shapes from the 2026-10-29 index drift audit (v0.24.0)", () => {
+  it("detects the gleam shape: plain 'do not accept contributions from AI agents'", () => {
+    const gates = parseGates(
+      "We do not accept contributions from AI agents. Bug reports, pull request descriptions, and comments must be written by a human, not by AI."
+    );
+    assert.equal(gates.find((g) => g.kind === "agents_banned")!.detected, true);
+  });
+
+  it("detects gleam variants: contributions from AI agents are not accepted; AI agents not welcome", () => {
+    const a = parseGates("Contributions from AI agents are not accepted.");
+    assert.equal(a.find((g) => g.kind === "agents_banned")!.detected, true);
+    const b = parseGates("Please note: AI agents are not welcome in this repository.");
+    assert.equal(b.find((g) => g.kind === "agents_banned")!.detected, true);
+    const c = parseGates("We don't accept pull requests from LLM agents.");
+    assert.equal(c.find((g) => g.kind === "agents_banned")!.detected, true);
+  });
+
+  it("detects the beets AI_POLICY shape: review-only agents, no agent PR creation, no AI good-first work", () => {
+    const gates = parseGates(
+      "Agents may only do code review. Agent PR creation is not permitted. AI is not for good-first-contribution issues; pick those up as a human."
+    );
+    assert.equal(gates.find((g) => g.kind === "agents_banned")!.detected, true);
+  });
+
+  it("does not fire agents_banned on a bug-report-scoped AI ban (PostHog shape)", () => {
+    const gates = parseGates(
+      "AI-generated bug reports will be closed without review. We cannot triage generated issues. For code, fork the repo and send a pull request."
+    );
+    assert.equal(gates.find((g) => g.kind === "agents_banned")!.detected, false);
+  });
+
+  it("does not fire the new shapes on ordinary AI discussion", () => {
+    const gates = parseGates(
+      "This project uses AI agents in its CI pipeline. Contributions from everyone are welcome; see the style guide."
+    );
+    assert.equal(gates.find((g) => g.kind === "agents_banned")!.detected, false);
+  });
+});
