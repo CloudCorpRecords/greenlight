@@ -996,7 +996,9 @@ export async function listWorkflows(
       content = await deps.fetchRaw(name);
     } else {
       try {
-        const res = await fetch(`${RAW}/${owner}/${repo}/HEAD/.github/workflows/${name}`, { headers });
+        // activeFetch (not bare fetch) so the injectable test seam covers
+        // workflow reads too (v0.25.0).
+        const res = await activeFetch()(`${RAW}/${owner}/${repo}/HEAD/.github/workflows/${name}`, { headers });
         if (res.ok) content = await res.text();
       } catch { /* one bad file must not sink the scan */ }
     }

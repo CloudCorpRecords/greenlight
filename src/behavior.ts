@@ -41,6 +41,15 @@
  * This is behavior inference from maintainer actions, not policy text:
  * verdicts should treat a detected behavioral gate as a hard reason to
  * skip the repo, the same way agents_banned is treated.
+ *
+ * v0.25.0 (2026-10-27 closed-unmerged audit, gap 5, the vite shape):
+ * rejection can also run through automation. A maintainer-side label
+ * matching bot|llm|agent|ai is applied to a PR, then a bot closes it
+ * citing that label. Neither the label event nor the bot's comment is
+ * maintainer text, so the comment matcher above cannot see the shape.
+ * extractLabelClose verifies it from the timeline (label applied by a
+ * non-author, a bot closed event, a bot comment citing the label) and
+ * counts it as one non-strong signal for that PR.
  */
 import { apiGet, apiCallsUsed } from "./github.js";
 
@@ -74,8 +83,8 @@ export interface BehavioralSignal {
   url: string;
   /** True for explicit phrases like "AI slop"; weaker signals can still count toward strength. */
   strong: boolean;
-  /** Which surface carried the evidence: "comment" | "review" | "review_comment". */
-  source?: "comment" | "review" | "review_comment";
+  /** Which surface carried the evidence: "comment" | "review" | "review_comment" | "label_close". */
+  source?: "comment" | "review" | "review_comment" | "label_close";
 }
 
 export interface BehavioralGate {
@@ -89,6 +98,36 @@ export interface BehavioralGate {
   /** Transparency: PRs scanned, maintainer comments seen, why nothing fired. */
   notes: string[];
   note: string;
+}
+
+/** One timeline event on a PR, reduced to what label-close detection needs. */
+export interface BehavioralTimelineEvent {
+  event: string;
+  /** Login of the user or bot that performed the event. */
+  actor: string;
+  /** Label name, present on "labeled" events. */
+  label?: string;
+}
+
+/**
+ * A label-and-bot closure fact (v0.25.0, the vite shape): a label
+ * matching /bot|llm|agent|ai/ was applied by someone other than the
+ * PR author (applying a label takes triage access, so the applier is
+ * maintainer-side or maintainer-configured automation), a bot closed
+ * the PR, and the bot's own comment cites the label as the reason.
+ * Produced by extractLabelClose from timeline events plus comments.
+ */
+export interface BehavioralLabelClose {
+  pr: number;
+  /** The applied label that matched (for example "bot: likely"). */
+  label: string;
+  /** Login that applied the label. */
+  labeler: string;
+  /** Bot login that closed the PR and wrote the citation comment. */
+  bot: string;
+  /** Truncated quote of the bot's closure comment. */
+  quote: string;
+  url: string;
 }
 
 /** Maximum closed-unmerged PRs examined per repo. Keeps the pass bounded. */
@@ -138,9 +177,10 @@ export function partitionByRecency(
  * API cost contract (v0.18.0, item 5): 1-3 calls to walk the closed-PR
  * list (stops early once 15 unmerged PRs are found) plus up to three
  * evidence pages per closed-unmerged PR (issue comments, reviews,
- * review comments).
+ * review comments). v0.25.0 adds at most one timeline call per PR,
+ * paid only for PRs carrying a bot label-citation comment.
  */
-export const BEHAVIORAL_MAX_API_CALLS = 3 + 3 * BEHAVIORAL_MAX_PRS;
+export const BEHAVIORAL_MAX_API_CALLS = 3 + 4 * BEHAVIORAL_MAX_PRS;
 
 const AI_TERMS =
   /\b(ai|a\.i\.|llm|llms|chatgpt|copilot|Muse|gemini|gpt-?4|gpt-?3|generated|slop)\b/i;
@@ -178,6 +218,57 @@ function truncateQuote(body: string, limit = 240): string {
 
 const MAINTAINER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
+/** Label names that mark a PR as machine-made: the vite closure shape. */
+const LABEL_CLOSE_LABEL = /\b(bot|llm|agent)\b|\bai\b/i;
+/** GitHub bot logins end in [bot] (github-actions[bot], and friends). */
+const BOT_LOGIN = /\[bot\]$/i;
+
+/**
+ * Pure: verify the label-and-bot closure shape for one closed-unmerged
+ * PR from its timeline events and its already-fetched comments.
+ * Returns the fact, or null when any leg of the shape is missing:
+ *   (a) a "labeled" event whose label matches LABEL_CLOSE_LABEL,
+ *       applied by someone other than the PR author;
+ *   (b) a "closed" event performed by a bot login;
+ *   (c) a bot-authored issue comment citing the label with an AI term
+ *       (the closure text, kept as the evidence quote).
+ * All three legs are required: a label alone can be triage noise, and
+ * a bot closure alone is usually a stale bot, not an AI rejection.
+ */
+export function extractLabelClose(
+  pr: BehavioralClosedPR,
+  timeline: BehavioralTimelineEvent[],
+  comments: BehavioralMaintainerComment[]
+): BehavioralLabelClose | null {
+  const labeled = timeline.find(
+    (e) =>
+      e.event === "labeled" &&
+      e.label !== undefined &&
+      LABEL_CLOSE_LABEL.test(e.label) &&
+      e.actor.toLowerCase() !== pr.author.toLowerCase()
+  );
+  if (!labeled || labeled.label === undefined) return null;
+  const closedByBot = timeline.some((e) => e.event === "closed" && BOT_LOGIN.test(e.actor));
+  if (!closedByBot) return null;
+  const citation = comments.find(
+    (c) =>
+      c.pr === pr.number &&
+      (c.source ?? "comment") === "comment" &&
+      BOT_LOGIN.test(c.author) &&
+      /\blabel/i.test(c.body) &&
+      AI_TERMS.test(c.body)
+  );
+  if (!citation) return null;
+  return {
+    pr: pr.number,
+    label: labeled.label,
+    labeler: labeled.actor,
+    bot: citation.author,
+    quote: truncateQuote(citation.body),
+    url: citation.url,
+  };
+}
+
 /**
  * Pure core: fold maintainer comments on closed-unmerged PRs into a gate
  * verdict. The live fetcher below builds these two inputs; tests drive
@@ -187,7 +278,8 @@ const MAINTAINER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
  */
 export function detectBehavioralGateFromData(
   prs: BehavioralClosedPR[],
-  comments: BehavioralMaintainerComment[]
+  comments: BehavioralMaintainerComment[],
+  labelCloses: BehavioralLabelClose[] = []
 ): BehavioralGate {
   const prByNumber = new Map(prs.map((p) => [p.number, p]));
   const evidence: BehavioralSignal[] = [];
@@ -216,6 +308,30 @@ export function detectBehavioralGateFromData(
     prsWithSignal.add(c.pr);
   }
 
+  // v0.25.0: fold label-and-bot closure facts in as evidence. Each
+  // counts its PR toward strength like a comment signal, but never as
+  // a strong signal: the evidence is a mechanism (label + bot), not a
+  // maintainer sentence, so one label-closed PR alone stays a warning.
+  let labelCloseSignals = 0;
+  for (const lc of labelCloses) {
+    if (!prByNumber.has(lc.pr)) continue;
+    evidence.push({
+      pr: lc.pr,
+      author: lc.bot,
+      quote: lc.quote,
+      url: lc.url,
+      strong: false,
+      source: "label_close",
+    });
+    prsWithSignal.add(lc.pr);
+    labelCloseSignals++;
+  }
+  if (labelCloseSignals > 0) {
+    notes.push(
+      `${labelCloseSignals} label-and-bot closure signal${labelCloseSignals === 1 ? "" : "s"} (vite shape: bot|llm|agent label applied, bot closed the PR citing it)`
+    );
+  }
+
   const strength = prsWithSignal.size;
   const threshold = 2;
   const hasStrong = evidence.some((e) => e.strong);
@@ -242,6 +358,12 @@ interface PrListItem {
   state: string;
   closed_at?: string;
   draft?: boolean;
+}
+
+interface TimelineListItem {
+  event?: string;
+  actor?: { login?: string };
+  label?: { name?: string };
 }
 
 interface CommentListItem {
@@ -336,7 +458,38 @@ export async function detectBehavioralGate(
       });
     }
   }
-  const gate = detectBehavioralGateFromData(live, comments);
+  // v0.25.0: label-and-bot closures are invisible to the comment
+  // matcher (their evidence is a label event plus a bot comment), so
+  // a PR carrying a bot label-citation comment earns one timeline
+  // fetch to verify the full shape. Best-effort: a failed timeline
+  // read means no label-close signal for that PR, never a fake one.
+  const labelCloses: BehavioralLabelClose[] = [];
+  for (const pr of live) {
+    const hasCitation = comments.some(
+      (c) =>
+        c.pr === pr.number &&
+        (c.source ?? "comment") === "comment" &&
+        BOT_LOGIN.test(c.author) &&
+        /\blabel/i.test(c.body) &&
+        AI_TERMS.test(c.body)
+    );
+    if (!hasCitation) continue;
+    try {
+      const events = (await apiGet(
+        `/repos/${owner}/${repo}/issues/${pr.number}/timeline?per_page=100`
+      )) as TimelineListItem[];
+      const timeline: BehavioralTimelineEvent[] = (events ?? [])
+        .filter((e) => e && typeof e.event === "string")
+        .map((e) => ({
+          event: String(e.event),
+          actor: String(e.actor?.login ?? ""),
+          label: e.label?.name ? String(e.label.name) : undefined,
+        }));
+      const fact = extractLabelClose(pr, timeline, comments);
+      if (fact) labelCloses.push(fact);
+    } catch { /* best-effort: no timeline, no signal */ }
+  }
+  const gate = detectBehavioralGateFromData(live, comments, labelCloses);
   if (recency.staleCount > 0) {
     gate.notes.push(
       `excluded ${recency.staleCount} closed-unmerged PR${recency.staleCount === 1 ? "" : "s"} older than the ${BEHAVIORAL_RECENCY_MONTHS}-month recency bound`

@@ -48,6 +48,7 @@ import {
   countStarterIssues,
   countStarterCandidates,
   resolveCanonicalRepo,
+  scanWorkflowGates,
 } from "./github.js";
 import { fetchMergeVelocity, type MergeVelocityStats } from "./merge-velocity.js";
 import { detectBehavioralGate } from "./behavior.js";
@@ -196,6 +197,30 @@ export function attachOutsiderShare(report: FrictionReport): FrictionReport {
 }
 
 /**
+ * Pure: merge workflow-derived gates into a friction gate list
+ * (v0.25.0). Workflow gates arrive detected-only from
+ * scanWorkflowGates; a kind already detected from policy sources
+ * keeps its policy-source entry, whose evidence quotes the policy
+ * text. The friction pipeline never scanned workflows before, so a
+ * repo whose only wall is an auto-close workflow scored as if the
+ * wall were not there (2026-10-27 closed-unmerged audit, gap 1:
+ * activepieces friction scored 42 with external_prs_closed missing,
+ * while check on the same repo detected it).
+ */
+export function mergeWorkflowGates(
+  gates: RepoSignals["gates"],
+  workflowGates: RepoSignals["gates"]
+): RepoSignals["gates"] {
+  const merged = [...gates];
+  for (const g of workflowGates) {
+    if (!g.detected) continue;
+    if (merged.some((x) => x.kind === g.kind && x.detected)) continue;
+    merged.push(g);
+  }
+  return merged;
+}
+
+/**
  * The repo_friction pipeline as one callable: gates from the full policy
  * source set (CONTRIBUTING variants and house rules at root, .github/
  * and docs/, plus the org-level AI_POLICY.md), starter-issue count, and
@@ -247,7 +272,15 @@ export async function fetchFrictionSummary(
         fetchMergeVelocity(owner, repo).catch(() => null),
       ]);
   const sources = sourcesResult.sources;
-  const gates = parseGatesFromSources(sources);
+  let gates = parseGatesFromSources(sources);
+  // v0.25.0: full mode also scans the repo's workflows, so friction
+  // prices the same auto-close and stale-bot gates the check path
+  // sees (weights for both kinds already exist in GATE_WEIGHTS).
+  // Lite mode stays policy-sources-only by design: its contract is
+  // the cheap canonical computation. scanWorkflowGates never throws.
+  if (!lite) {
+    gates = mergeWorkflowGates(gates, await scanWorkflowGates(owner, repo));
+  }
   if (policy.collaboratorsOnly && !gates.some((g) => g.kind === "collaborators_only" && g.detected)) {
     gates.push({
       kind: "collaborators_only",

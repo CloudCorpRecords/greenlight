@@ -34,6 +34,8 @@ import {
   type RaceIssue,
   type RacePRCandidate,
 } from "../src/racecheck.js";
+import { withTransientRetry, isTransientFetchError } from "../src/racecheck.js";
+import { RequestTimeoutError, ApiNotFoundError } from "../src/github.js";
 import { xrayIssue } from "../src/xray.js";
 
 afterEach(() => setFetchImpl(null));
@@ -952,3 +954,79 @@ describe("v0.21.2 GL-1: term-only RACE needs distinctive title terms", () => {
   });
 });
 
+
+describe("v0.25.0 transient retry on the issue fetch", () => {
+  const plainIssue = {
+    title: "Fix the thing",
+    body: "",
+    labels: [] as string[],
+    author: "external-dev",
+  };
+  const depsBase = {
+    searchOpenPRs: async () => [],
+    listOpenPRs: async () => [],
+    fetchFiles: async () => [] as string[],
+  };
+
+  it("retries a timed-out issue fetch and still returns a verdict", async () => {
+    let calls = 0;
+    const deps = {
+      ...depsBase,
+      fetchIssue: async () => {
+        calls++;
+        if (calls < 3) throw new RequestTimeoutError("/repos/o/r/issues/1", 30);
+        return plainIssue;
+      },
+    };
+    const result = await racecheckIssue("o", "r", 1, deps, { retryDelayMs: 0 });
+    assert.equal(calls, 3);
+    assert.equal(result.verdict, "CLEAR");
+    assert.ok(
+      result.reasons.some((r) => r.includes("3 attempts")),
+      "the retry is disclosed in the reasons"
+    );
+  });
+
+  it("gives up after the retry budget when the timeout persists", async () => {
+    let calls = 0;
+    const deps = {
+      ...depsBase,
+      fetchIssue: async () => {
+        calls++;
+        throw new RequestTimeoutError("/repos/o/r/issues/1", 30);
+      },
+    };
+    const result = await racecheckIssue("o", "r", 1, deps, { retryDelayMs: 0 });
+    assert.equal(result.verdict, "ERROR");
+    assert.equal(calls, 3);
+  });
+
+  it("never retries a non-transient failure", async () => {
+    let calls = 0;
+    const deps = {
+      ...depsBase,
+      fetchIssue: async () => {
+        calls++;
+        throw new ApiNotFoundError("/repos/o/r/issues/1");
+      },
+    };
+    const result = await racecheckIssue("o", "r", 1, deps, { retryDelayMs: 0 });
+    assert.equal(result.verdict, "ERROR");
+    assert.equal(calls, 1);
+  });
+
+  it("withTransientRetry retries 5xx and reports attempts", async () => {
+    let calls = 0;
+    const got = await withTransientRetry(
+      async () => {
+        calls++;
+        if (calls === 1) throw new Error("GitHub API 502 for /repos/o/r");
+        return 7;
+      },
+      { delayMs: 0 }
+    );
+    assert.deepEqual(got, { value: 7, attempts: 2 });
+    assert.equal(isTransientFetchError(new Error("GitHub API 404 for /x")), false);
+    assert.equal(isTransientFetchError(new Error("GitHub API 503 for /x")), true);
+  });
+});

@@ -83,7 +83,7 @@
  * that touches any non-dependency file still counts in full, and an
  * unreadable or empty file list fails open (the candidate counts).
  */
-import { apiCallsUsed, apiGet, cacheGet, cacheSet } from "./github.js";
+import { apiCallsUsed, apiGet, cacheGet, cacheSet, RequestTimeoutError } from "./github.js";
 import { canonicalRepoKey, type TrustStore } from "./trust.js";
 
 export type RaceVerdict = "RACE" | "SUSPECT" | "CLEAR" | "ERROR" | "SKIP";
@@ -991,6 +991,49 @@ async function defaultFetchFiles(owner: string, repo: string, prNumber: number):
 }
 
 /**
+ * True for failures worth retrying: the shared client's per-request
+ * timeout, a GitHub 5xx, or a transport-level fetch failure (undici
+ * surfaces those as TypeError). A 404 or a rate limit is a fact, not
+ * weather, and is never retried.
+ */
+export function isTransientFetchError(err: unknown): boolean {
+  if (err instanceof RequestTimeoutError) return true;
+  if (err instanceof TypeError) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /GitHub API 5\d\d/.test(msg);
+}
+
+/**
+ * Run fn, retrying transient failures with linear backoff (v0.25.0).
+ * Field case (2026-10-27 closed-unmerged audit, gap 4): under the
+ * campaign proxy's latency, single GitHub responses can outlast the
+ * client's 30s per-request timeout, so racecheck's one hard
+ * dependency, the issue fetch, returned ERROR four times in one
+ * evening and deferred every candidate behind it. Retrying the
+ * weather instead of failing the gate is the fix. Attempts are
+ * returned so callers can disclose the retry in their reasons.
+ */
+export async function withTransientRetry<T>(
+  fn: () => Promise<T>,
+  opts: { retries?: number; delayMs?: number; sleep?: (ms: number) => Promise<void> } = {}
+): Promise<{ value: T; attempts: number }> {
+  const retries = Math.max(0, opts.retries ?? 2);
+  const delayMs = opts.delayMs ?? 1500;
+  const sleep =
+    opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  let attempts = 0;
+  for (;;) {
+    attempts++;
+    try {
+      return { value: await fn(), attempts };
+    } catch (err) {
+      if (attempts > retries || !isTransientFetchError(err)) throw err;
+      await sleep(delayMs * attempts);
+    }
+  }
+}
+
+/**
  * The racecheck pipeline. Best-effort per source: a failed search or
  * list degrades to the other source; only an unreadable issue is an
  * ERROR. Changed files are fetched for at most MAX_FILE_FETCHES
@@ -1004,7 +1047,7 @@ export async function racecheckIssue(
   repo: string,
   number: number,
   deps: RacecheckDeps = {},
-  opts: { limit?: number; trustMode?: "off" | "dry-run" | "on"; trustStore?: TrustStore } = {}
+  opts: { limit?: number; trustMode?: "off" | "dry-run" | "on"; trustStore?: TrustStore; retries?: number; retryDelayMs?: number } = {}
 ): Promise<RacecheckResult> {
   const callsBefore = apiCallsUsed();
   const url = `https://github.com/${owner}/${repo}/issues/${number}`;
@@ -1066,8 +1109,14 @@ export async function racecheckIssue(
   }
 
   let issue: RaceIssue;
+  let issueFetchAttempts = 1;
   try {
-    issue = await fetchIssue(owner, repo, number);
+    const got = await withTransientRetry(() => fetchIssue(owner, repo, number), {
+      retries: opts.retries ?? 2,
+      delayMs: opts.retryDelayMs ?? 1500,
+    });
+    issue = got.value;
+    issueFetchAttempts = got.attempts;
   } catch (err) {
     return {
       owner, repo, number, url, title: "",
@@ -1081,6 +1130,10 @@ export async function racecheckIssue(
     };
   }
 
+  const fetchNotes: string[] =
+    issueFetchAttempts > 1
+      ? [`issue fetch needed ${issueFetchAttempts} attempts (transient upstream failures were retried)`]
+      : [];
   let keywords = extractKeywords(issue, { owner, repo });
   let suppressed: string[] = [];
   let ignoredMatches: IgnoredMatch[] = [];
@@ -1089,8 +1142,8 @@ export async function racecheckIssue(
     verdict, keywords, matches, ignoredMatches,
     reasons:
       trustInfo && trustInfo.blocked && trustInfo.mode === "dry-run"
-        ? [`${trustInfo.note}; dry-run only, the verdict below is unchanged`, ...reasons]
-        : reasons,
+        ? [`${trustInfo.note}; dry-run only, the verdict below is unchanged`, ...fetchNotes, ...reasons]
+        : [...fetchNotes, ...reasons],
     apiCalls: apiCallsUsed() - callsBefore,
     ...(trustInfo ? { trust: trustInfo } : {}),
   });

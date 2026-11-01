@@ -17,6 +17,9 @@ import {
   BEHAVIORAL_RECENCY_MONTHS,
   type BehavioralClosedPR,
   type BehavioralMaintainerComment,
+  type BehavioralTimelineEvent,
+  type BehavioralLabelClose,
+  extractLabelClose,
 } from "../src/behavior.js";
 import { scoreFriction } from "../src/friction.js";
 
@@ -301,5 +304,82 @@ describe("v0.18.0 behavioral evidence from reviews and review comments (item 5)"
     );
     assert.equal(gate.strength, 0);
     assert.equal(gate.detected, false);
+  });
+});
+
+describe("v0.25.0 label-and-bot closures (vite shape)", () => {
+  const viteComment = (prNumber: number): BehavioralMaintainerComment =>
+    comment(
+      prNumber,
+      "github-actions[bot]",
+      "This pull request has been labeled as likely to be created by a bot, LLM, or agent, and will be automatically closed in 7 days.",
+      "NONE"
+    );
+
+  const viteTimeline = (
+    labeler = "maintainer-jane",
+    label = "bot: likely"
+  ): BehavioralTimelineEvent[] => [
+    { event: "labeled", actor: labeler, label },
+    { event: "closed", actor: "github-actions[bot]" },
+  ];
+
+  it("extractLabelClose verifies the full vite shape", () => {
+    const fact = extractLabelClose(pr(41, "external-dev"), viteTimeline(), [viteComment(41)]);
+    assert.ok(fact);
+    assert.equal(fact.label, "bot: likely");
+    assert.equal(fact.labeler, "maintainer-jane");
+    assert.equal(fact.bot, "github-actions[bot]");
+    assert.match(fact.quote, /labeled as likely/);
+  });
+
+  it("extractLabelClose needs every leg of the shape", () => {
+    const p = pr(42, "external-dev");
+    // Label does not mark the PR as machine-made.
+    assert.equal(
+      extractLabelClose(p, viteTimeline("maintainer-jane", "needs-review"), [viteComment(42)]),
+      null
+    );
+    // A human closed it: not this shape.
+    assert.equal(
+      extractLabelClose(
+        p,
+        [
+          { event: "labeled", actor: "maintainer-jane", label: "bot: likely" },
+          { event: "closed", actor: "maintainer-jane" },
+        ],
+        [viteComment(42)]
+      ),
+      null
+    );
+    // No bot comment citing the label.
+    assert.equal(extractLabelClose(p, viteTimeline(), []), null);
+    // The PR author applied the label themselves.
+    assert.equal(extractLabelClose(p, viteTimeline("external-dev"), [viteComment(42)]), null);
+  });
+
+  it("one label-closed PR is a warning; two are a behavioral gate", () => {
+    const mk = (n: number, label: string): BehavioralLabelClose => ({
+      pr: n,
+      label,
+      labeler: "maintainer-jane",
+      bot: "github-actions[bot]",
+      quote: "labeled as likely to be created by a bot, LLM, or agent",
+      url: `https://github.com/o/r/pull/${n}`,
+    });
+    const one = detectBehavioralGateFromData([pr(41, "a")], [], [mk(41, "bot: likely")]);
+    assert.equal(one.strength, 1);
+    assert.equal(one.detected, false);
+    assert.equal(one.evidence.length, 1);
+    assert.equal(one.evidence[0].source, "label_close");
+    assert.equal(one.evidence[0].strong, false);
+
+    const two = detectBehavioralGateFromData(
+      [pr(41, "a"), pr(42, "b")],
+      [],
+      [mk(41, "bot: likely"), mk(42, "ai-generated")]
+    );
+    assert.equal(two.strength, 2);
+    assert.equal(two.detected, true);
   });
 });
