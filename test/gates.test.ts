@@ -96,7 +96,7 @@ describe("parseGates", () => {
 
   it("returns all gates (now eleven) with false when nothing matches", () => {
     const gates = parseGates("Thanks for contributing! Just open a PR.");
-    assert.equal(gates.length, 13); // 13 kinds since stale_bot
+    assert.equal(gates.length, 15); // 15 kinds since ai_label_scoped_ban + ai_prose_human (v0.26.0)
     assert.ok(gates.every((g) => !g.detected));
   });
 
@@ -173,7 +173,7 @@ describe("parseGatesFromSources", () => {
 
   it("returns all eleven kinds even when nothing matches", () => {
     const gates = parseGatesFromSources([{ file: "AGENTS.md", text: "Run the linter." }]);
-    assert.equal(gates.length, 13); // 13 kinds since stale_bot
+    assert.equal(gates.length, 15); // 15 kinds since ai_label_scoped_ban + ai_prose_human (v0.26.0)
     assert.ok(gates.every((g) => g.detected === false));
   });
 });
@@ -355,7 +355,7 @@ describe("agent policy gates (v0.9.0)", () => {
 
   it("stays byte-identical quiet when no agent policy exists", () => {
     const gates = parseGates("# Contributing\n\nFork, branch, and open a PR. Tests must pass.");
-    assert.equal(gates.length, 13); // 13 kinds since stale_bot
+    assert.equal(gates.length, 15); // 15 kinds since ai_label_scoped_ban + ai_prose_human (v0.26.0)
     for (const g of gates) {
       assert.equal(g.detected, false, g.kind);
       assert.equal(g.evidence, "");

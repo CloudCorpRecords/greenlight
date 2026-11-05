@@ -45,6 +45,11 @@ export interface IndexDrift {
 export const GATE_TO_INDEX_CLASS: Record<string, string> = {
   agents_banned: "agents-banned",
   agents_disclosure: "agents-disclosure",
+  // v0.26.0: the two AI-policy classes the 2026-10-26 backlog named.
+  // Neither is a door class: a scoped ban closes one issue class, and
+  // the prose rule closes agent-drafted prose, not the repo.
+  ai_label_scoped_ban: "gfi-ai-banned",
+  ai_prose_human: "ai-prose-human",
   collaborators_only: "collaborators-only",
   unsolicited_prs_paused: "paused",
   external_prs_closed: "paused",

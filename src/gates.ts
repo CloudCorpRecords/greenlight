@@ -279,6 +279,58 @@ const RULES: GateRule[] = [
     ],
   },
   {
+    // v0.26.0 field case 2026-11-05: label-scoped AI bans. Blockly's
+    // AGENTS.md says it in bold: "Do not work on `good first issue`s.
+    // If the task is an issue with that label, do not write code or PR
+    // text for it", and its docs AI policy says "AI should not be used
+    // to write code or PR summaries when solving a `good first issue`".
+    // Greenlight 0.25.0 parsed that same AGENTS.md and extracted only
+    // the disclosure line, so a blockly good-first-issue checked GO
+    // ("no blocking gates") - the exact miss that got PR #10629 closed
+    // on 2026-10-26. The gate is repo-level detection; verdict.ts owns
+    // the label match and the GATED call. Patterns are anchored on an
+    // explicit AI/LLM/agent prohibition tied to the good-first-issue
+    // label, never on the label alone (repos that merely welcome
+    // first-timers must not fire).
+    kind: "ai_label_scoped_ban",
+    regexes: [
+      /do not work on `?good[-\s]?first[-\s]?issues?`?/i,
+      /\bai\b (should )?not be used.{0,80}good[-\s]?first[-\s]?issue/i,
+      /(ai|llm|agents?) (is|are) not (to be used )?for good[-\s]?first/i,
+      /good[-\s]?first[-\s]?issues?.{0,80}\b(ai|llm|agents?)\b.{0,50}(not|never|banned|prohibited|reserved|do not)/i,
+      /(no|never|not).{0,40}\b(ai|llm)\b.{0,60}good[-\s]?first[-\s]?issue/i,
+    ],
+  },
+  {
+    // v0.26.0 field cases 2026-11-05: human-written-prose rules.
+    // vitejs/vite's CONTRIBUTING AI Policy (adapted from Nuxt): "Never
+    // let an LLM speak for you - all comments, issues, and PR
+    // descriptions should be written in your own words... If we find
+    // that these principles were not followed, we may close the issue
+    // or pull request directly." Blockly: "PR summaries and GitHub
+    // comments should be written by a human unless you need AI
+    // translation support" and, to agents directly, "Do not write pull
+    // request descriptions or GitHub comments. They must be written by
+    // the human contributor." Greenlight 0.25.0 detected NEITHER: vite
+    // checked GATED only via the behavioral pass (its policy gates all
+    // read false, live class "open"), and a blockly non-GFI issue
+    // checked GO in silence. These patterns are anchored on the
+    // human/own-words requirement itself, never on a bare AI mention,
+    // so a repo that merely welcomes AI tools or asks for disclosure
+    // does not fire.
+    kind: "ai_prose_human",
+    regexes: [
+      /never let an llm speak for you/i,
+      /do not write (pull request|pr) descriptions? or github comments?/i,
+      /(pr|pull request) summaries and (github )?comments? (should|must) be written by a human/i,
+      /(summaries|descriptions?|comments?).{0,50}written by (a |the )?human contributor/i,
+      /must be written by (a |the )?human/i,
+      /(comments?|issues?|(pull request|pr) descriptions?).{0,60}written in your own words/i,
+      /(fully|entirely) ai[-\s]?written prose/i,
+      /do not (allow|permit).{0,60}ai[-\s]?written (prose|descriptions?|comments?|summaries)/i,
+    ],
+  },
+  {
     // Stale-bot lifecycle risk. The primary detector is the workflow
     // pass (detectWorkflowGates parses actions/stale configs and their
     // PR windows); these prose patterns only catch repos that document
@@ -574,6 +626,8 @@ export function gateLabel(kind: GateKind): string {
     case "external_prs_closed": return "external PRs closed by automation";
     case "agents_banned": return "agent contributions banned";
     case "agents_disclosure": return "AI disclosure required";
+    case "ai_label_scoped_ban": return "AI banned on a labelled issue class (good first issue)";
+    case "ai_prose_human": return "PR prose must be human-written (own words)";
     case "stale_bot": return "stale bot auto-closes inactive PRs";
   }
 }

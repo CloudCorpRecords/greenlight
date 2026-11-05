@@ -17,6 +17,11 @@
  *     dco_required          -5
  *     agents_banned        -50 (v0.21.2)
  *     agents_disclosure     -5 (v0.21.2)
+ *     ai_label_scoped_ban  -20 (v0.26.0: AI banned on one labelled
+ *                           issue class, e.g. blockly good-first-issues)
+ *     ai_prose_human       -15 (v0.26.0: PR prose must be human-written
+ *                           in the contributor's own words, e.g. vite
+ *                           and blockly)
  *     stale_bot            -10 (a lifecycle clock on any PR opened here;
  *                           only scored when a source actually documents
  *                           the bot, since the friction pass reads prose
@@ -70,6 +75,16 @@ const GATE_WEIGHTS: Record<string, number> = {
   // on par with cla/dco.
   agents_banned: -50,
   agents_disclosure: -5,
+  // v0.26.0: label-scoped AI ban -20 (scoped weight, on par with
+  // scoped_prs_paused: only the named issue class is banned, but for
+  // an agent that class is fully closed and the GFI bonus below must
+  // not silently cancel that out for the audience the ban targets),
+  // human-written-prose rule -15 (more than a disclosure duty: every
+  // PR description and comment needs a human step an agent cannot
+  // satisfy alone; vite closes violations directly, blockly requires
+  // human-written summaries and comments).
+  ai_label_scoped_ban: -20,
+  ai_prose_human: -15,
   stale_bot: -10,
   discussion_first: -10,
   claim_first: -5,

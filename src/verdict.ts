@@ -60,6 +60,12 @@
  *  7c. A scoped intake pause never gates: it flags and caps at RISKY
  *     with the refused scope quoted (v0.17.0; prettier), lighter than
  *     the blanket pause.
+ *  7d. A label-scoped AI ban (v0.26.0; blockly) GATES only the issues
+ *     carrying the banned label: a good-first-issue in a repo whose AI
+ *     policy bans AI on good-first-issues is GATED, because the ban is
+ *     binding for that class and disclosure does not cure it (blockly
+ *     PR #10629, closed 2026-10-26). An issue outside the label is not
+ *     gated by this rule; rule 10d still applies to it.
  *  8. No activity for 180+ days -> STALE. The issue is probably abandoned,
  *     the repro may not even hold on current code.
  *  9. Soft claim-first gate (comment before starting, shadcn-labs/pdfcn
@@ -380,6 +386,24 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
     return { verdict: "GATED", reasons, claims, gates, flags };
   }
 
+  // Rule 7d: label-scoped AI ban (v0.26.0). The gate is repo-level;
+  // the ban binds only the labelled class, so the GATED call needs the
+  // issue's own labels. Blockly: AI is banned on good-first-issues
+  // (code and prose) while other issues stay open under disclosure +
+  // human-written prose. Greenlight 0.25.0 returned GO for a blockly
+  // good-first-issue ("no blocking gates") because no rule modeled
+  // the scope; that is the miss that produced PR #10629's closure.
+  const labelScopedBan = gates.find((g) => g.kind === "ai_label_scoped_ban" && g.detected);
+  const hasGfiLabel = (snapshot.labels ?? []).some((l) => /good[-\s]?first[-\s]?issue/i.test(l));
+  if (labelScopedBan && hasGfiLabel) {
+    flags.push("ai-label-scoped-ban");
+    reasons.push(
+      `repo AI policy bans AI on good-first-issue issues, and this issue carries that label: ${gateLabel(labelScopedBan.kind)}`
+    );
+    if (labelScopedBan.evidence) reasons.push(`gate evidence: "${labelScopedBan.evidence}"`);
+    return { verdict: "GATED", reasons, claims, gates, flags };
+  }
+
   // Rule 8: stale by inactivity.
   const inactivityDays = daysSince(snapshot.updatedAt, now);
   if (inactivityDays >= STALE_INACTIVITY_DAYS) {
@@ -488,6 +512,32 @@ export function scoreIssue(snapshot: IssueSnapshot, now: Date = new Date()): Ver
       `stale bot: ${staleBot.evidence ? `"${staleBot.evidence}"; ` : ""}an idle PR here is closed by automation, so it needs activity inside that window`
     );
     verdict = "RISKY";
+  }
+
+  // Rule 10d (v0.26.0): human-written-prose rule. Vite ("never let an
+  // LLM speak for you... we may close the issue or pull request
+  // directly") and blockly ("PR summaries and GitHub comments should
+  // be written by a human") require the contributor's own words;
+  // agent-drafted prose violates the rule by construction. This never
+  // gates on its own (a human can still write the prose and submit),
+  // but it must never pass silently: flag it and cap an otherwise-GO
+  // verdict at RISKY with the evidence quoted, so the wave knows the
+  // prose step is the human's, not the agent's. A label-scoped ban
+  // that does NOT cover this issue is disclosed in the same place:
+  // the scope is named, so nobody mistakes the repo for policy-free.
+  const proseHuman = gates.find((g) => g.kind === "ai_prose_human" && g.detected);
+  if (proseHuman) {
+    flags.push("ai-prose-human");
+    reasons.push(
+      `repo requires human-written PR prose (own words): ${proseHuman.evidence ? `"${proseHuman.evidence}"; ` : ""}PR descriptions and comments must be written by the human contributor, not drafted by an agent`
+    );
+    if (verdict === "GO") verdict = "RISKY";
+  }
+  if (labelScopedBan && !hasGfiLabel) {
+    flags.push("ai-label-scoped-ban");
+    reasons.push(
+      `repo AI policy bans AI on good-first-issue issues${labelScopedBan.evidence ? ` ("${labelScopedBan.evidence}")` : ""}; this issue does not carry that label, so the ban does not gate it`
+    );
   }
 
   // Rule 11: comment-mentioned PR cross-check. A PR cited in a non-author

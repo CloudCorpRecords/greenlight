@@ -193,6 +193,32 @@ export type GateKind =
    */
   | "agents_disclosure"
   /**
+   * v0.26.0 field case 2026-11-05 (RaspberryPiFoundation/blockly,
+   * PR #10629 closed 2026-10-26): the repo's AI policy bans AI use on
+   * one labelled class of issues ("Do not work on `good first issue`s.
+   * If the task is an issue with that label, do not write code or PR
+   * text for it", blockly AGENTS.md, summarizing its docs ai_policy).
+   * The ban is scoped, not blanket: check GATES an issue carrying the
+   * named label and leaves other issues to the remaining gates. The
+   * parser models the ban; the verdict layer owns the label match,
+   * because gates are repo-level and labels are issue-level.
+   */
+  | "ai_label_scoped_ban"
+  /**
+   * v0.26.0 field cases 2026-11-05: the repo requires PR summaries,
+   * descriptions, and comments to be written by a human, in the
+   * contributor's own words (vitejs/vite CONTRIBUTING AI Policy:
+   * "Never let an LLM speak for you - all comments, issues, and PR
+   * descriptions should be written in your own words", with violations
+   * closed directly; blockly: "PR summaries and GitHub comments should
+   * be written by a human", "Do not write pull request descriptions or
+   * GitHub comments. They must be written by the human contributor").
+   * Agent-drafted prose violates the rule by construction, so check
+   * caps an otherwise-GO verdict at RISKY with the evidence quoted;
+   * the human must write the prose. Never a silent pass.
+   */
+  | "ai_prose_human"
+  /**
    * The repo runs a stale bot (usually actions/stale in a workflow) that
    * marks inactive PRs stale and auto-closes them after a configured
    * window unless activity resumes. Not an intake block: the PR opens
