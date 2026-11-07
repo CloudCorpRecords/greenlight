@@ -21501,12 +21501,11 @@
    "repo": "coollabsio/coolify",
    "url": "https://github.com/coollabsio/coolify",
    "policy_classes": [
-    "agents-banned",
     "agents-disclosure"
    ],
    "headline": "AI use must be mentioned in the PR description",
    "what_to_do": "Disclose any AI tool use in the PR description. AI-generated PRs submitted without clear understanding of the change will be closed.",
-   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): in CONTRIBUTING.md, AI Usage Disclosure: \"If AI tools were used at any stage, mention it in the pull request description.\" The file separately warns that AI-generated pull requests without clear understanding will be closed. A disclosure rule, not a ban. Greenlight v0.25.0 flywheel correction: adds agents-banned: in CONTRIBUTING.md: \"## What This Project Is Not To set clear expectations: - Coolify is not optimized for first-time open-source contributors - We do not provide beginner-focused mentorship issues - Large unsolicited changes are unlikely to be accepted - Broad refactors or style rewrites are not helpful - Low-effort AI-generated pull requests will be closed AI usage is allowed.\"",
+   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): in CONTRIBUTING.md, AI Usage Disclosure: \"If AI tools were used at any stage, mention it in the pull request description.\" The file separately warns that AI-generated pull requests without clear understanding will be closed. A disclosure rule, not a ban.",
    "our_record": null,
    "scanned_on": "2026-10-18",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
@@ -46939,11 +46938,11 @@
    "repo": "heygen-com/hyperframes",
    "url": "https://github.com/heygen-com/hyperframes",
    "policy_classes": [
-    "agents-banned"
+    "open"
    ],
    "headline": "AI-assisted contributions welcome, no disclosure required",
    "what_to_do": "Normal contribution flow. The repo welcomes AI tool use and does not ask for disclosure; it does require that you understand the code you submit.",
-   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): in CONTRIBUTING.md, AI-Assisted Contributions: \"We welcome contributions that use AI tools (GitHub Copilot, Claude, ChatGPT, etc.). If you used AI to help write a PR, there is no need to disclose it, we review all code on its merits.\" The scan had misread the responsibility rule about not submitting AI-generated code you do not understand as a ban. Greenlight v0.25.0 flywheel correction: adds agents-banned: in CONTRIBUTING.md: \"- Do not submit AI-generated code you don't understand.\"",
+   "evidence": "Independent audit 2026-10-18 (corrects the 5k scan): in CONTRIBUTING.md, AI-Assisted Contributions: \"We welcome contributions that use AI tools (GitHub Copilot, Claude, ChatGPT, etc.). If you used AI to help write a PR, there is no need to disclose it, we review all code on its merits.\" The scan had misread the responsibility rule about not submitting AI-generated code you do not understand as a ban.",
    "our_record": null,
    "scanned_on": "2026-10-18",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
@@ -65702,7 +65701,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.53
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T20:15:41Z",
    "open_issues": 12,
    "outsider_merge_share": 16
@@ -65961,7 +65960,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.76
    },
-   "good_first_issues": null,
+   "good_first_issues": 45,
    "pushed_at": "2026-10-16T18:05:58Z",
    "open_issues": 349,
    "outsider_merge_share": 27
@@ -66093,7 +66092,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T21:49:00Z",
    "open_issues": 222,
    "outsider_merge_share": 100
@@ -66307,7 +66306,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 24.71
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:23:36Z",
    "open_issues": 822,
    "outsider_merge_share": 60
@@ -66432,7 +66431,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 47.15
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-07-27T05:52:06Z",
    "open_issues": 375,
    "outsider_merge_share": 100
@@ -66748,7 +66747,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 46.4
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T05:27:46Z",
    "open_issues": 86,
    "outsider_merge_share": 90
@@ -66889,7 +66888,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 46.45
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-23T23:43:21Z",
    "open_issues": 20,
    "outsider_merge_share": 60
@@ -67017,7 +67016,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.19
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T18:23:07Z",
    "open_issues": 889,
    "outsider_merge_share": 96
@@ -67174,7 +67173,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 47.3
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T17:43:26Z",
    "open_issues": 0,
    "outsider_merge_share": 52
@@ -67281,7 +67280,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.98
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:17:48Z",
    "open_issues": 69,
    "outsider_merge_share": 0
@@ -67318,7 +67317,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.23
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:25:01Z",
    "open_issues": 356,
    "outsider_merge_share": 39
@@ -67347,7 +67346,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.23
    },
-   "good_first_issues": null,
+   "good_first_issues": 3,
    "pushed_at": "2026-10-14T20:32:10Z",
    "open_issues": 499,
    "outsider_merge_share": 25
@@ -67416,7 +67415,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.53
    },
-   "good_first_issues": null,
+   "good_first_issues": 33,
    "pushed_at": "2026-10-19T15:43:37Z",
    "open_issues": 808,
    "outsider_merge_share": 59
@@ -67971,7 +67970,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 16.98
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T01:27:48Z",
    "open_issues": 47,
    "outsider_merge_share": 0
@@ -68046,7 +68045,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 81.98
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T08:03:46Z",
    "open_issues": 1028,
    "outsider_merge_share": 40
@@ -68143,7 +68142,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 3.82
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T16:14:50Z",
    "open_issues": 201,
    "outsider_merge_share": 13
@@ -68327,7 +68326,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 18.14
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T11:36:40Z",
    "open_issues": 49,
    "outsider_merge_share": 83
@@ -68390,7 +68389,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.98
    },
-   "good_first_issues": null,
+   "good_first_issues": 28,
    "pushed_at": "2026-10-18T15:13:52Z",
    "open_issues": 1440,
    "outsider_merge_share": 42
@@ -68453,7 +68452,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T11:24:33Z",
    "open_issues": 399,
    "outsider_merge_share": 80
@@ -68659,7 +68658,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.64
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T14:00:40Z",
    "open_issues": 5,
    "outsider_merge_share": 100
@@ -68720,7 +68719,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.09
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-13T18:07:57Z",
    "open_issues": 503,
    "outsider_merge_share": 83
@@ -69166,7 +69165,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.07
    },
-   "good_first_issues": null,
+   "good_first_issues": 10,
    "pushed_at": "2026-10-19T17:42:07Z",
    "open_issues": 464,
    "outsider_merge_share": 78
@@ -69738,7 +69737,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.11
    },
-   "good_first_issues": null,
+   "good_first_issues": 5,
    "pushed_at": "2026-10-19T12:11:52Z",
    "open_issues": 606,
    "outsider_merge_share": 50
@@ -69845,7 +69844,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 4.44
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T01:28:01Z",
    "open_issues": 67,
    "outsider_merge_share": 30
@@ -69874,7 +69873,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.03
    },
-   "good_first_issues": null,
+   "good_first_issues": 3,
    "pushed_at": "2026-10-18T18:05:09Z",
    "open_issues": 240,
    "outsider_merge_share": 22
@@ -69938,7 +69937,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.66
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-21T01:31:48Z",
    "open_issues": 684,
    "outsider_merge_share": 67
@@ -70005,7 +70004,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.05
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-09T12:44:46Z",
    "open_issues": 202,
    "outsider_merge_share": 100
@@ -70034,7 +70033,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-08T16:26:56Z",
    "open_issues": 60,
    "outsider_merge_share": 100
@@ -70127,7 +70126,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 49.64
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T11:36:54Z",
    "open_issues": 27,
    "outsider_merge_share": 75
@@ -71075,7 +71074,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.25
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T17:51:42Z",
    "open_issues": 204,
    "outsider_merge_share": 7
@@ -71242,7 +71241,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 13.27
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-06T07:30:39Z",
    "open_issues": 90,
    "outsider_merge_share": 54
@@ -71478,7 +71477,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.59
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-08T01:29:20Z",
    "open_issues": 253,
    "outsider_merge_share": 22
@@ -71568,7 +71567,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 34.33
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T05:40:58Z",
    "open_issues": 124
   },
@@ -71605,7 +71604,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.23
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T18:08:45Z",
    "open_issues": 181,
    "outsider_merge_share": 54
@@ -71666,7 +71665,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 7.82
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T11:53:44Z",
    "open_issues": 272,
    "outsider_merge_share": 81
@@ -71696,7 +71695,7 @@
     "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
     "seconds": 16.26
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-26T02:37:41Z",
    "open_issues": 58
   },
@@ -71766,7 +71765,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 45.48
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T07:17:43Z",
    "open_issues": 128,
    "outsider_merge_share": 84
@@ -72117,7 +72116,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 39.99
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T02:24:09Z",
    "open_issues": 79,
    "outsider_merge_share": 100
@@ -72436,7 +72435,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.33
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T11:56:01Z",
    "open_issues": 1561,
    "outsider_merge_share": 43
@@ -72539,7 +72538,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.14
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-09T14:37:06Z",
    "open_issues": 235,
    "outsider_merge_share": 100
@@ -73033,7 +73032,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 26.5
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-24T17:23:12Z",
    "open_issues": 141,
    "outsider_merge_share": 35
@@ -73177,7 +73176,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 15.83
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T22:01:28Z",
    "open_issues": 320,
    "outsider_merge_share": 62
@@ -73782,7 +73781,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 20.59
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T16:02:33Z",
    "open_issues": 27,
    "outsider_merge_share": 65
@@ -73812,7 +73811,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 15.0
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-05T07:07:23Z",
    "open_issues": 75,
    "outsider_merge_share": 100
@@ -74030,7 +74029,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 36.63
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T18:11:21Z",
    "open_issues": 230,
    "outsider_merge_share": 100
@@ -74320,7 +74319,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.72
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T19:50:55Z",
    "open_issues": 586,
    "outsider_merge_share": 92
@@ -74863,7 +74862,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 37.17
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T05:46:32Z",
    "open_issues": 121,
    "outsider_merge_share": 85
@@ -75090,7 +75089,7 @@
     "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
     "seconds": 145.6
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-05T23:30:41Z",
    "open_issues": 198,
    "outsider_merge_share": 61
@@ -75347,7 +75346,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 26.16
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-09T22:14:43Z",
    "open_issues": 141,
    "outsider_merge_share": 37
@@ -75567,7 +75566,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-07T16:29:54Z",
    "open_issues": 591
   },
@@ -75619,7 +75618,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 3.97
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:09:46Z",
    "open_issues": 557,
    "outsider_merge_share": 19
@@ -75694,7 +75693,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.25
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-09T17:55:04Z",
    "open_issues": 668,
    "outsider_merge_share": 59
@@ -75764,7 +75763,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 31.38
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T23:26:58Z",
    "open_issues": 912,
    "outsider_merge_share": 100
@@ -75798,7 +75797,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 35.42
    },
-   "good_first_issues": null,
+   "good_first_issues": 7,
    "pushed_at": "2026-10-20T18:27:29Z",
    "open_issues": 60,
    "outsider_merge_share": 37
@@ -75836,7 +75835,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 43.52
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T09:34:34Z",
    "open_issues": 3528,
    "outsider_merge_share": 100
@@ -76163,7 +76162,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.82
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-01T15:42:48Z",
    "open_issues": 9,
    "outsider_merge_share": 29
@@ -76195,7 +76194,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 36.18
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T20:25:23Z",
    "open_issues": 18,
    "outsider_merge_share": 91
@@ -76347,7 +76346,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 13.65
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T12:17:29Z",
    "open_issues": 47
   },
@@ -76408,7 +76407,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T23:23:00Z",
    "open_issues": 26,
    "outsider_merge_share": 100
@@ -76577,7 +76576,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.45
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T15:28:27Z",
    "open_issues": 16,
    "outsider_merge_share": 100
@@ -76779,7 +76778,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.55
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-17T17:38:16Z",
    "open_issues": 861,
    "outsider_merge_share": 35
@@ -77074,7 +77073,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 25.87
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-21T03:54:04Z",
    "open_issues": 298,
    "outsider_merge_share": 76
@@ -77639,7 +77638,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 37.18
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T09:42:51Z",
    "open_issues": 31,
    "outsider_merge_share": 71
@@ -78197,7 +78196,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 15.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T08:34:40Z",
    "open_issues": 129,
    "outsider_merge_share": 100
@@ -78293,7 +78292,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.31
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T01:10:54Z",
    "open_issues": 869,
    "outsider_merge_share": 77
@@ -78374,7 +78373,7 @@
     "provenance": "greenlight@0.23.0 friction --json via proxy (shipped CLI)",
     "seconds": 315.05
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-28T19:04:06Z",
    "open_issues": 103,
    "outsider_merge_share": 44
@@ -78439,7 +78438,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 18.96
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-06T06:19:22Z",
    "open_issues": 243,
    "outsider_merge_share": 100
@@ -78595,7 +78594,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.18
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T07:27:26Z",
    "open_issues": 1444,
    "outsider_merge_share": 64
@@ -78634,7 +78633,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 38.56
    },
-   "good_first_issues": null,
+   "good_first_issues": 5,
    "pushed_at": "2026-10-19T18:05:11Z",
    "open_issues": 719,
    "outsider_merge_share": 84
@@ -78808,7 +78807,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 6.41
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T13:59:49Z",
    "open_issues": 136,
    "outsider_merge_share": 50
@@ -79227,7 +79226,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.62
    },
-   "good_first_issues": null,
+   "good_first_issues": 23,
    "pushed_at": "2026-10-20T23:54:12Z",
    "open_issues": 1531,
    "outsider_merge_share": 88
@@ -79257,7 +79256,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 16.0
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-06T04:10:29Z",
    "open_issues": 176,
    "outsider_merge_share": 54
@@ -79299,7 +79298,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.45
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:18:09Z",
    "open_issues": 306,
    "outsider_merge_share": 79
@@ -79363,7 +79362,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.44
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T10:17:16Z",
    "open_issues": 148,
    "outsider_merge_share": 71
@@ -79531,7 +79530,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 50.87
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T16:53:33Z",
    "open_issues": 35,
    "outsider_merge_share": 100
@@ -79598,7 +79597,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.28
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:15:27Z",
    "open_issues": 2801,
    "outsider_merge_share": 59
@@ -79678,7 +79677,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.59
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-06T10:32:55Z",
    "open_issues": 44,
    "outsider_merge_share": 100
@@ -79715,7 +79714,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 6.46
    },
-   "good_first_issues": null,
+   "good_first_issues": 171,
    "pushed_at": "2026-10-19T18:44:21Z",
    "open_issues": 3628,
    "outsider_merge_share": 45
@@ -79780,7 +79779,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.37
    },
-   "good_first_issues": null,
+   "good_first_issues": 6,
    "pushed_at": "2026-09-18T23:39:10Z",
    "open_issues": 119,
    "outsider_merge_share": 73
@@ -80158,7 +80157,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 45.74
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:15:48Z",
    "open_issues": 93,
    "outsider_merge_share": 100
@@ -80370,7 +80369,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 15.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-15T08:12:01Z",
    "open_issues": 78,
    "outsider_merge_share": 25
@@ -80451,7 +80450,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 41.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T12:41:49Z",
    "open_issues": 20,
    "outsider_merge_share": 61
@@ -80792,7 +80791,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 29.21
    },
-   "good_first_issues": null,
+   "good_first_issues": 9,
    "pushed_at": "2026-08-12T01:07:51Z",
    "open_issues": 277,
    "outsider_merge_share": 86
@@ -80824,7 +80823,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 26.57
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-08T03:22:46Z",
    "open_issues": 65,
    "outsider_merge_share": 80
@@ -81018,7 +81017,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.01
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T17:47:47Z",
    "open_issues": 2140,
    "outsider_merge_share": 21
@@ -81169,7 +81168,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 6.55
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T14:30:49Z",
    "open_issues": 17,
    "outsider_merge_share": 43
@@ -81207,7 +81206,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 48.35
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T21:49:27Z",
    "open_issues": 683,
    "outsider_merge_share": 68
@@ -81330,7 +81329,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.23
    },
-   "good_first_issues": null,
+   "good_first_issues": 19,
    "pushed_at": "2026-10-17T23:06:31Z",
    "open_issues": 615,
    "outsider_merge_share": 53
@@ -81392,7 +81391,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 41.35
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T08:49:50Z",
    "open_issues": 7,
    "outsider_merge_share": 80
@@ -81493,7 +81492,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.07
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:48:15Z",
    "open_issues": 347,
    "outsider_merge_share": 82
@@ -81645,7 +81644,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.03
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T20:47:26Z",
    "open_issues": 0,
    "outsider_merge_share": 0
@@ -81862,7 +81861,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.87
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:04:55Z",
    "open_issues": 808,
    "outsider_merge_share": 69
@@ -82203,7 +82202,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.26
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-02T04:19:00Z",
    "open_issues": 23,
    "outsider_merge_share": 7
@@ -82365,7 +82364,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 41.6
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-09T22:20:14Z",
    "open_issues": 1,
    "outsider_merge_share": 0
@@ -82397,7 +82396,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 42.97
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-17T11:25:07Z",
    "open_issues": 81,
    "outsider_merge_share": 63
@@ -82680,7 +82679,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.92
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T03:04:26Z",
    "open_issues": 98,
    "outsider_merge_share": 67
@@ -82744,7 +82743,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.2
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T13:50:39Z",
    "open_issues": 1155,
    "outsider_merge_share": 90
@@ -83049,7 +83048,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.16
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:40:41Z",
    "open_issues": 106,
    "outsider_merge_share": 79
@@ -83079,7 +83078,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 4.5
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:24:31Z",
    "open_issues": 398,
    "outsider_merge_share": 100
@@ -83144,7 +83143,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.15
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T23:42:18Z",
    "open_issues": 102,
    "outsider_merge_share": 0
@@ -83221,7 +83220,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.06
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T12:46:14Z",
    "open_issues": 395,
    "outsider_merge_share": 20
@@ -83362,7 +83361,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 31.26
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-21T07:14:22Z",
    "open_issues": 394,
    "outsider_merge_share": 100
@@ -83542,7 +83541,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.66
    },
-   "good_first_issues": null,
+   "good_first_issues": 2,
    "pushed_at": "2026-10-19T16:32:24Z",
    "open_issues": 464,
    "outsider_merge_share": 93
@@ -83574,7 +83573,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 34.26
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T16:31:43Z",
    "open_issues": 117,
    "outsider_merge_share": 44
@@ -83607,7 +83606,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 28.05
    },
-   "good_first_issues": null,
+   "good_first_issues": 12,
    "pushed_at": "2026-10-11T03:23:54Z",
    "open_issues": 428,
    "outsider_merge_share": 74
@@ -83934,7 +83933,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 27.6
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-12T07:43:02Z",
    "open_issues": 6,
    "outsider_merge_share": 17
@@ -84313,7 +84312,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 29.72
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T15:28:23Z",
    "open_issues": 135,
    "outsider_merge_share": 90
@@ -84446,7 +84445,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.43
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-06T08:58:36Z",
    "open_issues": 95,
    "outsider_merge_share": 100
@@ -84722,7 +84721,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 18.05
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-02T06:29:46Z",
    "open_issues": 146,
    "outsider_merge_share": 100
@@ -84842,7 +84841,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.95
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-13T16:03:45Z",
    "open_issues": 25,
    "outsider_merge_share": 50
@@ -84875,7 +84874,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 46.21
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T17:41:44Z",
    "open_issues": 43,
    "outsider_merge_share": 11
@@ -85092,7 +85091,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.29
    },
-   "good_first_issues": null,
+   "good_first_issues": 50,
    "pushed_at": "2026-10-19T12:51:38Z",
    "open_issues": 3014,
    "outsider_merge_share": 79
@@ -85153,7 +85152,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.01
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-24T13:05:58Z",
    "open_issues": 1268
   },
@@ -85234,7 +85233,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.73
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T16:29:27Z",
    "open_issues": 2775,
    "outsider_merge_share": 100
@@ -85371,7 +85370,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 38.52
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-25T03:45:36Z",
    "open_issues": 125,
    "outsider_merge_share": 100
@@ -85946,7 +85945,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.87
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T01:38:52Z",
    "open_issues": 97,
    "outsider_merge_share": 69
@@ -86015,7 +86014,7 @@
     "provenance": "greenlight@0.18.0 friction --json via proxy (shipped CLI)",
     "seconds": 36.2
    },
-   "good_first_issues": null,
+   "good_first_issues": 18,
    "pushed_at": "2026-10-19T20:05:28Z",
    "open_issues": 487,
    "outsider_merge_share": 48
@@ -86348,7 +86347,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.66
    },
-   "good_first_issues": null,
+   "good_first_issues": 2,
    "pushed_at": "2026-10-21T05:17:47Z",
    "open_issues": 664,
    "outsider_merge_share": 100
@@ -86555,7 +86554,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 38.01
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T07:11:05Z",
    "open_issues": 485,
    "outsider_merge_share": 88
@@ -86747,7 +86746,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.92
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-04T05:03:08Z",
    "open_issues": 5,
    "outsider_merge_share": 39
@@ -86985,7 +86984,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.14
    },
-   "good_first_issues": null,
+   "good_first_issues": 13,
    "pushed_at": "2026-10-18T20:36:15Z",
    "open_issues": 401,
    "outsider_merge_share": 39
@@ -87542,7 +87541,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 37.45
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-14T12:46:56Z",
    "open_issues": 21,
    "outsider_merge_share": 67
@@ -87574,7 +87573,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.76
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T12:41:43Z",
    "open_issues": 2703,
    "outsider_merge_share": 38
@@ -87768,7 +87767,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.76
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T05:32:33Z",
    "open_issues": 28,
    "outsider_merge_share": 100
@@ -87921,7 +87920,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.35
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-18T15:46:10Z",
    "open_issues": 1371,
    "outsider_merge_share": 65
@@ -87963,7 +87962,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 5.36
    },
-   "good_first_issues": null,
+   "good_first_issues": 16,
    "pushed_at": "2026-10-19T17:46:05Z",
    "open_issues": 2865,
    "outsider_merge_share": 71
@@ -88315,7 +88314,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.51
    },
-   "good_first_issues": null,
+   "good_first_issues": 14,
    "pushed_at": "2026-10-17T06:35:02Z",
    "open_issues": 484,
    "outsider_merge_share": 21
@@ -88407,7 +88406,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.31
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-07-27T21:28:11Z",
    "open_issues": 0
   },
@@ -88438,7 +88437,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 31.74
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T16:38:55Z",
    "open_issues": 7,
    "outsider_merge_share": 100
@@ -88503,7 +88502,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 23.93
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-30T10:22:01Z",
    "open_issues": 13,
    "outsider_merge_share": 13
@@ -88572,7 +88571,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.69
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-14T12:38:02Z",
    "open_issues": 0,
    "outsider_merge_share": 45
@@ -88847,7 +88846,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 39.16
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T03:49:12Z",
    "open_issues": 40,
    "outsider_merge_share": 47
@@ -88950,7 +88949,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 25.75
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-17T23:27:13Z",
    "open_issues": 25,
    "outsider_merge_share": 100
@@ -89072,7 +89071,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 17.39
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-09T11:38:00Z",
    "open_issues": 900,
    "outsider_merge_share": 39
@@ -89104,7 +89103,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 29.84
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-14T09:30:53Z",
    "open_issues": 5,
    "outsider_merge_share": 33
@@ -89182,7 +89181,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.64
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-07T18:11:46Z",
    "open_issues": 181,
    "outsider_merge_share": 100
@@ -89425,7 +89424,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.31
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T15:45:43Z",
    "open_issues": 3601,
    "outsider_merge_share": 61
@@ -89687,7 +89686,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.05
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T09:28:37Z",
    "open_issues": 9,
    "outsider_merge_share": 67
@@ -89720,7 +89719,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-09T09:51:04Z",
    "open_issues": 244,
    "outsider_merge_share": 100
@@ -89750,7 +89749,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.76
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T14:02:39Z",
    "open_issues": 104,
    "outsider_merge_share": 93
@@ -89953,7 +89952,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.85
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T08:22:16Z",
    "open_issues": 11,
    "outsider_merge_share": 43
@@ -89985,7 +89984,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 45.22
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T23:50:02Z",
    "open_issues": 3,
    "outsider_merge_share": 100
@@ -90044,7 +90043,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.24
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T12:01:53Z",
    "open_issues": 11,
    "outsider_merge_share": 93
@@ -90461,7 +90460,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 37.07
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T19:56:10Z",
    "open_issues": 67,
    "outsider_merge_share": 69
@@ -90493,7 +90492,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 16.39
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T10:49:56Z",
    "open_issues": 2,
    "outsider_merge_share": 23
@@ -90525,7 +90524,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T00:15:54Z",
    "open_issues": 31,
    "outsider_merge_share": 80
@@ -90624,7 +90623,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.75
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T01:38:48Z",
    "open_issues": 123,
    "outsider_merge_share": 48
@@ -90916,7 +90915,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.3
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-27T19:17:36Z",
    "open_issues": 183
   },
@@ -90958,7 +90957,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.86
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-08T14:10:50Z",
    "open_issues": 519,
    "outsider_merge_share": 33
@@ -91377,7 +91376,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.97
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-03T15:08:56Z",
    "open_issues": 5,
    "outsider_merge_share": 27
@@ -91900,7 +91899,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 45.28
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T14:23:55Z",
    "open_issues": 635,
    "outsider_merge_share": 73
@@ -91997,7 +91996,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 31.63
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T13:15:46Z",
    "open_issues": 11,
    "outsider_merge_share": 22
@@ -92265,7 +92264,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 19.57
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-11T19:38:45Z",
    "open_issues": 105,
    "outsider_merge_share": 100
@@ -92367,7 +92366,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.4
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T09:58:14Z",
    "open_issues": 173,
    "outsider_merge_share": 52
@@ -92427,7 +92426,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 38.22
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T01:43:33Z",
    "open_issues": 71,
    "outsider_merge_share": 100
@@ -92529,7 +92528,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 19.62
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T19:29:11Z",
    "open_issues": 91,
    "outsider_merge_share": 77
@@ -92658,7 +92657,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.37
    },
-   "good_first_issues": null,
+   "good_first_issues": 7,
    "pushed_at": "2026-10-18T18:01:34Z",
    "open_issues": 4275,
    "outsider_merge_share": 22
@@ -92720,7 +92719,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 24.67
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-06T07:16:58Z",
    "open_issues": 146,
    "outsider_merge_share": 100
@@ -93030,7 +93029,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 2.98
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-14T08:36:36Z",
    "open_issues": 1,
    "outsider_merge_share": 0
@@ -93062,7 +93061,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 28.0
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-26T10:29:28Z",
    "open_issues": 64,
    "outsider_merge_share": 100
@@ -93250,7 +93249,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.47
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T04:47:25Z",
    "open_issues": 479,
    "outsider_merge_share": 11
@@ -93318,7 +93317,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.73
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-14T12:05:57Z",
    "open_issues": 166,
    "outsider_merge_share": 100
@@ -93350,7 +93349,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 43.56
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T15:19:15Z",
    "open_issues": 121,
    "outsider_merge_share": 55
@@ -93421,7 +93420,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 28.74
    },
-   "good_first_issues": null,
+   "good_first_issues": 17,
    "pushed_at": "2026-10-19T10:49:16Z",
    "open_issues": 517,
    "outsider_merge_share": 92
@@ -93547,7 +93546,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 25.02
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T12:47:10Z",
    "open_issues": 242,
    "outsider_merge_share": 100
@@ -93680,7 +93679,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.62
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T22:02:43Z",
    "open_issues": 46,
    "outsider_merge_share": 88
@@ -93773,7 +93772,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 44.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T20:28:10Z",
    "open_issues": 93,
    "outsider_merge_share": 56
@@ -93805,7 +93804,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 30.34
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-29T08:16:03Z",
    "open_issues": 9,
    "outsider_merge_share": 89
@@ -93872,7 +93871,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.9
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T19:24:23Z",
    "open_issues": 1687,
    "outsider_merge_share": 62
@@ -94012,7 +94011,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 6.21
    },
-   "good_first_issues": null,
+   "good_first_issues": 15,
    "pushed_at": "2026-10-19T05:09:06Z",
    "open_issues": 1848,
    "outsider_merge_share": 56
@@ -94423,7 +94422,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 20.93
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T16:27:05Z",
    "open_issues": 8,
    "outsider_merge_share": 100
@@ -94453,7 +94452,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.89
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-07T06:55:09Z",
    "open_issues": 23,
    "outsider_merge_share": 4
@@ -94617,7 +94616,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.04
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T16:05:50Z",
    "open_issues": 32,
    "outsider_merge_share": 100
@@ -94782,7 +94781,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.81
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-18T07:52:58Z",
    "open_issues": 1200,
    "outsider_merge_share": 100
@@ -95040,7 +95039,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.28
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-10T22:30:37Z",
    "open_issues": 24,
    "outsider_merge_share": 17
@@ -95132,7 +95131,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:52:12Z",
    "open_issues": 44,
    "outsider_merge_share": 79
@@ -95351,7 +95350,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 30.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-27T11:38:58Z",
    "open_issues": 18,
    "outsider_merge_share": 36
@@ -95430,7 +95429,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.66
    },
-   "good_first_issues": null,
+   "good_first_issues": 9,
    "pushed_at": "2026-10-19T18:08:49Z",
    "open_issues": 3735,
    "outsider_merge_share": 80
@@ -95526,7 +95525,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 29.35
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T13:11:10Z",
    "open_issues": 3,
    "outsider_merge_share": 79
@@ -95787,7 +95786,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 23.92
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T06:23:48Z",
    "open_issues": 149,
    "outsider_merge_share": 61
@@ -95851,7 +95850,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-17T12:23:59Z",
    "open_issues": 145,
    "outsider_merge_share": 65
@@ -95881,7 +95880,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.83
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T11:19:12Z",
    "open_issues": 116,
    "outsider_merge_share": 0
@@ -96020,7 +96019,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 18.8
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T20:58:48Z",
    "open_issues": 10,
    "outsider_merge_share": 3
@@ -96097,7 +96096,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 12.08
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-11T04:21:58Z",
    "open_issues": 1,
    "outsider_merge_share": 50
@@ -96241,7 +96240,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.71
    },
-   "good_first_issues": null,
+   "good_first_issues": 16,
    "pushed_at": "2026-10-19T00:03:35Z",
    "open_issues": 953,
    "outsider_merge_share": 100
@@ -96303,7 +96302,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 29.78
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T01:18:40Z",
    "open_issues": 16,
    "outsider_merge_share": 37
@@ -96469,7 +96468,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 6.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 34,
    "pushed_at": "2026-10-16T16:39:24Z",
    "open_issues": 1212,
    "outsider_merge_share": 100
@@ -96572,7 +96571,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.18
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T17:57:19Z",
    "open_issues": 154,
    "outsider_merge_share": 55
@@ -96795,7 +96794,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T02:20:10Z",
    "open_issues": 32,
    "outsider_merge_share": 100
@@ -96827,7 +96826,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 29.02
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T22:21:04Z",
    "open_issues": 79,
    "outsider_merge_share": 100
@@ -96954,7 +96953,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 15.51
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T08:56:22Z",
    "open_issues": 629
   },
@@ -97232,7 +97231,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.69
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-01T06:43:29Z",
    "open_issues": 117,
    "outsider_merge_share": 70
@@ -97337,7 +97336,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.57
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:53:45Z",
    "open_issues": 30,
    "outsider_merge_share": 76
@@ -97474,7 +97473,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 46.61
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T07:04:40Z",
    "open_issues": 91,
    "outsider_merge_share": 79
@@ -97596,7 +97595,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.04
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T15:01:50Z",
    "open_issues": 4,
    "outsider_merge_share": 66
@@ -97628,7 +97627,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.22
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:15:05Z",
    "open_issues": 18,
    "outsider_merge_share": 90
@@ -97672,7 +97671,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 38.86
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T19:38:35Z",
    "open_issues": 303,
    "outsider_merge_share": 24
@@ -97821,7 +97820,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 3.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T14:53:37Z",
    "open_issues": 883
   },
@@ -97857,7 +97856,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.95
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:40:47Z",
    "open_issues": 149
   },
@@ -98148,7 +98147,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 37.51
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T23:29:12Z",
    "open_issues": 752,
    "outsider_merge_share": 69
@@ -98246,7 +98245,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.01
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T18:31:30Z",
    "open_issues": 114,
    "outsider_merge_share": 71
@@ -98320,7 +98319,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 29.12
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T05:35:15Z",
    "open_issues": 67,
    "outsider_merge_share": 82
@@ -98382,7 +98381,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.51
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-09T06:29:49Z",
    "open_issues": 0,
    "outsider_merge_share": 26
@@ -98414,7 +98413,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 14.67
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-18T19:12:03Z",
    "open_issues": 2,
    "outsider_merge_share": 100
@@ -98444,7 +98443,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 19.9
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-19T06:31:39Z",
    "open_issues": 77
   },
@@ -98590,7 +98589,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 33.79
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T08:44:58Z",
    "open_issues": 173,
    "outsider_merge_share": 100
@@ -98744,7 +98743,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 6.45
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T16:31:36Z",
    "open_issues": 6,
    "outsider_merge_share": 96
@@ -99004,7 +99003,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.82
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-02T07:30:24Z",
    "open_issues": 235,
    "outsider_merge_share": 100
@@ -99037,7 +99036,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 37.76
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-01T19:48:24Z",
    "open_issues": 14,
    "outsider_merge_share": 85
@@ -99178,7 +99177,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 29.81
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T03:07:29Z",
    "open_issues": 79,
    "outsider_merge_share": 96
@@ -99238,7 +99237,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 60.9
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-17T05:46:30Z",
    "open_issues": 143,
    "outsider_merge_share": 82
@@ -99342,7 +99341,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.43
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T00:19:44Z",
    "open_issues": 17,
    "outsider_merge_share": 0
@@ -99647,7 +99646,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.47
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T04:24:51Z",
    "open_issues": 92,
    "outsider_merge_share": 45
@@ -99708,7 +99707,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T14:53:06Z",
    "open_issues": 54,
    "outsider_merge_share": 54
@@ -99779,7 +99778,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 46.07
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-07-26T22:30:33Z",
    "open_issues": 58,
    "outsider_merge_share": 41
@@ -99967,7 +99966,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 44.46
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-13T01:42:48Z",
    "open_issues": 71,
    "outsider_merge_share": 0
@@ -99999,7 +99998,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.47
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-12T08:48:04Z",
    "open_issues": 3,
    "outsider_merge_share": 95
@@ -100069,7 +100068,7 @@
     "provenance": "greenlight@0.25.0 friction --json via proxy (shipped CLI)",
     "seconds": 223.64
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-26T15:12:21Z",
    "open_issues": 1,
    "outsider_merge_share": 76
@@ -100166,7 +100165,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.88
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-14T23:12:55Z",
    "open_issues": 188,
    "outsider_merge_share": 86
@@ -100198,7 +100197,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 14.79
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T20:24:52Z",
    "open_issues": 93,
    "outsider_merge_share": 70
@@ -100267,7 +100266,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T01:13:27Z",
    "open_issues": 38,
    "outsider_merge_share": 100
@@ -100332,7 +100331,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 46.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-24T00:27:31Z",
    "open_issues": 101,
    "outsider_merge_share": 58
@@ -100429,7 +100428,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.61
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T19:14:17Z",
    "open_issues": 170,
    "outsider_merge_share": 17
@@ -100649,7 +100648,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.84
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T02:29:38Z",
    "open_issues": 214,
    "outsider_merge_share": 100
@@ -100748,7 +100747,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 33.97
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T23:54:15Z",
    "open_issues": 26
   },
@@ -100810,7 +100809,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 41.3
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T22:34:02Z",
    "open_issues": 14,
    "outsider_merge_share": 100
@@ -100878,7 +100877,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 40.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T09:05:34Z",
    "open_issues": 114,
    "outsider_merge_share": 100
@@ -101426,7 +101425,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 15.02
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T06:58:31Z",
    "open_issues": 232,
    "outsider_merge_share": 100
@@ -101465,7 +101464,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 38.53
    },
-   "good_first_issues": null,
+   "good_first_issues": 4,
    "pushed_at": "2026-10-21T09:13:41Z",
    "open_issues": 1499,
    "outsider_merge_share": 83
@@ -101474,11 +101473,12 @@
    "repo": "starship/starship",
    "url": "https://github.com/starship/starship",
    "policy_classes": [
-    "agents-banned"
+    "agents-banned",
+    "agents-disclosure"
    ],
    "headline": "Agent contributions are banned here",
    "what_to_do": "Do not submit agent-authored PRs; if the policy allows human-in-the-loop assistance, contribute personally instead.",
-   "evidence": "5k scan 2026-10-18: agents-banned in AI_POLICY.md: \"ce. - Contributions via OpenClaw, or any other unsupervised autonomous agent operating in an automated loop, are strictly prohibited.\"",
+   "evidence": "5k scan 2026-10-18: agents-banned in AI_POLICY.md: \"ce. - Contributions via OpenClaw, or any other unsupervised autonomous agent operating in an automated loop, are strictly prohibited.\" Greenlight v0.25.0 flywheel correction: adds agents-disclosure: in AI_POLICY.md: \"## Mandatory Disclosure Every Pull Request that utilizes AI-assisted tooling (including but not limited to Claude Code, Cursor, GitHub Copilot, ChatGPT, or local LLMs) must disclose its usage.\"",
    "our_record": null,
    "scanned_on": "2026-10-18",
    "scan_provenance": "5k scan wave 1, read-only via proxy",
@@ -102288,7 +102288,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.42
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T19:11:03Z",
    "open_issues": 1562,
    "outsider_merge_share": 100
@@ -102510,7 +102510,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.81
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T18:14:55Z",
    "open_issues": 1181,
    "outsider_merge_share": 41
@@ -102683,7 +102683,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 42.44
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-09T17:13:04Z",
    "open_issues": 390,
    "outsider_merge_share": 44
@@ -102715,7 +102715,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.88
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T02:55:32Z",
    "open_issues": 26,
    "outsider_merge_share": 100
@@ -102929,7 +102929,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.53
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-13T20:30:23Z",
    "open_issues": 16,
    "outsider_merge_share": 100
@@ -102976,7 +102976,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.28
    },
-   "good_first_issues": null,
+   "good_first_issues": 10,
    "pushed_at": "2026-10-19T16:48:59Z",
    "open_issues": 318,
    "outsider_merge_share": 38
@@ -103267,7 +103267,7 @@
     "provenance": "greenlight@0.16.0 friction --json via proxy (shipped CLI)",
     "seconds": 25.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-19T17:58:38Z",
    "open_issues": 149,
    "outsider_merge_share": 48
@@ -103391,7 +103391,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.12
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-01T21:35:12Z",
    "open_issues": 14,
    "outsider_merge_share": 74
@@ -103453,7 +103453,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 17.8
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-04T07:48:43Z",
    "open_issues": 0,
    "outsider_merge_share": 100
@@ -103553,7 +103553,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 13.81
    },
-   "good_first_issues": null,
+   "good_first_issues": 4,
    "pushed_at": "2026-09-21T12:28:58Z",
    "open_issues": 1397,
    "outsider_merge_share": 88
@@ -103943,7 +103943,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.02
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T06:10:43Z",
    "open_issues": 67,
    "outsider_merge_share": 5
@@ -103975,7 +103975,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.21
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-04T13:42:35Z",
    "open_issues": 146,
    "outsider_merge_share": 100
@@ -104064,7 +104064,7 @@
     "provenance": "greenlight@0.18.0 friction --json via proxy (shipped CLI)",
     "seconds": 53.13
    },
-   "good_first_issues": null,
+   "good_first_issues": 2,
    "pushed_at": "2026-10-19T23:18:07Z",
    "open_issues": 6028,
    "outsider_merge_share": 67
@@ -104123,7 +104123,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.8
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:41:09Z",
    "open_issues": 3573,
    "outsider_merge_share": 48
@@ -104185,7 +104185,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.86
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T07:23:55Z",
    "open_issues": 4,
    "outsider_merge_share": 90
@@ -104442,7 +104442,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 20.54
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-15T11:32:25Z",
    "open_issues": 9,
    "outsider_merge_share": 100
@@ -104535,7 +104535,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.4
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T18:11:53Z",
    "open_issues": 138,
    "outsider_merge_share": 0
@@ -104713,7 +104713,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 34.09
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T00:08:32Z",
    "open_issues": 47,
    "outsider_merge_share": 35
@@ -104746,7 +104746,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 36.95
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-15T02:51:32Z",
    "open_issues": 39,
    "outsider_merge_share": 100
@@ -104960,7 +104960,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 3.87
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T17:49:39Z",
    "open_issues": 871,
    "outsider_merge_share": 33
@@ -105322,7 +105322,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 16.97
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-08T08:57:37Z",
    "open_issues": 187,
    "outsider_merge_share": 94
@@ -105477,7 +105477,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 20.27
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-08T11:42:44Z",
    "open_issues": 29,
    "outsider_merge_share": 96
@@ -105746,7 +105746,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.03
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:59:28Z",
    "open_issues": 20,
    "outsider_merge_share": 14
@@ -105945,7 +105945,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.29
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-07-27T08:18:26Z",
    "open_issues": 5,
    "outsider_merge_share": 100
@@ -106100,7 +106100,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 34.42
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-21T03:19:36Z",
    "open_issues": 52,
    "outsider_merge_share": 23
@@ -106168,7 +106168,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 18.54
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-07-26T16:13:20Z",
    "open_issues": 76,
    "outsider_merge_share": 100
@@ -106917,7 +106917,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 27.77
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T02:36:18Z",
    "open_issues": 9,
    "outsider_merge_share": 43
@@ -107188,7 +107188,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.87
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T10:11:29Z",
    "open_issues": 1889,
    "outsider_merge_share": 60
@@ -107390,7 +107390,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 25.57
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T15:12:36Z",
    "open_issues": 6,
    "outsider_merge_share": 100
@@ -107562,7 +107562,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 39.19
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T09:00:50Z",
    "open_issues": 310,
    "outsider_merge_share": 0
@@ -107592,7 +107592,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.41
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-14T02:31:35Z",
    "open_issues": 423,
    "outsider_merge_share": 50
@@ -107853,7 +107853,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 38.96
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T02:47:51Z",
    "open_issues": 427,
    "outsider_merge_share": 17
@@ -107882,7 +107882,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.16
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T06:54:56Z",
    "open_issues": 41,
    "outsider_merge_share": 100
@@ -108520,7 +108520,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.13
    },
-   "good_first_issues": null,
+   "good_first_issues": 5,
    "pushed_at": "2026-10-19T17:19:51Z",
    "open_issues": 179,
    "outsider_merge_share": 50
@@ -108568,7 +108568,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.63
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T01:15:41Z",
    "open_issues": 62,
    "outsider_merge_share": 58
@@ -108818,7 +108818,7 @@
     "provenance": "greenlight@0.16.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.54
    },
-   "good_first_issues": null,
+   "good_first_issues": 47,
    "pushed_at": "2026-10-19T21:51:06Z",
    "open_issues": 895,
    "outsider_merge_share": 46
@@ -108878,7 +108878,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.53
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T02:04:13Z",
    "open_issues": 222,
    "outsider_merge_share": 100
@@ -109119,7 +109119,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 47.19
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T11:31:18Z",
    "open_issues": 178,
    "outsider_merge_share": 43
@@ -109351,7 +109351,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.16
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-12T03:39:18Z",
    "open_issues": 122,
    "outsider_merge_share": 100
@@ -109547,7 +109547,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.97
    },
-   "good_first_issues": null,
+   "good_first_issues": 25,
    "pushed_at": "2026-10-17T08:02:28Z",
    "open_issues": 466,
    "outsider_merge_share": 30
@@ -109828,7 +109828,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.4
    },
-   "good_first_issues": null,
+   "good_first_issues": 18,
    "pushed_at": "2026-10-17T16:28:53Z",
    "open_issues": 421,
    "outsider_merge_share": 100
@@ -110066,7 +110066,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.39
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-09T17:26:52Z",
    "open_issues": 0,
    "outsider_merge_share": 50
@@ -110096,7 +110096,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 13.01
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:07:16Z",
    "open_issues": 209,
    "outsider_merge_share": 68
@@ -110189,7 +110189,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.11
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:17:08Z",
    "open_issues": 19,
    "outsider_merge_share": 90
@@ -110219,7 +110219,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 16.11
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-09T17:23:36Z",
    "open_issues": 30,
    "outsider_merge_share": 91
@@ -110367,7 +110367,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 46.78
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-21T08:23:50Z",
    "open_issues": 136,
    "outsider_merge_share": 60
@@ -110404,7 +110404,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 13.09
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:05:01Z",
    "open_issues": 40,
    "outsider_merge_share": 7
@@ -110692,7 +110692,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-11T14:00:46Z",
    "open_issues": 425,
    "outsider_merge_share": 4
@@ -110722,7 +110722,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.3
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T11:22:41Z",
    "open_issues": 318,
    "outsider_merge_share": 11
@@ -110909,7 +110909,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.8
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T07:45:26Z",
    "open_issues": 988,
    "outsider_merge_share": 95
@@ -111000,7 +111000,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 7.6
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-04T23:39:51Z",
    "open_issues": 1110,
    "outsider_merge_share": 100
@@ -111351,7 +111351,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 8.56
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-05T19:13:12Z",
    "open_issues": 49,
    "outsider_merge_share": 73
@@ -111875,7 +111875,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.17
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-31T03:24:40Z",
    "open_issues": 15
   },
@@ -111904,7 +111904,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.43
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T23:46:23Z",
    "open_issues": 10,
    "outsider_merge_share": 57
@@ -111966,7 +111966,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 41.14
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-03T11:21:19Z",
    "open_issues": 33,
    "outsider_merge_share": 100
@@ -112253,7 +112253,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.89
    },
-   "good_first_issues": null,
+   "good_first_issues": 4,
    "pushed_at": "2026-07-30T10:11:35Z",
    "open_issues": 49,
    "outsider_merge_share": 100
@@ -112603,7 +112603,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 42.55
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T02:47:51Z",
    "open_issues": 481,
    "outsider_merge_share": 72
@@ -112765,7 +112765,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.14
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T09:47:53Z",
    "open_issues": 795,
    "outsider_merge_share": 0
@@ -112857,7 +112857,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.45
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T05:48:40Z",
    "open_issues": 130,
    "outsider_merge_share": 71
@@ -112982,7 +112982,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 7.42
    },
-   "good_first_issues": null,
+   "good_first_issues": 8,
    "pushed_at": "2026-08-21T20:44:39Z",
    "open_issues": 1049,
    "outsider_merge_share": 0
@@ -113179,7 +113179,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.59
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T22:06:05Z",
    "open_issues": 868,
    "outsider_merge_share": 100
@@ -113314,7 +113314,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T11:30:25Z",
    "open_issues": 31,
    "outsider_merge_share": 88
@@ -113347,7 +113347,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 26.37
    },
-   "good_first_issues": null,
+   "good_first_issues": 12,
    "pushed_at": "2026-09-08T06:42:15Z",
    "open_issues": 693,
    "outsider_merge_share": 100
@@ -113380,7 +113380,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 30.47
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T10:30:27Z",
    "open_issues": 30,
    "outsider_merge_share": 22
@@ -113520,7 +113520,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 13.86
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:43:16Z",
    "open_issues": 129,
    "outsider_merge_share": 75
@@ -113640,7 +113640,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.09
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T17:50:53Z",
    "open_issues": 11,
    "outsider_merge_share": 32
@@ -113702,7 +113702,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 38.8
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T21:06:11Z",
    "open_issues": 95,
    "outsider_merge_share": 100
@@ -113945,7 +113945,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 17.67
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:18:07Z",
    "open_issues": 344,
    "outsider_merge_share": 33
@@ -114038,7 +114038,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.08
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-06T09:57:47Z",
    "open_issues": 10,
    "outsider_merge_share": 100
@@ -114398,7 +114398,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 31.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T11:53:10Z",
    "open_issues": 273,
    "outsider_merge_share": 34
@@ -115137,7 +115137,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 15.22
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-02T07:54:19Z",
    "open_issues": 127,
    "outsider_merge_share": 100
@@ -115481,7 +115481,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 45.55
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T11:12:53Z",
    "open_issues": 968,
    "outsider_merge_share": 94
@@ -115511,7 +115511,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 15.75
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T16:23:43Z",
    "open_issues": 3107,
    "outsider_merge_share": 8
@@ -115581,7 +115581,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.56
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T13:41:06Z",
    "open_issues": 791,
    "outsider_merge_share": 66
@@ -115851,7 +115851,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 46.4
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-13T09:04:12Z",
    "open_issues": 24,
    "outsider_merge_share": 83
@@ -115894,7 +115894,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.7
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T08:15:25Z",
    "open_issues": 19,
    "outsider_merge_share": 100
@@ -116051,7 +116051,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 41.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T02:17:57Z",
    "open_issues": 373,
    "outsider_merge_share": 86
@@ -116080,7 +116080,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 5.94
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T16:23:42Z",
    "open_issues": 3649,
    "outsider_merge_share": 75
@@ -116110,7 +116110,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.58
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-09-12T06:20:49Z",
    "open_issues": 214,
    "outsider_merge_share": 11
@@ -116298,7 +116298,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.06
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T20:20:24Z",
    "open_issues": 51,
    "outsider_merge_share": 81
@@ -116507,7 +116507,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 9.81
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-03T11:50:09Z",
    "open_issues": 29,
    "outsider_merge_share": 100
@@ -116603,7 +116603,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 10.07
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T17:22:37Z",
    "open_issues": 311,
    "outsider_merge_share": 100
@@ -116673,7 +116673,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 9.52
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-24T05:38:13Z",
    "open_issues": 2
   },
@@ -116763,7 +116763,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.48
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T20:05:12Z",
    "open_issues": 223,
    "outsider_merge_share": 73
@@ -116822,7 +116822,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 9.12
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T11:22:54Z",
    "open_issues": 178,
    "outsider_merge_share": 0
@@ -116902,7 +116902,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 13.52
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T08:26:50Z",
    "open_issues": 107,
    "outsider_merge_share": 100
@@ -116964,7 +116964,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.1
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T20:04:26Z",
    "open_issues": 168,
    "outsider_merge_share": 86
@@ -117224,7 +117224,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 40.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T12:59:29Z",
    "open_issues": 8,
    "outsider_merge_share": 69
@@ -117254,7 +117254,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.59
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-30T23:33:52Z",
    "open_issues": 102,
    "outsider_merge_share": 61
@@ -117391,7 +117391,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.61
    },
-   "good_first_issues": null,
+   "good_first_issues": 41,
    "pushed_at": "2026-10-18T12:08:57Z",
    "open_issues": 572,
    "outsider_merge_share": 82
@@ -117701,7 +117701,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.0
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-08-27T12:45:47Z",
    "open_issues": 267,
    "outsider_merge_share": 100
@@ -117745,7 +117745,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 41.82
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T12:25:35Z",
    "open_issues": 84,
    "outsider_merge_share": 75
@@ -118062,7 +118062,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 13.86
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-24T08:30:47Z",
    "open_issues": 30,
    "outsider_merge_share": 97
@@ -118126,7 +118126,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 44.31
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T08:57:23Z",
    "open_issues": 64,
    "outsider_merge_share": 100
@@ -118156,7 +118156,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.47
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T04:45:17Z",
    "open_issues": 113,
    "outsider_merge_share": 33
@@ -118284,7 +118284,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 2.51
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T15:32:34Z",
    "open_issues": 65
   },
@@ -118322,7 +118322,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 34.24
    },
-   "good_first_issues": null,
+   "good_first_issues": 1,
    "pushed_at": "2026-10-21T02:25:11Z",
    "open_issues": 109,
    "outsider_merge_share": 26
@@ -118612,7 +118612,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 6.96
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-05T08:51:50Z",
    "open_issues": 11,
    "outsider_merge_share": 72
@@ -118680,7 +118680,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 43.17
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T13:16:52Z",
    "open_issues": 200,
    "outsider_merge_share": 67
@@ -118772,7 +118772,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 39.19
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T18:12:09Z",
    "open_issues": 2,
    "outsider_merge_share": 31
@@ -118896,7 +118896,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 8.86
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T19:04:48Z",
    "open_issues": 1212,
    "outsider_merge_share": 100
@@ -118956,7 +118956,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 14.83
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T00:47:21Z",
    "open_issues": 0,
    "outsider_merge_share": 79
@@ -119021,7 +119021,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 61.46
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T00:36:30Z",
    "open_issues": 41,
    "outsider_merge_share": 100
@@ -119121,7 +119121,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 6.23
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T18:22:48Z",
    "open_issues": 74,
    "outsider_merge_share": 72
@@ -119314,7 +119314,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 4.31
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-20T01:59:29Z",
    "open_issues": 4,
    "outsider_merge_share": 50
@@ -119468,7 +119468,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 15.3
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-23T16:05:45Z",
    "open_issues": 3,
    "outsider_merge_share": 100
@@ -119500,7 +119500,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 17.25
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-20T16:04:50Z",
    "open_issues": 3,
    "outsider_merge_share": 100
@@ -119540,7 +119540,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 35.77
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T13:50:13Z",
    "open_issues": 58,
    "outsider_merge_share": 58
@@ -119661,7 +119661,7 @@
     "provenance": "greenlight@0.19.0 friction --json via proxy (shipped CLI)",
     "seconds": 12.79
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-14T06:47:21Z",
    "open_issues": 89,
    "outsider_merge_share": 100
@@ -119690,7 +119690,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.2
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T16:10:49Z",
    "open_issues": 15,
    "outsider_merge_share": 57
@@ -119788,7 +119788,7 @@
     "provenance": "greenlight@0.21.1 friction --json via proxy (shipped CLI)",
     "seconds": 43.77
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-22T16:47:28Z",
    "open_issues": 14,
    "outsider_merge_share": 100
@@ -120019,7 +120019,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 33.17
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-21T02:45:28Z",
    "open_issues": 43,
    "outsider_merge_share": 100
@@ -120249,7 +120249,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.37
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-16T14:44:16Z",
    "open_issues": 59,
    "outsider_merge_share": 28
@@ -120287,7 +120287,7 @@
     "provenance": "greenlight@0.21.0 friction --json via proxy (shipped CLI)",
     "seconds": 22.07
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-17T16:44:37Z",
    "open_issues": 100,
    "outsider_merge_share": 14
@@ -120394,7 +120394,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 6.85
    },
-   "good_first_issues": null,
+   "good_first_issues": 11,
    "pushed_at": "2026-10-18T10:48:19Z",
    "open_issues": 776,
    "outsider_merge_share": 67
@@ -120437,7 +120437,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 12.32
    },
-   "good_first_issues": null,
+   "good_first_issues": 6,
    "pushed_at": "2026-10-19T14:35:57Z",
    "open_issues": 4477,
    "outsider_merge_share": 69
@@ -120615,7 +120615,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 28.37
    },
-   "good_first_issues": null,
+   "good_first_issues": 2,
    "pushed_at": "2026-09-03T17:04:55Z",
    "open_issues": 417,
    "outsider_merge_share": 100
@@ -120710,7 +120710,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 11.15
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-19T15:15:34Z",
    "open_issues": 11,
    "outsider_merge_share": 95
@@ -120769,7 +120769,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.49
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-18T09:57:47Z",
    "open_issues": 21,
    "outsider_merge_share": 100
@@ -120833,7 +120833,7 @@
     "provenance": "greenlight@0.9.2 friction --json via proxy (shipped CLI)",
     "seconds": 4.57
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-09-27T07:42:03Z",
    "open_issues": 1361,
    "outsider_merge_share": 100
@@ -120865,7 +120865,7 @@
     "provenance": "greenlight@0.21.4 friction --json via proxy (shipped CLI)",
     "seconds": 27.68
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-24T09:58:40Z",
    "open_issues": 33,
    "outsider_merge_share": 0
@@ -121086,7 +121086,7 @@
     "provenance": "greenlight@0.15.1 friction --json via proxy (shipped CLI)",
     "seconds": 7.98
    },
-   "good_first_issues": null,
+   "good_first_issues": 0,
    "pushed_at": "2026-10-15T21:58:16Z",
    "open_issues": 1618,
    "outsider_merge_share": 37
@@ -121343,7 +121343,7 @@
   "name": "Agent Policy Index",
   "publisher": "Greenlight",
   "publisher_url": "https://github.com/CloudCorpRecords/greenlight",
-  "updated": "2026-11-05",
+  "updated": "2026-11-07",
   "repos": 3628,
   "method": "Every entry comes from a real contribution campaign run in October 2026: issues claimed, PRs opened, bots and policies met face to face, plus Greenlight friction measurements. Policy classes marked 'detected' were found by automated scans; classes marked 'verified' were confirmed by a policy file read or by direct campaign contact.",
   "license": "CC-BY-4.0",
