@@ -472,6 +472,76 @@ export interface PolicySource {
 }
 
 /**
+ * Template evidence (scanner parity, v0.27.0): PR and issue templates are
+ * policy evidence. A template that makes the contributor attest that NO
+ * AI/LLM was used is an AI-use ban enforced by attestation (the
+ * decky-loader lesson); a template that asks the contributor to DISCLOSE
+ * AI use is agents_disclosure, never a ban. These rules run ONLY over
+ * template files (see isTemplatePath), never over CONTRIBUTING prose.
+ * The regexes are the scanner's TEMPLATE_PATTERNS verbatim (scan5k
+ * classify_repo) and the scope guard is the scanner's SCOPE_RX.
+ */
+export const TEMPLATE_SINGLE_PATHS = new Set([
+  ".github/pull_request_template.md",
+  ".github/PULL_REQUEST_TEMPLATE.md",
+  "pull_request_template.md",
+  "docs/pull_request_template.md",
+  ".github/ISSUE_TEMPLATE.md",
+]);
+
+export const TEMPLATE_DIRS = [
+  ".github/PULL_REQUEST_TEMPLATE",
+  ".github/ISSUE_TEMPLATE",
+];
+
+export function isTemplatePath(file: string): boolean {
+  if (TEMPLATE_SINGLE_PATHS.has(file)) return true;
+  return TEMPLATE_DIRS.some((d) => file.startsWith(d + "/"));
+}
+
+// A "banned" match scoped to bug reports / issues / PR reviews is a
+// triage rule, not a contribution ban (scanner SCOPE_RX, PostHog lesson).
+const TEMPLATE_SCOPE_RX = /bug report|ai[- ]generated (issues?|bug)\b|pr reviews/i;
+
+const TEMPLATE_RULES: GateRule[] = [
+  {
+    kind: "agents_banned",
+    regexes: [
+      /no ai\/llm used|no (ai|llm)( tools?)? (was |were )?used|not (written|created|generated|produced) (by|using|with) (ai|an? llm)|no (ai|llm)[-](generated|authored|assisted|written)|(i)?(confirm|certify|attest|declare).{0,50}?\b(no|not|never)\b.{0,40}?\b(ai|llm)\b/i,
+    ],
+  },
+  {
+    kind: "agents_disclosure",
+    regexes: [
+      /if you used (ai|an? llm)|did you use (ai|an? llm)|(ai|llm)( tools?)? (was|were) used.{0,60}?(describe|disclose|explain|note)|extent of (ai|llm) (use|usage|assistance)|which (ai|llm) tools?/i,
+    ],
+  },
+];
+
+/**
+ * Run the template-only rules over one template file's text. The text is
+ * normalized exactly like parseGates (emphasis, URLs and assignees tokens
+ * stripped, whitespace collapsed) so matching matches the general path.
+ * Returns the two template kinds in the same shape as parseGates.
+ */
+export function parseTemplateGates(text: string): Gate[] {
+  const body = (text ?? "")
+    .replace(/\*+/g, "")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/\S*assignees=\S*/gi, " ")
+    .replace(/\s+/g, " ");
+  return TEMPLATE_RULES.map((rule) => {
+    const found = rule.regexes.find((re) => re.test(body));
+    if (!found) return { kind: rule.kind, detected: false, evidence: "" };
+    const evidence = snippet(body, found);
+    if (rule.kind === "agents_banned" && TEMPLATE_SCOPE_RX.test(evidence)) {
+      return { kind: rule.kind, detected: false, evidence: "" };
+    }
+    return { kind: rule.kind, detected: true, evidence };
+  });
+}
+
+/**
  * Parse several policy files at once. Binding rules increasingly live in
  * house-rules files that CONTRIBUTING only links to (reticle keeps its
  * claim-first, DCO, .changes and `pnpm verify` rules in AGENTS.md), so the
@@ -500,6 +570,17 @@ export function parseGatesFromSources(sources: PolicySource[]): Gate[] {
         m.detected = true;
         m.evidence = g.evidence;
         m.source = src.file;
+      }
+    }
+    if (isTemplatePath(src.file)) {
+      for (const g of parseTemplateGates(src.text)) {
+        if (!g.detected) continue;
+        const m = merged.find((x) => x.kind === g.kind);
+        if (m && !m.detected) {
+          m.detected = true;
+          m.evidence = g.evidence;
+          m.source = src.file;
+        }
       }
     }
   }

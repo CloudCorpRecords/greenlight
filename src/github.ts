@@ -508,6 +508,30 @@ export const HOUSE_RULE_FILES = [
   "docs/AI_POLICY.md",
 ] as const;
 
+/** Template files probed for gate evidence (scanner parity, v0.27.0). */
+export const TEMPLATE_FILES = [
+  ".github/pull_request_template.md",
+  ".github/PULL_REQUEST_TEMPLATE.md",
+  "pull_request_template.md",
+  "docs/pull_request_template.md",
+  ".github/ISSUE_TEMPLATE.md",
+] as const;
+
+/** Template directories whose files are all probed (capped per directory). */
+export const TEMPLATE_DIRS = [
+  ".github/PULL_REQUEST_TEMPLATE",
+  ".github/ISSUE_TEMPLATE",
+] as const;
+
+const TEMPLATE_FILE_CAP = 6;
+
+/**
+ * House-rules cache payload shape. Entries without this marker predate
+ * template scanning and count as a miss, so they are re-fetched with
+ * template probing included.
+ */
+const HOUSE_RULES_CACHE_SHAPE = 2;
+
 export interface HouseRuleDeps {
   /**
    * Test seam: fetch a repo-root file's raw text, or undefined when absent.
@@ -517,6 +541,14 @@ export interface HouseRuleDeps {
   fetchRaw?: (file: string) => Promise<string | undefined>;
   /** Test seam: fetch the org's AI_POLICY.md text, or undefined when absent. */
   fetchOrgPolicy?: (owner: string) => Promise<string | undefined>;
+  /**
+   * Test seam: list the file names inside a template directory, or
+   * undefined/null when the directory does not exist. When neither this
+   * seam nor fetchRaw is provided, directories are listed through the
+   * contents API; when fetchRaw is provided without this seam, directory
+   * probing is skipped so tests stay hermetic.
+   */
+  fetchDir?: (dir: string) => Promise<string[] | null | undefined>;
 }
 
 /**
@@ -704,8 +736,9 @@ async function fetchRawFile(
  * location does not stop the later locations: the read still wins when
  * a later location has the file.
  *
- * The cache payload is { sources, provenance }; entries written before
- * v0.19.0 (a bare sources array) count as a miss and are re-fetched.
+ * The cache payload is { sources, provenance, templateScan }; entries
+ * written before v0.19.0 (a bare sources array) or before v0.27.0 (no
+ * templateScan marker) count as a miss and are re-fetched.
  */
 export async function fetchHouseRulesDetailed(
   owner: string,
@@ -714,10 +747,10 @@ export async function fetchHouseRulesDetailed(
 ): Promise<{ sources: { file: string; text: string }[]; provenance: PolicySourceProvenance[] }> {
   if (!deps.fetchRaw) {
     const cached = cacheGet("house-rules", [owner, repo]) as
-      | { sources: { file: string; text: string }[]; provenance: PolicySourceProvenance[] }
+      | { sources: { file: string; text: string }[]; provenance: PolicySourceProvenance[]; templateScan?: number }
       | { file: string; text: string }[]
       | undefined;
-    if (cached && !Array.isArray(cached) && Array.isArray(cached.provenance)) {
+    if (cached && !Array.isArray(cached) && Array.isArray(cached.provenance) && cached.templateScan === HOUSE_RULES_CACHE_SHAPE) {
       return { sources: cached.sources, provenance: cached.provenance };
     }
   }
@@ -767,7 +800,52 @@ export async function fetchHouseRulesDetailed(
       provenance.push({ file, scope: "repo", status: "absent" });
     }
   }
-  if (!deps.fetchRaw) cacheSet("house-rules", [owner, repo], { sources, provenance });
+  // v0.27.0: template evidence (scanner parity). PR and issue templates
+  // are probed at every location, with no basename dedupe (a gate can
+  // live only in a template file: the decky-loader lesson), plus every
+  // file in the two template directories (max 6 per directory,
+  // .md/.yml/.yaml only, mirroring the scan5k probe). The template rules
+  // themselves live in gates.ts (parseTemplateGates) and run only over
+  // these paths.
+  for (const file of TEMPLATE_FILES) {
+    const outcome = await fetchOne(file);
+    if (outcome.status === "read") {
+      sources.push({ file, text: outcome.text });
+      provenance.push({ file, scope: "repo", status: "read" });
+    } else if (outcome.status === "error") {
+      provenance.push({ file, scope: "repo", status: "error", error: outcome.error });
+    } else {
+      provenance.push({ file, scope: "repo", status: "absent" });
+    }
+  }
+  for (const dir of TEMPLATE_DIRS) {
+    let names: string[] = [];
+    if (deps.fetchDir) {
+      names = (await deps.fetchDir(dir)) ?? [];
+    } else if (!deps.fetchRaw) {
+      try {
+        const items = (await apiGet(`/repos/${owner}/${repo}/contents/${dir}`)) as Array<{
+          name?: unknown;
+          type?: unknown;
+        }>;
+        names = items
+          .filter((i) => i.type === "file")
+          .map((i) => String(i.name ?? ""));
+      } catch { /* no template dir or empty */ }
+    }
+    const files = names.filter((n) => /\.(md|yml|yaml)$/i.test(n)).slice(0, TEMPLATE_FILE_CAP);
+    for (const name of files) {
+      const file = `${dir}/${name}`;
+      const outcome = await fetchOne(file);
+      if (outcome.status === "read") {
+        sources.push({ file, text: outcome.text });
+        provenance.push({ file, scope: "repo", status: "read" });
+      } else if (outcome.status === "error") {
+        provenance.push({ file, scope: "repo", status: "error", error: outcome.error });
+      }
+    }
+  }
+  if (!deps.fetchRaw) cacheSet("house-rules", [owner, repo], { sources, provenance, templateScan: HOUSE_RULES_CACHE_SHAPE });
   return { sources, provenance };
 }
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.27.0 - 2026-11-09
+
+- Template evidence (scanner parity): PR and issue templates are now
+  probed as policy sources (.github/pull_request_template.md and its
+  variants, plus every file in .github/PULL_REQUEST_TEMPLATE/ and
+  .github/ISSUE_TEMPLATE/, capped at 6 per directory). Template-only
+  rules classify a no-AI attestation template as agents_banned and an
+  AI-usage disclosure template as agents_disclosure, with the scanner's
+  scope guard so a ban scoped to bug reports does not count as a
+  contribution ban. House-rules cache entries written before template
+  scanning are treated as a miss and re-fetched.
+
 ## v0.26.0 - 2026-11-05
 
 - **Two AI-policy gate shapes the scanner missed are now modeled: label-scoped AI bans and human-written-prose rules.** Field cases: RaspberryPiFoundation/blockly PR #10629 (closed 2026-10-26) and vitejs/vite PR #23808, both closed over AI rules Greenlight 0.25.0 did not parse — it fetched blockly's AGENTS.md ("Do not write pull request descriptions or GitHub comments", "Do not work on `good first issue`s") and extracted only the disclosure line, so a blockly good-first-issue checked GO, and vite's CONTRIBUTING AI Policy ("Never let an LLM speak for you... we may close the issue or pull request directly") produced zero policy gates (vite friction 93, blockly friction 95 with only agents_disclosure). (1) New gate kind `ai_label_scoped_ban`: check GATES an issue carrying the banned label with the policy evidence quoted (verdict Rule 7d); an issue outside the label is not gated by it and the scope is disclosed in the reasons. (2) New gate kind `ai_prose_human`: check caps an otherwise-GO verdict at RISKY with the evidence quoted (Rule 10d), so agent-drafted prose never passes silently where a repo requires the contributor's own words. Friction weights: -20 / -15. Index drift gains the classes `gfi-ai-banned` and `ai-prose-human`. 9 new tests (1268 total); MCP tool count unchanged at 33.

@@ -58,10 +58,12 @@ describe("policy-source provenance via the deps seams", () => {
       scope: "repo",
       status: "read",
     });
-    // One entry per basename probed, plus the org entry.
+    // One entry per house-rules basename probed, one per template path
+    // probed (v0.27.0: the 5 template singles; template-directory files
+    // report only when read), plus the org entry.
     const repoEntries = provenance.filter((p) => p.scope === "repo");
-    assert.equal(repoEntries.length, 5);
-    assert.equal(provenance.length, 6);
+    assert.equal(repoEntries.length, 10);
+    assert.equal(provenance.length, 11);
   });
 
   it("absent state: every location missed yields absent with the first candidate path", async () => {
