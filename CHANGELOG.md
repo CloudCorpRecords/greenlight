@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.27.1 - 2026-11-17
+
+- Maintenance release: full re-verification of the v0.27.0 tree and the
+  published package. The complete test suite passes 1277 of 1277 on the
+  pristine tree (the README count had gone stale at 1268 and is now
+  synced to the real count). The published-package audit found no
+  packaged-install defect: the tarball carries dist/cli.js and
+  dist/racecheck.js, the bin entry and files allowlist are correct, and
+  the CLI dispatches racecheck in both argument forms. This release
+  exists so downstream environments that pinned a local tarball (the
+  contribution campaign sniper env, whose local greenlight-0.25.0.tgz
+  was a 0-byte file, leaving its racecheck gate UNKNOWN) can install a
+  fresh, verified artifact from npm.
+
 ## v0.27.0 - 2026-11-09
 
 - Template evidence (scanner parity): PR and issue templates are now
