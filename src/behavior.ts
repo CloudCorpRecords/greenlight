@@ -98,6 +98,13 @@ export interface BehavioralGate {
   /** Transparency: PRs scanned, maintainer comments seen, why nothing fired. */
   notes: string[];
   note: string;
+  /**
+   * v0.27.2: enrichments that failed or were skipped (one entry per
+   * failed surface or PR, plus a time-budget entry when the pass stops
+   * early). Present only when the pass degraded; the verdict above is
+   * computed from the evidence that did load, never from the failures.
+   */
+  degraded?: string[];
 }
 
 /** One timeline event on a PR, reduced to what label-close detection needs. */
@@ -279,7 +286,8 @@ export function extractLabelClose(
 export function detectBehavioralGateFromData(
   prs: BehavioralClosedPR[],
   comments: BehavioralMaintainerComment[],
-  labelCloses: BehavioralLabelClose[] = []
+  labelCloses: BehavioralLabelClose[] = [],
+  degraded: string[] = []
 ): BehavioralGate {
   const prByNumber = new Map(prs.map((p) => [p.number, p]));
   const evidence: BehavioralSignal[] = [];
@@ -347,7 +355,20 @@ export function detectBehavioralGateFromData(
   if (!detected && evidence.length > 0) {
     notes.push("signals exist but stay below the detection threshold");
   }
-  return { detected, strength, threshold, evidence, notes, note };
+  if (degraded.length > 0) {
+    notes.push(
+      `degraded: ${degraded.length} behavioral enrichment read(s) failed or were skipped; verdict computed from the evidence that loaded: ${degraded[0]}`
+    );
+  }
+  return {
+    detected,
+    strength,
+    threshold,
+    evidence,
+    notes,
+    note,
+    ...(degraded.length > 0 ? { degraded } : {}),
+  };
 }
 
 interface PrListItem {
@@ -375,11 +396,41 @@ interface CommentListItem {
 }
 
 /**
+ * Aggregate wall-time budget for the live pass, in seconds (v0.27.2).
+ * The pass costs up to 46 sequential calls; on a slow connection each
+ * call can take seconds, and the 2026-11-17 redis/redis-py check burned
+ * 143s in this pass alone (and died at 300s in an earlier run) even
+ * though every individual request had a timeout. When the budget runs
+ * out the pass stops fetching, marks itself degraded, and returns a
+ * verdict from the evidence already loaded. Override per run with
+ * GREENLIGHT_BEHAVIORAL_TIMEOUT_S.
+ */
+export function behavioralTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const n = Number(env.GREENLIGHT_BEHAVIORAL_TIMEOUT_S);
+  return Number.isFinite(n) && n > 0 ? n * 1000 : 90_000;
+}
+
+function shortError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.length > 160 ? msg.slice(0, 160) : msg;
+}
+
+/**
  * Live pass: walk the closed-PR list (newest first) until 15
  * closed-unmerged PRs are collected, fetch comments on those PRs, and run
- * the pure core. Returns the gate verdict; throws on API failure (the
- * friction pipeline treats a failure as "signal unavailable", never as
- * detected).
+ * the pure core.
+ *
+ * v0.27.2: this pass is an enrichment, never a single point of failure.
+ * Before this change, one failing surface (a 502 on
+ * /pulls/4632/comments during the 2026-11-17 redis/redis-py check)
+ * threw out of the whole pass and the check returned no verdict at all.
+ * Now every surface fetch is individually guarded: a failure is recorded
+ * in the gate's degraded list and the pass continues with the evidence
+ * that did load. Even a failed closed-PR list read degrades to a
+ * no-evidence gate with the failure named, instead of throwing. The
+ * three surfaces of one PR are fetched in parallel, and the whole pass
+ * is bounded by behavioralTimeoutMs so slow connections degrade instead
+ * of hanging the caller.
  */
 export async function detectBehavioralGate(
   owner: string,
@@ -387,25 +438,35 @@ export async function detectBehavioralGate(
   opts: { now?: number } = {}
 ): Promise<BehavioralGate> {
   const nowMs = opts.now ?? Date.now();
+  const startedAt = Date.now();
+  const budgetMs = behavioralTimeoutMs();
+  const degraded: string[] = [];
   const callsBefore = apiCallsUsed();
   const closedUnmerged: BehavioralClosedPR[] = [];
-  for (let page = 1; page <= 3 && closedUnmerged.length < BEHAVIORAL_MAX_PRS; page++) {
-    const items = (await apiGet(
-      `/repos/${owner}/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=30&page=${page}`
-    )) as PrListItem[];
-    if (!items || items.length === 0) break;
-    for (const p of items) {
-      if (closedUnmerged.length >= BEHAVIORAL_MAX_PRS) break;
-      if (p.state === "closed" && !p.merged_at) {
-        closedUnmerged.push({
-          number: p.number,
-          url: p.html_url,
-          author: String(p.user?.login ?? ""),
-          closedAt: String(p.closed_at ?? ""),
-        });
+  try {
+    for (let page = 1; page <= 3 && closedUnmerged.length < BEHAVIORAL_MAX_PRS; page++) {
+      const items = (await apiGet(
+        `/repos/${owner}/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=30&page=${page}`
+      )) as PrListItem[];
+      if (!items || items.length === 0) break;
+      for (const p of items) {
+        if (closedUnmerged.length >= BEHAVIORAL_MAX_PRS) break;
+        if (p.state === "closed" && !p.merged_at) {
+          closedUnmerged.push({
+            number: p.number,
+            url: p.html_url,
+            author: String(p.user?.login ?? ""),
+            closedAt: String(p.closed_at ?? ""),
+          });
+        }
       }
+      if (items.length < 30) break;
     }
-    if (items.length < 30) break;
+  } catch (err) {
+    degraded.push(`closed PR list for ${owner}/${repo}: ${shortError(err)}`);
+    const gate = detectBehavioralGateFromData([], [], [], degraded);
+    gate.notes.push(`API calls used: ${apiCallsUsed() - callsBefore}`);
+    return gate;
   }
 
   // v0.17.1: drop stale closures before paying comment calls for them.
@@ -414,12 +475,37 @@ export async function detectBehavioralGate(
 
   // v0.18.0 (item 5): maintainer rejections live on three surfaces.
   // One bounded page each: issue comments, reviews, review comments.
+  // v0.27.2: the three surfaces of one PR are fetched in parallel, each
+  // guarded on its own, so one slow or failing surface neither blocks
+  // nor kills the other two, and the aggregate budget stops the pass
+  // cleanly between PRs.
   const comments: BehavioralMaintainerComment[] = [];
+  const scanned: BehavioralClosedPR[] = [];
   for (const pr of live) {
-    const issueComments = (await apiGet(
-      `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`
-    )) as CommentListItem[];
-    for (const c of issueComments ?? []) {
+    if (Date.now() - startedAt > budgetMs) {
+      degraded.push(
+        `behavioral pass exceeded its ${Math.round(budgetMs / 1000)}s budget at PR #${pr.number}; remaining PRs skipped`
+      );
+      break;
+    }
+    const fetchSurface = async (
+      surface: BehavioralMaintainerComment["source"],
+      path: string
+    ): Promise<CommentListItem[]> => {
+      try {
+        return ((await apiGet(path)) as CommentListItem[]) ?? [];
+      } catch (err) {
+        degraded.push(`PR #${pr.number} ${surface} read failed: ${shortError(err)}`);
+        return [];
+      }
+    };
+    scanned.push(pr);
+    const [issueComments, reviews, reviewComments] = await Promise.all([
+      fetchSurface("comment", `/repos/${owner}/${repo}/issues/${pr.number}/comments?per_page=100`),
+      fetchSurface("review", `/repos/${owner}/${repo}/pulls/${pr.number}/reviews?per_page=100`),
+      fetchSurface("review_comment", `/repos/${owner}/${repo}/pulls/${pr.number}/comments?per_page=100`),
+    ]);
+    for (const c of issueComments) {
       comments.push({
         pr: pr.number,
         author: String(c.user?.login ?? ""),
@@ -429,10 +515,7 @@ export async function detectBehavioralGate(
         source: "comment",
       });
     }
-    const reviews = (await apiGet(
-      `/repos/${owner}/${repo}/pulls/${pr.number}/reviews?per_page=100`
-    )) as CommentListItem[];
-    for (const r of reviews ?? []) {
+    for (const r of reviews) {
       const body = String(r.body ?? "").trim();
       if (!body) continue; // bare APPROVE/REQUEST_CHANGES votes carry no text
       comments.push({
@@ -444,10 +527,7 @@ export async function detectBehavioralGate(
         source: "review",
       });
     }
-    const reviewComments = (await apiGet(
-      `/repos/${owner}/${repo}/pulls/${pr.number}/comments?per_page=100`
-    )) as CommentListItem[];
-    for (const c of reviewComments ?? []) {
+    for (const c of reviewComments) {
       comments.push({
         pr: pr.number,
         author: String(c.user?.login ?? ""),
@@ -489,7 +569,7 @@ export async function detectBehavioralGate(
       if (fact) labelCloses.push(fact);
     } catch { /* best-effort: no timeline, no signal */ }
   }
-  const gate = detectBehavioralGateFromData(live, comments, labelCloses);
+  const gate = detectBehavioralGateFromData(scanned, comments, labelCloses, degraded);
   if (recency.staleCount > 0) {
     gate.notes.push(
       `excluded ${recency.staleCount} closed-unmerged PR${recency.staleCount === 1 ? "" : "s"} older than the ${BEHAVIORAL_RECENCY_MONTHS}-month recency bound`

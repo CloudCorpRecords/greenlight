@@ -195,7 +195,13 @@ export async function runPreflight(opts: PreflightOptions): Promise<PreflightRes
   // practice, so a pre-build check should say NO-GO before work starts.
   let behavioral: BehavioralGate | null = null;
   if (opts.behavioral) {
-    behavioral = await detectBehavioralGate(owner, repo);
+    // v0.27.2: an enrichment failure means no behavioral evidence, never
+    // a dead preflight.
+    try {
+      behavioral = await detectBehavioralGate(owner, repo);
+    } catch {
+      behavioral = null;
+    }
     if (behavioral?.detected) {
       const n = behavioral.strength;
       const first = behavioral.evidence[0];

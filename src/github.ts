@@ -1306,6 +1306,13 @@ export function extractTimelineCrossRefPRs(
 /** Count open issues labelled good-first-issue or help-wanted. */
 export async function countStarterIssues(owner: string, repo: string): Promise<number | null> {
   try {
+    // v0.27.2: search does not follow repo renames (it 422s on the old
+    // name: asciimoo/hister, renamed to asciimoo/nogon, killed the
+    // 2026-11-17 wave), so resolve the canonical name before searching,
+    // the same rule scan and check already follow (item 15).
+    const canon = await resolveCanonicalRepo(owner, repo);
+    owner = canon.owner;
+    repo = canon.repo;
     // Comma-separated labels are GitHub's OR for the label qualifier; the
     // parenthesized (a OR b) form silently returns zero (found 2026-10-19:
     // badges/shields has 42 good-first-issues and the OR form found none).
@@ -1349,8 +1356,10 @@ export async function countStarterCandidates(
   deps: StarterSearchDeps = {}
 ): Promise<number | null> {
   const labels = STARTER_CANDIDATE_LABELS.map((l) => `"${l}"`).join(",");
-  const query = `repo:${owner}/${repo} type:issue state:open no:assignee label:${labels}`;
-  if (deps.searchCount) return deps.searchCount(query);
+  if (deps.searchCount) return deps.searchCount(`repo:${owner}/${repo} type:issue state:open no:assignee label:${labels}`);
+  // v0.27.2: same rename resolution as the other starter searches.
+  const canon = await resolveCanonicalRepo(owner, repo);
+  const query = `repo:${canon.owner}/${canon.repo} type:issue state:open no:assignee label:${labels}`;
   try {
     const q = encodeURIComponent(query);
     const data = (await apiGet(`/search/issues?q=${q}&per_page=1`)) as { total_count: number };
@@ -1494,6 +1503,12 @@ export async function listStarterIssues(
   repo: string,
   limit = 25
 ): Promise<ScanCandidate[]> {
+  // v0.27.2: resolve renames before searching, for the same reason as
+  // countStarterIssues above: repo:asciimoo/hister 422s after the rename
+  // to asciimoo/nogon, while the repo itself reads fine via /repos.
+  const canon = await resolveCanonicalRepo(owner, repo);
+  owner = canon.owner;
+  repo = canon.repo;
   // Comma-separated labels are GitHub's OR for the label qualifier; the
   // parenthesized (a OR b) form silently returns zero (found 2026-10-19).
   const q = encodeURIComponent(

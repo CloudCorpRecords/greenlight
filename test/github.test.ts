@@ -610,6 +610,34 @@ describe("starter-issue search queries (v0.16.0)", () => {
     assert.ok(seen.includes("label%3A%22good%20first%20issue%22%2C%22help%20wanted%22"), `query was: ${seen}`);
     assert.ok(!seen.includes("%28label"), `no parenthesized OR in: ${seen}`);
   });
+
+  it("listStarterIssues searches the canonical name after a rename (v0.27.2, asciimoo/hister shape)", async () => {
+    const { listStarterIssues } = await import("../src/github.js");
+    const seen: string[] = [];
+    setFetchImpl((async (url: string | URL | Request) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes("/repos/asciimoo/hister")) {
+        return new Response(JSON.stringify({ full_name: "asciimoo/nogon" }), { status: 200 });
+      }
+      // The old name 422s on search, exactly like the live API.
+      if (u.includes("repo%3Aasciimoo%2Fhister")) {
+        return new Response(
+          JSON.stringify({ message: "Validation Failed", errors: [{ message: "The listed users and repositories cannot be searched" }] }),
+          { status: 422 }
+        );
+      }
+      return new Response(
+        JSON.stringify({ total_count: 1, items: [{ number: 408, title: "t", html_url: "u", labels: [], updated_at: "x" }] }),
+        { status: 200 }
+      );
+    }) as typeof fetch);
+    const out = await listStarterIssues("asciimoo", "hister", 5);
+    assert.equal(out.length, 1);
+    assert.equal(out[0].number, 408);
+    const search = seen.find((u) => u.includes("/search/issues"));
+    assert.ok(search?.includes("repo%3Aasciimoo%2Fnogon"), `search used the canonical name: ${search}`);
+  });
 });
 
 describe("v0.18.0 repo rename resolution (item 15)", () => {

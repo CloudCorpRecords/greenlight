@@ -402,7 +402,14 @@ export async function computeIssueStatus(
   // when explicitly asked, because it costs up to 18 API calls per repo.
   let behavioralGate: BehavioralGate | null = null;
   if (opts.behavioralGate !== undefined) behavioralGate = opts.behavioralGate;
-  else if (opts.behavioral) behavioralGate = await detectBehavioralGate(owner, repo);
+  else if (opts.behavioral) {
+    // v0.27.2: same guard as the CLI check path; degrade to no evidence.
+    try {
+      behavioralGate = await detectBehavioralGate(owner, repo);
+    } catch {
+      behavioralGate = null;
+    }
+  }
   if (behavioralGate) snapshot.behavioralGate = behavioralGate;
   const legacy = scoreIssue(snapshot);
   const proto = await fetchProtocolState(owner, repo, number, deps);

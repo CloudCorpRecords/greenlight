@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.27.2 - 2026-11-17
+
+- Wave no longer dies on one repo. Field case 2026-11-17: the starter
+  issue search for asciimoo/hister returned GitHub API 422 and the whole
+  wave aborted with empty output. Root cause: the repo had been renamed
+  to asciimoo/nogon, and GitHub search does not follow renames (it 422s
+  on the old name while /repos reads fine). The starter searches
+  (listStarterIssues, countStarterIssues, countStarterCandidates) now
+  resolve the canonical repo name before searching, the same rule scan
+  and check already followed. On top of that, runWave is resilient per
+  repo and per issue: a failing starter search skips that repo with the
+  error recorded, a failing xray becomes an ERROR entry on that issue,
+  and a failing behavioral check degrades that repo only. The result
+  gains an errors list and reports partial honestly instead of printing
+  nothing.
+- Check no longer dies or hangs on the behavioral gate pass. Field case
+  2026-11-17: check on redis/redis-py first timed out at 300s, then
+  failed with a 502 from /pulls/4632/comments inside the behavioral
+  pass, so no verdict was returned at all. The pass is an enrichment,
+  so it now degrades: each of the three evidence surfaces per PR is
+  fetched in parallel and guarded on its own, a failed closed-PR list
+  degrades to a no-evidence gate with the failure named, and the whole
+  pass is bounded by an aggregate budget (90s default,
+  GREENLIGHT_BEHAVIORAL_TIMEOUT_S) after which it returns a verdict
+  from the evidence already loaded. Degradations are reported on the
+  gate's new degraded list and in the check JSON output. The CLI check
+  and scan paths, preflight, and the protocol fetch path also guard the
+  pass so an enrichment failure can never take a verdict down again.
+  7 new tests (1284 total); MCP tool count unchanged at 33.
+
 ## v0.27.1 - 2026-11-17
 
 - Maintenance release: full re-verification of the v0.27.0 tree and the

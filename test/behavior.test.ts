@@ -22,6 +22,8 @@ import {
   extractLabelClose,
 } from "../src/behavior.js";
 import { scoreFriction } from "../src/friction.js";
+import { detectBehavioralGate, behavioralTimeoutMs } from "../src/behavior.js";
+import { setFetchImpl } from "../src/github.js";
 
 const pr = (number: number, author: string): BehavioralClosedPR => ({
   number,
@@ -195,6 +197,90 @@ describe("detectBehavioralGateFromData", () => {
       [comment(10, "maintainer", long), comment(11, "maintainer", long)]
     );
     assert.ok(gate.evidence[0].quote.length <= 240);
+  });
+});
+
+describe("v0.27.2 live behavioral pass degrades instead of throwing", () => {
+  // Field case 2026-11-17: greenlight check on redis/redis-py died with
+  // "GitHub API 502 for /repos/redis/redis-py/pulls/4632/comments" from
+  // this pass, so the check returned no verdict at all.
+  const closedList = [
+    {
+      number: 4632,
+      html_url: "https://github.com/redis/redis-py/pull/4632",
+      user: { login: "contrib" },
+      merged_at: null,
+      state: "closed",
+      closed_at: "2026-10-01T00:00:00Z",
+    },
+  ];
+  const route = (failSurface: string) =>
+    (async (url: string | URL | Request) => {
+      const u = String(url);
+      if (u.includes("/pulls?state=closed")) {
+        return new Response(JSON.stringify(closedList), { status: 200 });
+      }
+      if (u.includes(failSurface)) {
+        return new Response(JSON.stringify({ error: "Remote end closed connection without response" }), {
+          status: 502,
+        });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    }) as typeof fetch;
+
+  it("a 502 on PR review comments still returns a gate, with the degradation noted", async () => {
+    setFetchImpl(route("/pulls/4632/comments"));
+    try {
+      const gate = await detectBehavioralGate("redis", "redis-py");
+      assert.equal(gate.detected, false);
+      assert.equal(gate.strength, 0);
+      assert.ok(gate.degraded, "degraded list present");
+      assert.equal(gate.degraded.length, 1);
+      assert.ok(gate.degraded[0].includes("4632"), `degradation names the PR: ${gate.degraded[0]}`);
+      assert.ok(gate.degraded[0].includes("502"), `degradation names the failure: ${gate.degraded[0]}`);
+      assert.ok(
+        gate.notes.some((n) => n.includes("degraded")),
+        "notes carry the degradation for human output"
+      );
+    } finally {
+      setFetchImpl(null);
+    }
+  });
+
+  it("every surface failing still returns a gate instead of throwing", async () => {
+    setFetchImpl(route("/4632/"));
+    try {
+      const gate = await detectBehavioralGate("redis", "redis-py");
+      assert.equal(gate.detected, false);
+      // Issue comments and review comments match /4632/; reviews live
+      // under /pulls/4632/reviews, which also matches. All three degrade.
+      assert.ok((gate.degraded?.length ?? 0) >= 2, `degraded entries: ${gate.degraded}`);
+    } finally {
+      setFetchImpl(null);
+    }
+  });
+
+  it("a failing closed-PR list degrades to a no-evidence gate", async () => {
+    setFetchImpl(
+      (async () =>
+        new Response(JSON.stringify({ error: "boom" }), { status: 502 })) as typeof fetch
+    );
+    try {
+      const gate = await detectBehavioralGate("redis", "redis-py");
+      assert.equal(gate.detected, false);
+      assert.equal(gate.strength, 0);
+      assert.ok(gate.degraded?.[0].includes("closed PR list"));
+    } finally {
+      setFetchImpl(null);
+    }
+  });
+
+  it("behavioralTimeoutMs defaults to 90s and honors the env override", () => {
+    assert.equal(behavioralTimeoutMs({} as NodeJS.ProcessEnv), 90_000);
+    assert.equal(
+      behavioralTimeoutMs({ GREENLIGHT_BEHAVIORAL_TIMEOUT_S: "5" } as NodeJS.ProcessEnv),
+      5_000
+    );
   });
 });
 

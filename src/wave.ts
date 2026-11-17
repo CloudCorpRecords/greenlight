@@ -124,6 +124,18 @@ export interface WaveRepo {
   excluded?: string;
   issues: WaveIssue[];
   behavioralGate?: BehavioralGate;
+  /**
+   * v0.27.2: non-fatal failures inside this repo (a failed enrichment
+   * whose absence was tolerated). The repo's surviving results stand.
+   */
+  degraded?: string[];
+}
+
+/** One non-fatal per-repo or per-issue failure (v0.27.2). */
+export interface WaveError {
+  repo: string;
+  issue?: number;
+  error: string;
 }
 
 export interface WaveResult {
@@ -139,6 +151,11 @@ export interface WaveResult {
   partialReason?: string;
   filters: WaveFilters;
   candidatesConsidered: number;
+  /**
+   * v0.27.2: per-repo errors that were skipped over instead of aborting
+   * the run. Empty on a clean run. When non-empty the run is partial.
+   */
+  errors: WaveError[];
 }
 
 /** Injected so tests can drive the pipeline with fixtures. */
@@ -211,6 +228,11 @@ export async function runWave(
   deps: WaveDeps
 ): Promise<WaveResult> {
   const callsBefore = apiCallsUsed();
+  // v0.27.2: per-repo failures accumulate here instead of aborting the
+  // run. Before this, one repo's 422 from the starter-issue search
+  // (asciimoo/hister, renamed to asciimoo/nogon, 2026-11-17) threw out
+  // of runWave and the CLI printed no JSON at all.
+  const errors: WaveError[] = [];
   const finish = (
     repos: WaveRepo[],
     partial: boolean,
@@ -224,14 +246,20 @@ export async function runWave(
     }
     const tier: Record<WaveVerdict, number> = { CLEAR: 0, RISKY: 1, TAKEN: 2, ERROR: 3 };
     queue.sort((a, b) => (tier[a.verdict] ?? 9) - (tier[b.verdict] ?? 9));
+    const isPartial = partial || errors.length > 0;
     return {
       repos,
       queue,
       apiCalls: apiCallsUsed() - callsBefore,
-      partial,
-      partialReason,
+      partial: isPartial,
+      partialReason:
+        partialReason ??
+        (errors.length > 0
+          ? `${errors.length} repo error(s) skipped: ${errors.map((e) => e.repo).join(", ")}`
+          : undefined),
       filters,
       candidatesConsidered: repos.length,
+      errors,
     };
   };
 
@@ -303,7 +331,28 @@ export async function runWave(
       }
       const issues: WaveIssue[] = [];
       for (const s of starters) {
-        const xr = await deps.xray(owner, repoName, s.number);
+        let xr: XrayResult;
+        try {
+          xr = await deps.xray(owner, repoName, s.number);
+        } catch (err) {
+          if (err instanceof RateLimitError) throw err;
+          // v0.27.2: one issue's failed xray is an ERROR entry on that
+          // issue, never a dead repo or a dead run.
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push({ repo: entry.repo, issue: s.number, error: msg });
+          issues.push({
+            repo: entry.repo,
+            number: s.number,
+            title: s.title,
+            url: s.url,
+            verdict: "ERROR",
+            reasons: [`xray failed: ${msg}`],
+            flags: ["degraded"],
+            competingPRs: [],
+            apiCalls: 0,
+          });
+          continue;
+        }
         const competingPRs = xr.linkedPRs
           .filter((p) => p.state === "open")
           .map((p) => ({ number: p.number, url: p.url, state: p.state }));
@@ -322,15 +371,24 @@ export async function runWave(
       const repoEntry: WaveRepo = { ...base, issues };
       const hasClear = issues.some((i) => i.verdict === "CLEAR");
       if (hasClear) {
-        const gate = await deps.behavioral(owner, repoName);
-        repoEntry.behavioralGate = gate;
-        if (gate.detected) {
-          repos.push({
-            ...repoEntry,
-            excluded: `behavioral gate: maintainer rejects AI-built PRs in practice (${gate.strength} signal${gate.strength === 1 ? "" : "s"})`,
-            issues: [],
-          });
-          continue;
+        try {
+          const gate = await deps.behavioral(owner, repoName);
+          repoEntry.behavioralGate = gate;
+          if (gate.detected) {
+            repos.push({
+              ...repoEntry,
+              excluded: `behavioral gate: maintainer rejects AI-built PRs in practice (${gate.strength} signal${gate.strength === 1 ? "" : "s"})`,
+              issues: [],
+            });
+            continue;
+          }
+        } catch (err) {
+          if (err instanceof RateLimitError) throw err;
+          // v0.27.2: a failed behavioral enrichment degrades this repo
+          // (its CLEAR issues stand, flagged), it does not kill the run.
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push({ repo: entry.repo, error: `behavioral gate check failed: ${msg}` });
+          repoEntry.degraded = [`behavioral gate check failed: ${msg}`];
         }
       }
       repos.push(repoEntry);
@@ -342,7 +400,19 @@ export async function runWave(
           `rate limited at ${entry.repo}: ${err.message}`
         );
       }
-      throw err;
+      // v0.27.2: any other per-repo failure (the starter search 422 on a
+      // renamed repo is the field case) skips that repo with the error
+      // recorded, and the wave continues with the remaining candidates.
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push({ repo: entry.repo, error: msg });
+      repos.push({
+        repo: entry.repo,
+        url: entry.url ?? `https://github.com/${entry.repo}`,
+        stars: entry.stars ?? 0,
+        excluded: `error: ${msg}`,
+        issues: [],
+      });
+      continue;
     }
   }
   return finish(repos, false);
@@ -434,6 +504,9 @@ export function formatWaveHuman(result: WaveResult): string {
   }
   for (const r of result.repos) {
     if (r.excluded) lines.push(`skip: ${r.repo} (${r.excluded})`);
+  }
+  for (const e of result.errors ?? []) {
+    lines.push(`error: ${e.repo}${e.issue ? `#${e.issue}` : ""}: ${e.error}`);
   }
   if (result.partial) lines.push(`PARTIAL: ${result.partialReason}`);
   lines.push(`API calls used: ${result.apiCalls}`);

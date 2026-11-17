@@ -257,6 +257,72 @@ describe("runWave", () => {
     assert.equal(result.queue[0].repo, "o/one");
   });
 
+  it("skips a repo whose starter search 422s and still returns the other repos as results (v0.27.2)", async () => {
+    // Field case 2026-11-17: repo:asciimoo/hister 422ed after the rename
+    // to asciimoo/nogon and the whole wave died with empty output.
+    const deps = fixtureDeps({
+      starters: {
+        "o/good": [{ number: 1, title: "t", url: "u" }],
+      },
+      xrays: { "o/good#1": xray("GO", { number: 1 }) },
+    });
+    const baseStarter = deps.starterIssues;
+    deps.starterIssues = async (owner: string, repo: string, limit: number) => {
+      if (`${owner}/${repo}` === "asciimoo/hister") {
+        throw new Error(
+          'GitHub API 422 for /search/issues?q=repo%3Aasciimoo%2Fhister: {"message":"Validation Failed"}'
+        );
+      }
+      return baseStarter(owner, repo, limit);
+    };
+    const result = await runWave(
+      [entry("asciimoo/hister", { stars: 9000 }), entry("o/good", { stars: 8000 })],
+      filters,
+      deps
+    );
+    // The surviving repo still produces its queue entry.
+    assert.equal(result.queue.length, 1);
+    assert.equal(result.queue[0].repo, "o/good");
+    assert.equal(result.queue[0].verdict, "CLEAR");
+    // The failure is recorded per repo, and the run is honestly partial.
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].repo, "asciimoo/hister");
+    assert.ok(result.errors[0].error.includes("422"));
+    assert.equal(result.partial, true);
+    const bad = result.repos.find((r) => r.repo === "asciimoo/hister");
+    assert.ok(bad?.excluded?.includes("422"), `bad repo excluded with its error: ${bad?.excluded}`);
+    // The result serializes as valid JSON with the errors list.
+    const parsed = JSON.parse(JSON.stringify(result)) as typeof result;
+    assert.equal(parsed.errors.length, 1);
+    assert.equal(parsed.queue.length, 1);
+  });
+
+  it("records a failed xray as an ERROR issue and keeps the repo's other issues (v0.27.2)", async () => {
+    const deps = fixtureDeps({
+      starters: {
+        "o/mixed": [
+          { number: 1, title: "broken", url: "u1" },
+          { number: 2, title: "fine", url: "u2" },
+        ],
+      },
+      xrays: { "o/mixed#2": xray("GO", { number: 2 }) },
+    });
+    const baseXray = deps.xray;
+    deps.xray = async (owner: string, repo: string, number: number) => {
+      if (number === 1) throw new Error("GitHub API 502 for /repos/o/mixed/issues/1/timeline");
+      return baseXray(owner, repo, number);
+    };
+    const result = await runWave([entry("o/mixed", { stars: 9000 })], filters, deps);
+    assert.equal(result.queue.length, 1);
+    assert.equal(result.queue[0].number, 2);
+    const repo = result.repos[0];
+    const broken = repo.issues.find((i) => i.number === 1);
+    assert.equal(broken?.verdict, "ERROR");
+    assert.ok(broken?.flags.includes("degraded"));
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].issue, 1);
+  });
+
   it("degrades to partial when a search call is rate limited", async () => {
     const { RateLimitError } = await import("../src/github.js");
     const deps = fixtureDeps({

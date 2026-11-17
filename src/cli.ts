@@ -240,7 +240,14 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
   // --no-behavioral); a detected gate caps the verdict at GATED.
   let behavioralGate: BehavioralGate | null = null;
   if (!args.includes("--no-behavioral")) {
-    behavioralGate = await detectBehavioralGate(owner, repo);
+    // v0.27.2: the behavioral pass degrades internally, but a check must
+    // never die on an enrichment even if that contract regresses: a
+    // failure here means "no behavioral evidence", not no verdict.
+    try {
+      behavioralGate = await detectBehavioralGate(owner, repo);
+    } catch {
+      behavioralGate = null;
+    }
   }
   const { snapshot, merged } = await checkIssueWithProtocol(owner, repo, number, {
     externalGates: loadExternalGates(args),
@@ -283,6 +290,7 @@ async function cmdCheck(issueUrl: string, asJson: boolean, args: string[]): Prom
           llm_status: merged.llm_status ?? null,
           suggestion,
           index_drift: indexDrift,
+          degraded: behavioralGate?.degraded ?? [],
           renamedFrom: renameNote ? `${parsed.owner}/${parsed.repo}` : null,
         },
         null,
@@ -381,7 +389,12 @@ async function cmdScan(repoRef: string, asJson: boolean, args: string[]): Promis
   // GATED.
   let behavioralGate: BehavioralGate | null = null;
   if (!args.includes("--no-behavioral")) {
-    behavioralGate = await detectBehavioralGate(owner, repo);
+    // v0.27.2: same guard as cmdCheck; a scan never dies on an enrichment.
+    try {
+      behavioralGate = await detectBehavioralGate(owner, repo);
+    } catch {
+      behavioralGate = null;
+    }
   }
   const results: Array<{
     number: number;
