@@ -91,6 +91,14 @@ export interface WaveFilters {
    * "stars" restores the pre-0.16.2 stars-descending order.
    */
   sort?: "winnability" | "stars";
+  /**
+   * v0.27.3: candidate rotation. When set, the sorted candidate list is
+   * rotated by this many positions before the maxRepos slice, so
+   * successive waves do not always start at the same head. runWave
+   * derives a day-based offset when this is unset and the filtered
+   * list is longer than maxRepos.
+   */
+  startOffset?: number;
 }
 
 export const DEFAULT_WAVE_FILTERS: WaveFilters = {
@@ -188,7 +196,7 @@ export function filterWaveRepos(
     const s = e.friction_score ?? null;
     return s === null ? Number.POSITIVE_INFINITY : s;
   };
-  return entries
+  const sorted = entries
     .filter((e) => {
       const classes = e.policy_classes ?? [];
       if (classes.length !== 1 || classes[0] !== "open") return false;
@@ -205,8 +213,12 @@ export function filterWaveRepos(
       const friction = frictionOf(a) - frictionOf(b);
       if (friction !== 0) return friction;
       return (b.stars ?? 0) - (a.stars ?? 0);
-    })
-    .slice(0, filters.maxRepos);
+    });
+  const rawOffset = filters.startOffset ?? 0;
+  const offset =
+    sorted.length > 0 ? ((rawOffset % sorted.length) + sorted.length) % sorted.length : 0;
+  const rotated = offset === 0 ? sorted : [...sorted.slice(offset), ...sorted.slice(0, offset)];
+  return rotated.slice(0, filters.maxRepos);
 }
 
 function mapXrayVerdict(v: XrayResult["verdict"]): WaveVerdict {
@@ -263,7 +275,20 @@ export async function runWave(
     };
   };
 
-  const candidates = filterWaveRepos(index, filters);
+  // v0.27.3: rotate the candidate window by day when the caller did
+  // not pin an offset and more candidates pass the filter than one
+  // wave can take, so a repo stuck at the head cannot block every
+  // successive wave. When every candidate fits in one wave the order
+  // is left untouched (rotation would change nothing but ordering).
+  let effectiveFilters = filters;
+  if (filters.startOffset === undefined) {
+    const all = filterWaveRepos(index, { ...filters, maxRepos: Number.MAX_SAFE_INTEGER, startOffset: 0 });
+    if (all.length > filters.maxRepos) {
+      const day = Math.floor(Date.now() / 86_400_000);
+      effectiveFilters = { ...filters, startOffset: day % all.length };
+    }
+  }
+  const candidates = filterWaveRepos(index, effectiveFilters);
   const rateLimited = (err: unknown): WaveResult | null =>
     err instanceof RateLimitError
       ? finish([], true, `rate limited: ${err.message}`)
@@ -305,6 +330,10 @@ export async function runWave(
   const repos: WaveRepo[] = [];
 
   for (const entry of candidates) {
+    // Budget-floor abort stays fatal (v0.27.3): this check is kept
+    // outside the per-repo try so a drained budget, or a rate limit
+    // hit while reading the budget itself, still stops the run with
+    // partial results instead of spinning through every candidate.
     try {
       if ((await deps.remainingBudget()) < filters.minBudget) {
         return finish(
@@ -313,6 +342,15 @@ export async function runWave(
           `core budget fell under the ${filters.minBudget} floor at ${entry.repo}`
         );
       }
+    } catch (err) {
+      const partial = rateLimited(err);
+      if (partial) {
+        // Preserve the repos already completed, unlike the pre-run case.
+        return finish(repos, true, `rate limited: ${err instanceof RateLimitError ? err.message : String(err)}`);
+      }
+      throw err;
+    }
+    try {
       const [owner, repoName] = entry.repo.split("/");
       const base: WaveRepo = {
         repo: entry.repo,
@@ -393,13 +431,13 @@ export async function runWave(
       }
       repos.push(repoEntry);
     } catch (err) {
-      if (err instanceof RateLimitError) {
-        return finish(
-          repos,
-          true,
-          `rate limited at ${entry.repo}: ${err.message}`
-        );
-      }
+      // v0.27.3: a per-repo RateLimitError skips that repo, exactly like
+      // every other per-repo failure. Before this, a rate limit at one
+      // repo (field case 2026-11-21: conductor-oss/conductor) returned
+      // partial results at the first blocked repo, and because the
+      // candidate order is deterministic the same repo blocked every
+      // successive wave. The pre-run and mid-run budget-floor aborts
+      // above are unchanged and remain fatal to the run.
       // v0.27.2: any other per-repo failure (the starter search 422 on a
       // renamed repo is the field case) skips that repo with the error
       // recorded, and the wave continues with the remaining candidates.

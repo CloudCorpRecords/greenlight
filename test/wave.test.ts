@@ -333,9 +333,126 @@ describe("runWave", () => {
       throw new RateLimitError("GitHub rate limit hit (403). Secondary limit.");
     };
     const result = await runWave([entry("o/one", { stars: 9000 })], filters, deps);
+    // v0.27.3: a per-repo rate limit is a skip, not a fatal stop. With
+    // only one candidate the observable result is still partial with
+    // an empty queue, but the failure is now in the errors list.
     assert.equal(result.partial, true);
-    assert.ok(result.partialReason?.includes("rate limited"));
     assert.equal(result.queue.length, 0);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].repo, "o/one");
+    assert.ok(result.errors[0].error.includes("rate limit"));
+    assert.ok(result.repos[0].excluded?.includes("rate limit"));
+  });
+
+  it("skips a rate-limited first repo and still scans repos 2 and 3 (v0.27.3)", async () => {
+    // Field case 2026-11-21: a rate limit at conductor-oss/conductor
+    // killed the whole wave; the deterministic candidate order meant
+    // the same repo blocked every successive run and only 2 repos
+    // were ever scanned.
+    const { RateLimitError } = await import("../src/github.js");
+    const deps = fixtureDeps({
+      starters: {
+        "o/second": [{ number: 2, title: "t2", url: "u2" }],
+        "o/third": [{ number: 3, title: "t3", url: "u3" }],
+      },
+      xrays: {
+        "o/second#2": xray("GO", { number: 2 }),
+        "o/third#3": xray("GO", { number: 3 }),
+      },
+    });
+    const baseStarter = deps.starterIssues;
+    deps.starterIssues = async (owner: string, repo: string, limit: number) => {
+      if (`${owner}/${repo}` === "o/blocked") {
+        throw new RateLimitError("GitHub rate limit hit (403). Secondary limit.");
+      }
+      return baseStarter(owner, repo, limit);
+    };
+    const result = await runWave(
+      [
+        entry("o/blocked", { stars: 9000, outsider_merge_share: 95 }),
+        entry("o/second", { stars: 8000, outsider_merge_share: 90 }),
+        entry("o/third", { stars: 7000, outsider_merge_share: 85 }),
+      ],
+      filters,
+      deps
+    );
+    assert.equal(result.partial, true);
+    assert.deepEqual(
+      result.queue.map((i) => i.repo),
+      ["o/second", "o/third"]
+    );
+    assert.ok(result.queue.every((i) => i.verdict === "CLEAR"));
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].repo, "o/blocked");
+    const blocked = result.repos.find((r) => r.repo === "o/blocked");
+    assert.ok(blocked?.excluded?.includes("rate limit"));
+    assert.equal(result.repos.length, 3);
+  });
+
+  it("skips a repo whose xray is rate limited and continues (v0.27.3)", async () => {
+    const { RateLimitError } = await import("../src/github.js");
+    const deps = fixtureDeps({
+      starters: {
+        "o/blocked": [{ number: 1, title: "t1", url: "u1" }],
+        "o/good": [{ number: 2, title: "t2", url: "u2" }],
+      },
+      xrays: { "o/good#2": xray("GO", { number: 2 }) },
+    });
+    const baseXray = deps.xray;
+    deps.xray = async (owner: string, repo: string, number: number) => {
+      if (`${owner}/${repo}` === "o/blocked") {
+        throw new RateLimitError("GitHub rate limit hit (403).");
+      }
+      return baseXray(owner, repo, number);
+    };
+    const result = await runWave(
+      [
+        entry("o/blocked", { stars: 9000, outsider_merge_share: 95 }),
+        entry("o/good", { stars: 8000, outsider_merge_share: 90 }),
+      ],
+      filters,
+      deps
+    );
+    assert.equal(result.partial, true);
+    assert.deepEqual(result.queue.map((i) => i.repo), ["o/good"]);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.errors[0].repo, "o/blocked");
+  });
+
+  it("rotates candidates by an explicit startOffset (v0.27.3)", () => {
+    const index = [
+      entry("o/a", { outsider_merge_share: 95 }),
+      entry("o/b", { outsider_merge_share: 90 }),
+      entry("o/c", { outsider_merge_share: 85 }),
+    ];
+    const kept = filterWaveRepos(index, { ...filters, maxRepos: 2, startOffset: 1 }).map((e) => e.repo);
+    assert.deepEqual(kept, ["o/b", "o/c"]);
+    const wrapped = filterWaveRepos(index, { ...filters, maxRepos: 2, startOffset: 2 }).map((e) => e.repo);
+    assert.deepEqual(wrapped, ["o/c", "o/a"]);
+  });
+
+  it("runWave honors an explicit startOffset so a blocked head does not lead (v0.27.3)", async () => {
+    const deps = fixtureDeps({
+      starters: {
+        "o/b": [{ number: 2, title: "t2", url: "u2" }],
+        "o/c": [{ number: 3, title: "t3", url: "u3" }],
+      },
+      xrays: {
+        "o/b#2": xray("GO", { number: 2 }),
+        "o/c#3": xray("GO", { number: 3 }),
+      },
+    });
+    const result = await runWave(
+      [
+        entry("o/a", { outsider_merge_share: 95 }),
+        entry("o/b", { outsider_merge_share: 90 }),
+        entry("o/c", { outsider_merge_share: 85 }),
+      ],
+      { ...filters, maxRepos: 2, startOffset: 1 },
+      deps
+    );
+    assert.deepEqual(result.repos.map((r) => r.repo), ["o/b", "o/c"]);
+    assert.equal(result.queue.length, 2);
   });
 });
 

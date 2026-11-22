@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.27.3 - 2026-11-22
+
+- Wave no longer stops at the first rate-limited repo. Field case
+  2026-11-21: a rate limit at conductor-oss/conductor killed the
+  evening wave, which returned byte-identical partial results twice
+  after scanning only 2 repos. Root cause: runWave treated a per-repo
+  RateLimitError as fatal (returning partial results at that repo)
+  while every other per-repo error skipped the repo and continued,
+  and the deterministic candidate order meant the same repo blocked
+  every successive run. A per-repo rate limit now skips that repo
+  with the error recorded in the errors list, the same shape as other
+  per-repo failures, and the wave continues with the remaining
+  candidates. The pre-run budget-floor abort and the mid-run
+  core-budget-floor abort are unchanged and remain fatal to the run.
+- Candidate rotation: filterWaveRepos accepts a startOffset that
+  rotates the sorted candidate list before the maxRepos slice, and
+  runWave derives a day-based offset when no offset is pinned and
+  more candidates pass the filter than one wave can take, so
+  successive waves do not always start at the same head.
+  4 new tests (1288 total); MCP tool count unchanged at 33.
+
 ## v0.27.2 - 2026-11-17
 
 - Wave no longer dies on one repo. Field case 2026-11-17: the starter
